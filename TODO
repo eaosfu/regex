@@ -1,0 +1,58 @@
+LEGEND:
+(I): INCOMPLETE/NOT STARTED
+(P): IN PROGRESS
+(D): DONE
+
+/////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+TODO ITEMS LISTED IN ORDER:
+/////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+(D) - UPDATE typedef NFA with flags indicating the type of NFA node we're dealing with:
+             The flags should be as follows:
+               - is_literal    --- indicates matches a specific literal
+               - is_dot        --- indicates matches any literal
+               - is_accepting  --- indicates node is an accepting state
+               - is_split      --- indicates node has more than one transition out of it
+               - is_epsilon    --- indicates node is an epsilon transition
+               - is_range      --- indicates node is a bitstring where each bit represents one literal
+                                   if the bit is set, the literal is matched otherwise the literal should
+                                   not be matched
+             The flags can be represented by an unsigned char (8 bits) and bit masks used to check whether
+             the flag is set.
+
+(D) - UPDATE scanner so there's a way to control whether escape sequences are treated as a single character
+             E.x. Decide whether to treat \( as two characters or a single 'special' character
+             This is usefule when parsing bracket expression where \( should be treated as two separate
+             characters but as a single 'special' character when NOT in a bracket expression
+
+(D) - FIX    parse_match_list_expression():regex_parser.c the expression '[.].]' is not treated as an error
+
+(D) - UPDATE how we feed characters to the nfa simulation. In particular, setting flags so we can tell whether
+             we're at the beginning of a string (i.e. where a '^' would match) or at the end (i.e. where '$'
+             would match).
+
+(D) - CREATE new_range_alternation_nfa():nfa.c
+
+(D) - UPDATE match():regex_parser.c so that it can compare against bitstrings representing a range
+
+(D) - UPDATE scanner so it recognizes digits 0-9
+
+(D) - UPDATE parser to handle interval expressions (i.e. <expression>{<RE_DUP_MIN>, <RE_DUP_MAX>}
+
+(I) - UPDATE simulartor to handle interval expressions (i.e. <expression>{<RE_DUP_MIN>, <RE_DUP_MAX>}
+
+(I) - CREATE a global memory management system so we can allocate from a memory pool and instead 
+             always having to call malloc()
+
+(I) - UPDATE list.c and nfa.c to use the new memory management system
+
+(I) - UPDATE create a wrapper for fatal():misc.c in regex_parser.c that takes in a pointer to
+             the parser object and frees memory used before calling the real fatal():misc.c
+
+(I) - UPDATE parser so all calls to fatal():misc.c are changed to parser_fatal():regex_parser.c and
+             pass a pointer to the parser object
+
+(I) - UPDATE fatal():misc.c and warn():misc.c so they can take printf style argument list
+
+(I) - UPDATE -- find a way to pack the final nfa into an array rather than following pointers
+
+(I) - UDPATE uses of 'symbol_type' to 'token_type'
