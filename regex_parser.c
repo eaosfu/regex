@@ -71,7 +71,7 @@ new_interval_record(NFA * nfa, unsigned int min, unsigned int max)
 
 void parse_paren_expression(Parser * parser);
 void parse_literal_expression(Parser * parser);
-void parse_op_expression(Parser * parser);
+void parse_quantifier_expression(Parser * parser);
 void parse_regex(Parser * parser);
 void parse_sub_expression(Parser * parser);
 void parse_bracket_expression(Parser * parser);
@@ -103,85 +103,53 @@ init_parser(FILE * input_stream)
 
 
 void
-parse_op_expression(Parser * parser)
+parse_quantifier_expression(Parser * parser)
 {
-  static int multi_op_count = 0;
+  static int quantifier_count = 0;
   NFA * nfa;
   switch(parser->lookahead.type) {
     case PLUS: {
-      if(multi_op_count >= 1) {
+      if(quantifier_count >= 1) {
         fatal("Invalid use of consecutive 'multi' operators\n");
       }
       parser_consume_token(parser);
       nfa = pop(parser->symbol_stack);
       push(parser->symbol_stack, new_posclosure_nfa(nfa));
-      multi_op_count++;
-      parse_op_expression(parser);
-      multi_op_count--;
+      quantifier_count++;
+      parse_quantifier_expression(parser);
+      quantifier_count--;
     } break;
     case KLEENE: {
-      if(multi_op_count > 1) {
+      if(quantifier_count > 1) {
         fatal("Invalid use of consecutive 'multi' operators\n");
       }
       parser_consume_token(parser);
       nfa = pop(parser->symbol_stack);
       push(parser->symbol_stack, new_kleene_nfa(nfa));
-      multi_op_count++;
-      parse_op_expression(parser);
-      multi_op_count--;
+      quantifier_count++;
+      parse_quantifier_expression(parser);
+      quantifier_count--;
     } break;
     case OPENBRACE: {
-      // handle interval expression like in '[a-k]{m,n}'
-       // Cases:
-       // {M} - exact count
-       // {M,} - minimum count, maximum is infinity
-       // {,N} - 0 through N
-       // {,} - 0 to infinity (same as '*')
-       // {M,N} - M through N 
-       //
-       // we've seen the '{',
-       // ENTER NUMBER_LOOP:
-       //   consume token as long as it's a DIGIT, and append to digit_string
-       //     convert the digit to an 'unsigned int' checking that it doesn't exceed some
-       //     limit (we don't want to allow interval values in the billions... so set a 
-       //     reasonable limit)
-       // EXIT_LOOP
-       // 
-       // At this point we may not have seen a digit which just means min = 0.
-       // We're currently looking at either an ',' or the closing '}'
-       // 
-       // If(lookahead.value == ',') {
-       //   ENTER SAME NUMBER_LOOP AS ABOVE AND STORE THE RESULT IN 'max'
-       // }
-       //   
-       // If at this point both 'min' == 0 and 'max' == 0 then
-       // this is equivalent to a KLEENES CLOSURE
-       //
-       // Otherwise make sure that the interval makes sense. 
-       // i.e. 'min' < 'max'
-       // if it isn't error out
-       //   
-       // if(lookahead.type == CLOSEBRACE) {
-       //   we're done parsing the interval expression
-       //   In order to communicate the interval values when we run the simulation
-       //   we have the parser keep a stack of 'interval nodes'. The stack cantains
-       //   the ID of the parent of the nfa currently on top of the symbol stack.
-       //   This will tell the simulation where to reset itself to so that the
-       //   pattern can be matched again.
-       // }
-       // else  {
-       //   We've spotted a syntax error.
-       // }
-       //
-#define CONVERT_TO_UINT(p, interval)                                    \
-  do {                                                                  \
-    while((p)->lookahead.type == ASCIIDIGIT) {                          \
-      (interval) = ((interval) * dec_pos) + ((p)->lookahead.value - 0); \
-      parser_consume_token((p));                                        \
-    }                                                                   \
+      // handle interval expression like in '<expression>{m,n}'
+#define DISCARD_WHITESPACE(p) \
+  do {                                                                    \
+    while((p)->lookahead.value == ' ' || (p)->lookahead.value == '\t') {  \
+      parser_consume_token((p));                                          \
+    }                                                                     \
   } while(0)
 
-      if(multi_op_count > 1) {
+#define CONVERT_TO_UINT(p, interval)                                      \
+  do {                                                                    \
+    while((p)->lookahead.type == ASCIIDIGIT) {                            \
+      dec_pos *= 10;                                                      \
+      (interval) = ((interval) * dec_pos) + ((p)->lookahead.value - '0'); \
+      dec_pos++;                                                          \
+      parser_consume_token((p));                                          \
+    }                                                                     \
+  } while(0)
+
+      if(quantifier_count > 1) {
         fatal("Invalid use of consecutive 'multi' operators\n");
       }
 
@@ -193,17 +161,24 @@ parse_op_expression(Parser * parser)
       unsigned int max = 0;
       IntervalRecord * interval_record;
 
+      DISCARD_WHITESPACE(parser);
       CONVERT_TO_UINT(parser, min);
+      DISCARD_WHITESPACE(parser);
 
       // Note we use lookahead.value instead of lookahead.type
       // since the scanner never assigns special meaning to ','
       if(parser->lookahead.value == ',') {
         dec_pos = 0;
+        parser_consume_token(parser);
+        DISCARD_WHITESPACE(parser);
         CONVERT_TO_UINT(parser, max);
+        DISCARD_WHITESPACE(parser);
         set_max = 1;
       }
 
-      if(parser->lookahead.type == CLOSEPAREN && (min <= max)) {
+printf("MIN: %d, MAX: %d\n", min, max);
+
+      if(parser->lookahead.type == CLOSEBRACE) {
         if(set_max) {
           if((max != 0) && (min > max)) {
             fatal("Invalid interval, min > max\n");
@@ -211,6 +186,14 @@ parse_op_expression(Parser * parser)
           if(min == 0 && max == 0) {
             // <expression>{,} ;create a kleenes closure
             push(parser->symbol_stack, new_kleene_nfa(pop(parser->symbol_stack)));
+          }
+          else if(min == 0 && max == 1) {
+            // <expression>{0,1} ; equivalent to <expression>?
+            push(parser->symbol_stack, new_qmark_nfa(pop(parser->symbol_stack)));
+          }
+          else if(min == 1 && max == 0) {
+            // <expression>{1,} ; equivalent to <expression>+
+            push(parser->symbol_stack, new_posclosure_nfa(pop(parser->symbol_stack)));
           }
           else {
             if(min > 0 && max == 0) {
@@ -237,17 +220,20 @@ parse_op_expression(Parser * parser)
           }
         }
       }
-
-      multi_op_count++;
-      parse_op_expression(parser);
-      multi_op_count--;
+      else {
+        fatal("Syntax error at interval expression. Expected '}'\n");
+      }
+#undef DISCARD_WHITESPACE
 #undef CONVERT_TO_UINT
+      quantifier_count++;
+      parse_quantifier_expression(parser);
+      quantifier_count--;
     } break;
     case QMARK: {
       parser_consume_token(parser);
       nfa = pop(parser->symbol_stack);
       push(parser->symbol_stack, new_qmark_nfa(nfa));
-      parse_op_expression(parser);
+      parse_quantifier_expression(parser);
     } break;
     case PIPE: {
 printf("\tPIPE!!!\n\n");
@@ -268,7 +254,7 @@ printf("LEFT PAREN POPPED: symbol stack top: 0x%x\n", parser->symbol_stack->head
         push(parser->symbol_stack, concatenate_nfa(left, right));
       }
       left = pop(parser->symbol_stack);
-      push(parser->symbol_stack, new_literal_nfa(NFA_EPSILON));
+      push(parser->symbol_stack, new_literal_nfa(0, NFA_EPSILON));
       parse_sub_expression(parser);
       right = pop(parser->symbol_stack);
       push(parser->symbol_stack, new_alternation_nfa(left, right));
@@ -284,23 +270,38 @@ printf("CLOSEPAREN\n");
 }
 
 
+// NEED A WAY TO AVOID CREATING NFA's in cases like [aaaa]
+// currently we create a new nfa for each element between [ and ]
 void
 parse_matching_list(Parser * parser, int negate)
 {
+#define new_mlliteral_nfa(token, negate)                           \
+  ((negate)) ? new_literal_nfa((token).value, NFA_NGLITERAL) : \
+               new_literal_nfa((token).value, 0)
+
+#define update_mlliteral_type(nfa_node, negate) \
+  ((negate)) ? ((nfa_node)->value.type = NFA_NGLITERAL) : 0 // do nothing
+   
 printf("PARSE MATCHING LIST\n");
+  
   NFA * open_delim_p;
   unsigned int prev_token_val;
  
   Token prev_token = parser->lookahead;
   parser_consume_token(parser);
   Token lookahead = parser->lookahead;
+
   
+  if(prev_token.type == __EOF) {
+    return;
+  }
+
   if(prev_token.type == OPENBRACKET  && (lookahead.type == DOT 
-                                        ||  lookahead.type == COLON 
-                                        ||  lookahead.type == EQUAL)) {
+                                          ||  lookahead.type == COLON 
+                                          ||  lookahead.type == EQUAL)) {
     symbol_type delim = lookahead.type;
     prev_token = parser->lookahead;
-    open_delim_p = new_literal_nfa(parser->lookahead.value);
+    open_delim_p = new_literal_nfa(parser->lookahead.value, 0);
     // push the punctuation mark
     push(parser->symbol_stack, open_delim_p); 
     parser_consume_token(parser);
@@ -308,7 +309,7 @@ printf("PARSE MATCHING LIST\n");
     // handle case where ']' immediately follows '[<delim> (e.x. '[.].]')
     if(parser->lookahead.type == CLOSEBRACKET) {
       prev_token = parser->lookahead;
-      push(parser->symbol_stack, new_literal_nfa(parser->lookahead.value));
+      push(parser->symbol_stack, new_literal_nfa(parser->lookahead.value, 0));
       parser_consume_token(parser);
     }
 
@@ -319,7 +320,7 @@ printf("PARSE MATCHING LIST\n");
         break;
       }
       prev_token = parser->lookahead;
-      push(parser->symbol_stack, new_literal_nfa(parser->lookahead.value));
+      push(parser->symbol_stack, new_literal_nfa(parser->lookahead.value, 0));
       parser_consume_token(parser);
     }
 
@@ -334,6 +335,8 @@ printf("PARSE MATCHING LIST\n");
     switch(delim) {
       case DOT: {
         while((left = pop(parser->symbol_stack)) != open_delim_p) {
+          update_mlliteral_type(left->parent, negate);
+          update_mlliteral_type(right->parent, negate);
           right = concatenate_nfa(left, right);
         }
         push(parser->symbol_stack, right);
@@ -360,80 +363,88 @@ printf("PARSE MATCHING LIST\n");
       // let parse_bracket_expressoin() handle the error
       return;
     }
-    push(parser->symbol_stack, new_literal_nfa(prev_token.value));
+    //push(parser->symbol_stack, new_literal_nfa(prev_token.value, 0));
+    push(parser->symbol_stack, new_mlliteral_nfa(prev_token, negate));
+  }
+  else if(lookahead.type == __EOF) {
+    // If we hit this point we're missing the closing ']'
+    // handle error in parse_bracket_expression()
+    return;
   }
   else {
-    NFA * left = new_literal_nfa(prev_token.value);
+    NFA * left = new_mlliteral_nfa(prev_token, negate);
+
     if(lookahead.type == HYPHEN) {
       // process a range expression like [a-z], [a-Z], [A-Z], etc.
       int range_invalid = 1;
       parser_consume_token(parser);
       lookahead = parser->lookahead;
 
+      // Note that we accept the range [A-z]
       if(prev_token.value >= 'a' && prev_token.value <= 'z') {
         if(lookahead.value >= 'A' && lookahead.value <= 'Z') {
-           left = new_range_nfa(prev_token.value, 'z');
-           update_range_nfa('A', lookahead.value, left->parent->value.range);
+           left = new_range_nfa(prev_token.value, 'z', negate);
+           update_range_nfa('A', lookahead.value, left->parent->value.range, negate);
            range_invalid = 0;
         }
         else if(lookahead.value >= prev_token.value && lookahead.value <= 'z') {
-          left = new_range_nfa(prev_token.value, lookahead.value);
+          left = new_range_nfa(prev_token.value, lookahead.value, negate);
            range_invalid = 0;
         }
       }
       else if((prev_token.value >= 'A' && prev_token.value <= 'Z') && 
               (lookahead.value >= prev_token.value && lookahead.value <= 'Z')) {
-        left = new_range_nfa('A', 'Z');
+        left = new_range_nfa('A', 'Z', negate);
         range_invalid = 0;
       }
       else if(prev_token.value <= lookahead.value) {
-        left = new_range_nfa(prev_token.value, lookahead.value);
+        left = new_range_nfa(prev_token.value, lookahead.value, negate);
         range_invalid = 0;
       }
       
       if(range_invalid) {
-        fatal("Invalid range expression, low > high\n");
+        fatal("Invalid range expression '[low_bound, high_bound]'"
+              " with low_bound > high_bound\n");
       }
 
       parser_consume_token(parser);
     }
-    else {
-      left = new_alternation_nfa(left, new_literal_nfa(lookahead.value));
+    else if(lookahead.type != CLOSEBRACKET) {
+      // handle expressions like [a] or [ab]
+      //left = new_alternation_nfa(left, new_literal_nfa(lookahead.value, (negate) ? NFA_NGLITERAL : 0));
+      left = new_alternation_nfa(left, new_mlliteral_nfa(lookahead, negate));
+      parser_consume_token(parser);
     }
-
-
-printf("CHAR CLASS: ADDED\n");
+    // if lookahead.type == CLOSEBRACKET we've already set 'left' appropriately
     push(parser->symbol_stack, left);
   }
-printf("PARSE MATCHING LIST\n");
+
   parse_matching_list(parser, negate);
 
+#undef new_mlliteral_nfa
+#undef update_mlliteral_type
 }
 
 
-/*
-  regex --> literal_exp subexp
-        --> parsen_exp  subexp
-        --> bracket_exp subexp
-
-  bracket_exp --> '['':' char_string ':'']' op_exp
-              --> '[''=' char_string '='']' op_exp
-              --> '[''.' char_string '.'']' op_exp
-*/
+//FIXME: NEED TO PROPERLY HANDLE EXPRESSIONS LIKE [a] or [ab] i.e non range expressions ... 
+//       I think this is fixed know
+//
+//       NEED TO PROPERLY HANDLE NEGATION OF INDIVIUAL ELEMENTS LIKE IN THE CASE [^abc]
 void
 parse_bracket_expression(Parser * parser)
 {
   // use this as the new bottom of the stack
-  NFA * open_delim_p = new_literal_nfa(parser->lookahead.value);
+  NFA * open_delim_p = new_literal_nfa(parser->lookahead.value, 0);
   push(parser->symbol_stack, open_delim_p);
   parser->scanner->parse_escp_seq = 0;
   parser_consume_token(parser);
 printf("PARSE BRACKET EXPRESSION\n");
   // disable scanning escape sequences
   int negate_match = 0;
-
-  switch(parser->lookahead.value) {
+printf("\tTOKEN: %c\n", parser->lookahead.value);
+  switch(parser->lookahead.type) {
     case CIRCUMFLEX: {
+printf("NEGATE MATCH!\n");
       parser_consume_token(parser);
       parse_matching_list(parser, ++negate_match);
     } break;
@@ -462,7 +473,7 @@ printf("PARSE BRACKET EXPRESSION\n");
 
     push(parser->symbol_stack, right);
 printf("PUSHED NFA BACK ONTO STACK: symbol stack top: 0x%x\n", peek(parser->symbol_stack));
-    parse_op_expression(parser);
+    parse_quantifier_expression(parser);
   }
 
 }
@@ -473,11 +484,12 @@ parse_literal_expression(Parser * parser)
 {
   NFA * nfa;
   if(parser->lookahead.type == DOT) {
-    nfa = new_literal_nfa(DOT);
+    //nfa = new_literal_nfa(DOT);
+    nfa = new_literal_nfa(parser->lookahead.value, NFA_ANY);
   }
   else {
     //nfa = new_literal_nfa(parser->lookahead.value.name[0]);
-    nfa = new_literal_nfa(parser->lookahead.value);
+    nfa = new_literal_nfa(parser->lookahead.value, 0);
   }
 printf("parse_literal: '%c' (%u)\n\n", nfa->parent->value.literal, nfa->parent->value.literal);
 
@@ -485,7 +497,7 @@ printf("parse_literal: '%c' (%u)\n\n", nfa->parent->value.literal, nfa->parent->
 
   push(parser->symbol_stack, nfa);
 
-  parse_op_expression(parser);
+  parse_quantifier_expression(parser);
 
 }
 
@@ -503,7 +515,7 @@ parse_paren_expression(Parser * parser)
 
   if(parser->lookahead.type == CLOSEPAREN) {
     parser_consume_token(parser);
-    parse_op_expression(parser);
+    parse_quantifier_expression(parser);
   }
   else {
     fatal("--Expected ')'\n");
@@ -598,6 +610,9 @@ printf("\t\tEOL ANCHOR: nfa->value.type: %d vs. %d\n", nfa->value.type, NFA_ACCE
     else if(nfa->value.type == NFA_RANGE) {
 printf("\t\tAPPENDING: RANGE\n");
     }
+    else if(nfa->value.type == NFA_NGLITERAL) {
+printf("\t\tNEGATED LITREAL\n");
+    }
     else {
 printf("\t\tAPPENDING: '%c', type was: %d\n", nfa->value.literal, nfa->value.type);
     }
@@ -618,10 +633,12 @@ printf("\t\tAPPENDING: '%c', type was: %d\n", nfa->value.literal, nfa->value.typ
 static inline int
 is_literal_in_range(nfa_range range, unsigned int c)
 {
-  unsigned int mask = 0x001 << c % 32;
-  if(range[c/SIZE_OF_RANGE] & mask) {
+  unsigned int mask = 0x001 << (c % 32 - 1);
+  if(range[c/32 - 1] & mask) {
+printf("LITERAL IN RANGE\n");
     return 1;
   }
+printf("LITERAL NOT IN RANGE\n");
    return 0;
 }
 
@@ -636,23 +653,17 @@ printf("\tmatching DOT\n");
       ret = 1;
     } break;
     case NFA_RANGE: {
-printf("\tmatching RANGE\n");
       ret = is_literal_in_range(*(nfa->value.range), c);
+    } break;
+    case NFA_NGLITERAL: {
+printf("\tmatch: '%c' != '%c'\n", nfa->value.literal, c);
+      ret = !(c == nfa->value.literal);
     } break;
     default: {
 printf("\tmatch: '%c'(%lu) vs '%c'(%lu)\n", nfa->value.literal, nfa->value.literal, c, c);
       ret = (c == nfa->value.literal);
     } break;
   } 
-/*
-printf("\tmatch: '%c'(%lu) vs '%c'(%lu)\n", nfa->value.type, nfa->value.type, c, c);
-  if(nfa->value.type == DOT && c != '\n') {
-    ret = 1;
-  }
-  else if(nfa->value.type == c) {
-    ret = 1;
-  }
-*/
   return ret;
 }
 
@@ -814,7 +825,8 @@ main(void)
   //char * target = "weeknights";
   //char * target = "weekend";
   //char * target = "wek";
-  char * target = "bleek weeeknights";
+  //char * target = "bleek weeeknights";
+  char * target = "This is a <EM>first</EM> test";
   //char * target = "abbbc";
 
   printf("\n--> RUNNING NFA SIMULAITON\n\n");

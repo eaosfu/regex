@@ -1,12 +1,13 @@
 // TODO: implement nfa_pool
 #include <stdlib.h>
-
+#include <string.h>
 #include "nfa.h"
 #include "misc.h"
+
 #include <stdio.h>
 
 NFA *
-new_nfa(unsigned char type)
+new_nfa(unsigned int type)
 {
   // TOOD: check nfa_pool, if not empty pop an nfa from the pool
   //       set its type to 't' and it's parent, out1, out2 pointers to NULL and
@@ -18,25 +19,41 @@ new_nfa(unsigned char type)
 
 
 void
-update_range_nfa(unsigned int low, unsigned int high, nfa_range * range)
+update_range_nfa(unsigned int low, unsigned int high, nfa_range * range, int negate)
 {
-printf("Update range\n");
-  for(int i = low; i <= high; ++i) {
-    (*range)[(i / SIZE_OF_RANGE)] |= 0x01 << (i % 32);
+#define set_bit(r, i)   (*(r))[(i) / 32 - 1] |= 0x01 << ((i) % 32 - 1)
+#define unset_bit(r, i) (*(r))[(i) / 32 - 1] &= (0xFFFFFFFF ^ (0x01 << ((i) % 32 - 1)))
+  if(negate) {
+    for(int i = low; i <= high; ++i) {
+      unset_bit(range, i);
+    }
   }
+  else {
+    for(int i = low; i <= high; ++i) {
+      set_bit(range, i);
+    }
+  }
+#undef set_bit
+#undef unset_bit
 }
 
 
 NFA *
-new_range_nfa(unsigned int low, unsigned int high)
+new_range_nfa(unsigned int low, unsigned int high, int negate)
 {
   NFA * start  = new_nfa(NFA_RANGE);
   NFA * accept = new_nfa(NFA_ACCEPTING);
   
   start->value.range = xmalloc(sizeof *(start->value.range));
 
+  if(negate) {
+    for(int i = 0; i < SIZE_OF_RANGE; ++i) {
+      (*(start->value.range))[i] = 0xffffffff;
+    }
+  }
+
 printf("NEW RANGE NFA FROM %d TO %d\n", low, high);
-  update_range_nfa(low, high, start->value.range);
+  update_range_nfa(low, high, start->value.range, negate);
 
   accept->parent = start;
 
@@ -47,10 +64,18 @@ printf("NEW RANGE NFA FROM %d TO %d\n", low, high);
 
 
 NFA *
-new_literal_nfa(unsigned int literal)
+new_literal_nfa(unsigned int literal, unsigned int special_meaning)
 {
-  NFA * start = new_nfa(NFA_LITERAL);
+  NFA * start;
   NFA * accept = new_nfa(NFA_ACCEPTING);
+
+  if(special_meaning) {
+printf("SPECIAL MEANING: %d for char: %c\n", special_meaning, literal);
+    start = new_nfa(special_meaning);
+  }
+  else {
+    start = new_nfa(NFA_LITERAL);
+  }
   
   start->value.literal = literal;
   start->out1 = start->out2 = accept;

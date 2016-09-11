@@ -34,7 +34,7 @@ next_char(Scanner * s)
 {
   int nc = EOF;
   if(s != NULL) {
-    if(REMAINING_BUFFER > 0)
+    if(REMAINING_BUFFER > 0) {
       if(s->unput) {
         nc = *++(s->readhead);
         s->unput = 0;
@@ -44,6 +44,7 @@ next_char(Scanner * s)
         nc = *++(s->readhead) = fgetc(s->input);
         ++(s->bytes_read);
       }
+    }
   }
   return nc;
 }
@@ -67,6 +68,15 @@ scan(Scanner * s)
 {
   int ret = 0;
   unsigned int c;
+
+// FOR TESTING
+  static int seen_newline = 0;
+  if(seen_newline) {
+    update_token(s->curtoken, 0, __EOF);
+    return s->curtoken;
+  }
+// FOR TESTING DONE
+
   while(ret != 1 && (c = next_char(s))) {
     switch(c) {
       case '0' : // fallthrough
@@ -79,7 +89,7 @@ scan(Scanner * s)
       case '7' : // fallthrough
       case '8' : // fallthrough
       case '9' : update_token(s->curtoken, c, ASCIIDIGIT);  ret = 1; break;
-      case '\n': // fallthrough
+      case '\n': { /* TESTING ONLY */seen_newline = 1; /*DONE TESTING*/}// fallthrough
       case EOF: update_token(s->curtoken, 0, __EOF);        ret = 1; break;
       case '$': update_token(s->curtoken, c, DOLLAR);       ret = 1; break;
       case '^': update_token(s->curtoken, c, CIRCUMFLEX);   ret = 1; break;

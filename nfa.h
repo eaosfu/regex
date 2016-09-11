@@ -15,13 +15,14 @@
 #define NFA_ACCEPTING  0x020
 #define NFA_BOL_ANCHOR 0x040
 #define NFA_EOL_ANCHOR 0x080
+#define NFA_NGLITERAL  0x100 // negated literal as in [^abc]
 
 typedef unsigned int nfa_range[SIZE_OF_RANGE];
 
 typedef struct NFA {
   //nfa_type type;
   struct {
-    unsigned char type;
+    unsigned int type;
     union {
       unsigned int literal;
       nfa_range * range;
@@ -32,15 +33,15 @@ typedef struct NFA {
   struct NFA * out2;
 } NFA;
 
-NFA * new_nfa(unsigned char);
+NFA * new_nfa(unsigned int);
 NFA * new_kleene_nfa(NFA *);
 NFA * concatenate_nfa(NFA *, NFA *);
 NFA * new_kleene_nfa(NFA *);
 NFA * new_qmark_nfa(NFA *);
 NFA * new_posclosure_nfa(NFA *);
 NFA * new_alternation_nfa(NFA *, NFA *);
-NFA * new_range_nfa(unsigned int, unsigned int);
-void update_range_nfa(unsigned int, unsigned int, nfa_range *);
+NFA * new_range_nfa(unsigned int, unsigned int, int);
+void update_range_nfa(unsigned int, unsigned int, nfa_range *, int);
 
-NFA * new_literal_nfa(unsigned int);
+NFA * new_literal_nfa(unsigned int, unsigned int);
 #endif
