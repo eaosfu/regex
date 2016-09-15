@@ -71,6 +71,12 @@ TODO ITEMS LISTED IN ORDER:
              a special negation flag in the NFA itself and simply mark that node in the simulator
              stack as have a special matching case (i.e. don't match).
 
+(I) - CREATE test cases for regex engine, implement test cases
+
+(I) - CREATE test cases for library code, implement test cases
+
+(I) - CREATE test suite that integrates test cases for the different components
+
 (I) - CREATE a global memory management system so we can allocate from a memory pool instead of
              always having to call malloc()
 
