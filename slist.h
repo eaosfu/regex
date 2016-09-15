@@ -4,6 +4,9 @@
 typedef void * VISIT_PROC(void *);
 typedef VISIT_PROC * VISIT_PROC_pt;
 
+typedef void * COMPARE_PROC(void *, void *);
+typedef COMPARE_PROC * COMPARE_PROC_pt;
+
 typedef struct List {
   struct ListItem * head;
   int size;
@@ -32,6 +35,7 @@ int list_push(List *, void *);
 int list_insert_at(List *, void *, int);
 int list_append(List *, void *);
 
+void * list_search(List *, void *, COMPARE_PROC_pt);
 void * list_shift(List *);
 void * list_remove_at(List *, int);
 void * list_get_at(List *, int);

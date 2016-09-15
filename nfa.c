@@ -1,6 +1,7 @@
 // TODO: implement nfa_pool
 #include <stdlib.h>
 #include <string.h>
+#include "slist.h"
 #include "nfa.h"
 #include "misc.h"
 
@@ -9,6 +10,7 @@
 NFA *
 new_nfa(unsigned int type)
 {
+//printf("ALLOCATED NFA: ");
   // TOOD: check nfa_pool, if not empty pop an nfa from the pool
   //       set its type to 't' and it's parent, out1, out2 pointers to NULL and
   //       return that as the new nfa
@@ -19,18 +21,19 @@ new_nfa(unsigned int type)
 
 
 void
-update_range_nfa(unsigned int low, unsigned int high, nfa_range * range, int negate)
+update_range_nfa(unsigned int low, unsigned int high, NFA * range_nfa, int negate)
 {
 #define set_bit(r, i)   (*(r))[(i) / 32 - 1] |= 0x01 << ((i) % 32 - 1)
 #define unset_bit(r, i) (*(r))[(i) / 32 - 1] &= (0xFFFFFFFF ^ (0x01 << ((i) % 32 - 1)))
+printf("UPDATED RANGE NFA\n");
   if(negate) {
     for(int i = low; i <= high; ++i) {
-      unset_bit(range, i);
+      unset_bit(range_nfa->value.range, i);
     }
   }
   else {
     for(int i = low; i <= high; ++i) {
-      set_bit(range, i);
+      set_bit(range_nfa->value.range, i);
     }
   }
 #undef set_bit
@@ -38,6 +41,29 @@ update_range_nfa(unsigned int low, unsigned int high, nfa_range * range, int neg
 }
 
 
+NFA *
+new_range_nfa(int negate)
+{
+  NFA * start  = new_nfa(NFA_RANGE);
+  NFA * accept = new_nfa(NFA_ACCEPTING);
+  
+  start->value.range = xmalloc(sizeof *(start->value.range));
+
+  if(negate) {
+    for(int i = 0; i < SIZE_OF_RANGE; ++i) {
+      (*(start->value.range))[i] = 0xffffffff;
+    }
+  }
+
+printf("NEW EMPTY RANGE NFA\n");
+  accept->parent = start;
+
+  start->out1 = start->out2 = accept;
+
+   return accept;
+}
+
+/*
 NFA *
 new_range_nfa(unsigned int low, unsigned int high, int negate)
 {
@@ -53,7 +79,8 @@ new_range_nfa(unsigned int low, unsigned int high, int negate)
   }
 
 printf("NEW RANGE NFA FROM %d TO %d\n", low, high);
-  update_range_nfa(low, high, start->value.range, negate);
+  //update_range_nfa(low, high, start->value.range, negate);
+  update_range_nfa(low, high, start, negate);
 
   accept->parent = start;
 
@@ -61,7 +88,7 @@ printf("NEW RANGE NFA FROM %d TO %d\n", low, high);
 
    return accept;
 }
-
+*/
 
 NFA *
 new_literal_nfa(unsigned int literal, unsigned int special_meaning)
@@ -226,8 +253,113 @@ concatenate_nfa(NFA * prev, NFA * next)
     prev->out2 = next->parent->out2;
     NFA * discard_node = next->parent;
     next->parent = prev->parent;
+printf("CONCAT FREEING NODE\n");
     free(discard_node);
   }
 
   return next;
+}
+
+
+
+static int g_states_added = 0;
+
+void *
+nfa_compare_equal(void * nfa1, void *nfa2)
+{
+  void * ret = NULL;
+  if(nfa1 == NULL || nfa2 == NULL) {
+    return ret;
+  }
+
+  if(nfa1 == nfa2) {
+    // just return a non null
+printf("compare 0x%x vs 0x%x\n", nfa1, nfa2);
+    ret = nfa1;
+  }
+
+  return ret;
+}
+
+void
+free_nfa_helper(NFA * n, List * l, List * seen_states)
+{
+  if(n == NULL) {
+    return;
+  }
+
+  int i = 0;
+  int already_seen = 0;
+
+  if(!list_search(seen_states, n, nfa_compare_equal)) {
+    list_push(seen_states, n);
+    //list_append(seen_states, n);
+    if(n->value.type & ~(NFA_SPLIT)) {
+      list_push(l, n);
+      ++g_states_added;
+    }
+    else {
+      if((n->value.type & (NFA_SPLIT))) {
+        // n->out1 is not a loop
+        free_nfa_helper(n->out1, l, seen_states);
+      }
+      if(n->out2) {
+        free_nfa_helper(n->out2, l, seen_states);
+      }
+    }
+  }
+}
+
+
+// walk the NFA collecting every node in the graph
+// mark a node as 'special' if its type is NOT one of:
+//   -- NFA_LITERAL    # matches a literal
+//   -- NFA_NGLITERAL  # negates matching a literal
+// all other nodes encountered are classified as 'simple'
+void
+free_nfa(NFA * nfa)
+{
+  if(nfa == NULL) {
+    return;
+  }
+
+  List * cur_state_set  = new_list(); 
+  List * next_state_set = new_list();
+  List * seen_states    = new_list();
+  int total_states = 0;
+  // step 1 - load the set of next states;
+  // step 2 - delete NFAs in set of current states
+  // step 3 - move NFA's in set of next states into set of current states
+  // repeat until all states have been deleted
+//printf("nfa: 0x%x\n", nfa);
+  g_states_added = 0;
+  free_nfa_helper(nfa->parent, next_state_set, seen_states);
+//printf("FREE NFA\n");
+  while(g_states_added > 0) {
+//printf("STATES ADDED: %d\n", g_states_added);
+    total_states += g_states_added;
+    g_states_added = 0;
+    list_swap(cur_state_set, next_state_set);
+    list_clear(next_state_set);
+    while((nfa = list_shift(cur_state_set))) {
+    //for(int i = 0; i < cur_state_set->size; ++i) {
+      //nfa = list_get_at(cur_state_set, i);
+      if(nfa = nfa->out2){
+        free_nfa_helper(nfa, next_state_set, seen_states);
+      }
+    }
+  }
+ 
+  NFA * del_nfa = NULL;
+  for(int i = 0; i < seen_states->size; ++i) {
+    del_nfa = (NFA *)list_get_at(seen_states, i);
+    if(del_nfa->value.type == NFA_RANGE) {
+      free(del_nfa->value.range);
+    }
+    free(del_nfa);
+  }
+
+  list_free(cur_state_set, NULL);
+  list_free(next_state_set, NULL);
+  list_free(seen_states, NULL);
 }

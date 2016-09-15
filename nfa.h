@@ -2,8 +2,7 @@
 #define NFA_H_
 #include <limits.h>
 
-//typedef enum {LITERAL=255, SPLIT=256, EPSILON=257, ACCEPTING=258} nfa_type;
-
+#define MAX_NFA_STATES 512
 #define SIZE_OF_LOCALE 128
 #define SIZE_OF_RANGE SIZE_OF_LOCALE/(sizeof(unsigned int) * CHAR_BIT)
 
@@ -16,6 +15,8 @@
 #define NFA_BOL_ANCHOR 0x040
 #define NFA_EOL_ANCHOR 0x080
 #define NFA_NGLITERAL  0x100 // negated literal as in [^abc]
+
+
 
 typedef unsigned int nfa_range[SIZE_OF_RANGE];
 
@@ -40,8 +41,11 @@ NFA * new_kleene_nfa(NFA *);
 NFA * new_qmark_nfa(NFA *);
 NFA * new_posclosure_nfa(NFA *);
 NFA * new_alternation_nfa(NFA *, NFA *);
-NFA * new_range_nfa(unsigned int, unsigned int, int);
-void update_range_nfa(unsigned int, unsigned int, nfa_range *, int);
+//NFA * new_range_nfa(unsigned int, unsigned int, int);
+NFA * new_range_nfa(int);
+//void update_range_nfa(unsigned int, unsigned int, nfa_range *, int);
+void update_range_nfa(unsigned int, unsigned int, NFA *, int);
+void free_nfa(NFA *);
 
 NFA * new_literal_nfa(unsigned int, unsigned int);
 #endif

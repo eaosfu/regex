@@ -10,6 +10,7 @@
 Scanner *
 init_scanner(FILE * stream)
 {
+printf("SCANNER INIT START\n");
   Scanner * s = xmalloc(sizeof(Scanner));
   s->input = stream;
   s->unput = 0;
@@ -17,6 +18,7 @@ init_scanner(FILE * stream)
   memset(s->buffer, 0, MAX_BUFFER_SZ);
   s->readhead = s->buffer;
   s->curtoken = new_token();
+printf("SCANNER INIT END\n");
   return s;
 }
 

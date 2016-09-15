@@ -65,18 +65,22 @@ int
 list_append(List * list, void * data)
 {
   if(list == NULL) {
-    //return NULL;
     return -1;
   }
 
-  ListItem ** itr = &(list->head);
-  unsigned int idx = 0;
+  int idx = 0;
+  ListItem * iter = list->head;
 
-  while((*itr)->next && (itr = &((*itr)->next)) && ++idx);
-  ++idx;
-  (*itr)->next = new_list_item(list, data);
-  list->size++;
-  //return list->head;
+  if(iter == NULL) {
+    list->head = new_list_item(list, data);
+  }
+  else {
+    while(iter && iter->next && (iter = iter->next) && ++idx);
+    iter->next = new_list_item(list, data);
+  }
+
+  ++list->size;
+
   return idx;
 }
 
@@ -109,7 +113,7 @@ list_shift(List * list)
   if(list == NULL || list->head == NULL) {
     return NULL;
   }
-
+printf("LIST SHIFT\n");
   ListItem * old_head = list->head;
   list->head = list->head->next;
 
@@ -267,7 +271,7 @@ list_free(List * list, VISIT_PROC_pt delete_data)
   ListItem * cur_item = list->pool;
   ListItem * tmp = NULL;
 
-  while(cur_item->next) {
+  while(cur_item && cur_item->next) {
     tmp = cur_item->next;
 
     if(delete_data) {
@@ -278,7 +282,14 @@ list_free(List * list, VISIT_PROC_pt delete_data)
     cur_item = tmp;
   }
 
-  free(cur_item);
+  // remove last item and its data
+  if(cur_item) {
+    if(delete_data && cur_item->data) {
+      delete_data(cur_item->data);
+    }
+    free(cur_item);
+  }
+
   free(list);
   list = NULL;
 
@@ -334,6 +345,30 @@ list_reverse(ListItem * node)
   return node;
 }
 
+
+void *
+list_search(List * list, void * target, COMPARE_PROC_pt compare)
+{
+  void * ret = NULL;
+
+  if(list == NULL || list->head == NULL) {
+    return ret;
+  }
+
+  if(!compare) {
+    fatal("No comparison function provided\n");
+  }
+
+  ListItem * iter = list->head;
+  int idx = 0;
+  while((ret = compare(iter->data, target)) == NULL && iter->next) {
+//printf("LIST COMPARE: iter: 0x%x vs target: 0x%x\n", iter->data, target);
+    iter = iter->next;
+    ++idx;
+  }
+
+  return ret;
+}
 
 /*
 int

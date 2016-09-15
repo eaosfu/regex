@@ -1,7 +1,19 @@
-LEGEND:
+STATUS LEGEND:
 (I): INCOMPLETE/NOT STARTED
 (P): IN PROGRESS
 (D): DONE
+(H): ON HOLD
+
+FORMAT:
+<STATUS> <ACTION> <DESCRIPTION>
+
+/////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+Notes:
+/////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+POSIX: REGEX GENERAL REQUIREMENTS
+SOURCE: http://pubs.opengroup.org/onlinepubs/009696899/basedefs/xbd_chap09.html#tag_09_03_05
+
+"The implementation shall support any regular expression that does not exceed 256 bytes in length."
 
 /////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 TODO ITEMS LISTED IN ORDER:
@@ -38,12 +50,28 @@ TODO ITEMS LISTED IN ORDER:
 
 (D) - UPDATE parser to handle interval expressions (i.e. <expression>{<RE_DUP_MIN>, <RE_DUP_MAX>}
 
-(P) - CREATE heap to keep track of values seen during bracket expression construction
-             E.X [aaa] should only create one node of the token-value 'a'
+(D) - CREATE an Array to keep track of values seen during bracket expression construction
+             E.x [aaa] should only create one node of the token-value 'a'
+             -- I think an array should be fine since we're not dealing with a very large set
+                of characters
 
-(P) - UPDATE simulartor to handle interval expressions (i.e. <expression>{<RE_DUP_MIN>, <RE_DUP_MAX>}
+(D) - FIX    nfa.c and parser/simulator to make sure we aren't leaking memory. Even though I'm planning 
+             on updating how memory is being managed we still should be careful with this.
 
-(I) - CREATE a global memory management system so we can allocate from a memory pool and instead 
+(I) - UPDATE parse_matching_list():regex_parser.c so that we only update the range nfa passed in by the
+             caller (i.e. parse_bracket_expression).
+             -- Note this is mostly done still need to handle 'named' character classes like [:alpha:],
+                etc.
+
+(H) - UPDATE simulartor to handle interval expressions (i.e. <expression>{<RE_DUP_MIN>, <RE_DUP_MAX>}
+             Actually I think redesigning the simulator would clean things up quite a bit.
+             One thing that might help is having a stack of which nodes need special processing.
+             For example which nodes have intervals associated with them or which nodes have
+             negated bracket expressions. In the latter case particularly I could avoid having
+             a special negation flag in the NFA itself and simply mark that node in the simulator
+             stack as have a special matching case (i.e. don't match).
+
+(I) - CREATE a global memory management system so we can allocate from a memory pool instead of
              always having to call malloc()
 
 (I) - UPDATE list.c and nfa.c to use the new memory management system

@@ -13,8 +13,8 @@ typedef ListItem StackItem;
 
 #define new_stack()     new_list()
 #define push(s, d)      list_push((s), (d))
-#define stack_delete(s) list_free((s))
 #define pop(s)          list_shift((s))
 #define peek(s)         list_get_at((s), 0)
+#define stack_delete(s, delete_proc) list_free((s), (delete_proc))
 
 #endif
