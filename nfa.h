@@ -48,4 +48,5 @@ void update_range_nfa(unsigned int, unsigned int, NFA *, int);
 void free_nfa(NFA *);
 
 NFA * new_literal_nfa(unsigned int, unsigned int);
+NFA * new_anchor_nfa(unsigned int);
 #endif

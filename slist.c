@@ -113,7 +113,7 @@ list_shift(List * list)
   if(list == NULL || list->head == NULL) {
     return NULL;
   }
-printf("LIST SHIFT\n");
+
   ListItem * old_head = list->head;
   list->head = list->head->next;
 

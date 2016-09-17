@@ -85,6 +85,7 @@ parser_consume_token(Parser * parser)
 static inline void
 parser_backtrack(Parser * parser, Token * lookahead_reset)
 {
+printf("\tBACKTRACKING PARSER\n");
   unput(parser->scanner);
   parser->lookahead = *(lookahead_reset);
 }
@@ -93,13 +94,11 @@ parser_backtrack(Parser * parser, Token * lookahead_reset)
 Parser *
 init_parser(FILE * input_stream)
 {
-printf("PARSER INIT START:\n");
   Parser * parser        = xmalloc(sizeof(*parser));
   parser->scanner        = init_scanner(input_stream);
   parser->symbol_stack   = new_stack();
   parser->interval_stack = new_stack();
   parser_consume_token(parser);
-printf("PARSER INIT END:\n");
   return parser;
 }
 
@@ -107,35 +106,7 @@ printf("PARSER INIT END:\n");
 void
 parse_quantifier_expression(Parser * parser)
 {
-  static int quantifier_count = 0;
-  NFA * nfa;
-  switch(parser->lookahead.type) {
-    case PLUS: {
-      if(quantifier_count >= 1) {
-        fatal("Invalid use of consecutive 'multi' operators\n");
-      }
-      parser_consume_token(parser);
-      nfa = pop(parser->symbol_stack);
-printf("POS CLOSURE: RANGE_NFA: 0x%x\n", nfa);
-      push(parser->symbol_stack, new_posclosure_nfa(nfa));
-      quantifier_count++;
-      parse_quantifier_expression(parser);
-      quantifier_count--;
-    } break;
-    case KLEENE: {
-      if(quantifier_count > 1) {
-        fatal("Invalid use of consecutive 'multi' operators\n");
-      }
-      parser_consume_token(parser);
-      nfa = pop(parser->symbol_stack);
-      push(parser->symbol_stack, new_kleene_nfa(nfa));
-      quantifier_count++;
-      parse_quantifier_expression(parser);
-      quantifier_count--;
-    } break;
-    case OPENBRACE: {
-      // handle interval expression like in '<expression>{m,n}'
-#define DISCARD_WHITESPACE(p) \
+#define DISCARD_WHITESPACE(p)                                             \
   do {                                                                    \
     while((p)->lookahead.value == ' ' || (p)->lookahead.value == '\t') {  \
       parser_consume_token((p));                                          \
@@ -152,18 +123,42 @@ printf("POS CLOSURE: RANGE_NFA: 0x%x\n", nfa);
     }                                                                     \
   } while(0)
 
-      if(quantifier_count > 1) {
-        fatal("Invalid use of consecutive 'multi' operators\n");
-      }
+#define CHECK_MULTI_QUANTIFIER_ERROR                                      \
+  if(quantifier_count >= 1)                                               \
+    fatal("Invalid use of consecutive 'multi' operators\n")
+  static int quantifier_count = 0;
+  NFA * nfa;
 
+  switch(parser->lookahead.type) {
+    case PLUS: { 
+printf("POS CLOSURE\n");
+      CHECK_MULTI_QUANTIFIER_ERROR;
       parser_consume_token(parser);
-
+      nfa = pop(parser->symbol_stack);
+      push(parser->symbol_stack, new_posclosure_nfa(nfa));
+      quantifier_count++;
+      parse_quantifier_expression(parser);
+      quantifier_count--;
+    } break;
+    case KLEENE: {
+      CHECK_MULTI_QUANTIFIER_ERROR;
+      parser_consume_token(parser);
+      nfa = pop(parser->symbol_stack);
+      push(parser->symbol_stack, new_kleene_nfa(nfa));
+      quantifier_count++;
+      parse_quantifier_expression(parser);
+      quantifier_count--;
+    } break;
+    case OPENBRACE: {
+      // handle interval expression like in '<expression>{m,n}'
       int set_max = 0;
       int dec_pos = 0;
       unsigned int min = 0;
       unsigned int max = 0;
       IntervalRecord * interval_record;
-
+      
+      CHECK_MULTI_QUANTIFIER_ERROR;
+      parser_consume_token(parser);
       DISCARD_WHITESPACE(parser);
       CONVERT_TO_UINT(parser, min);
       DISCARD_WHITESPACE(parser);
@@ -226,8 +221,6 @@ printf("MIN: %d, MAX: %d\n", min, max);
       else {
         fatal("Syntax error at interval expression. Expected '}'\n");
       }
-#undef DISCARD_WHITESPACE
-#undef CONVERT_TO_UINT
       quantifier_count++;
       parse_quantifier_expression(parser);
       quantifier_count--;
@@ -240,6 +233,8 @@ printf("MIN: %d, MAX: %d\n", min, max);
     } break;
     case PIPE: {
 printf("\tPIPE!!!\n\n");
+      // reset the quantifier_count rhs of alternation
+      quantifier_count = 0;
       parser_consume_token(parser);
       // concatenate everything on the stack unitl we see an open paren
       // or until nothing is left on the stack
@@ -270,6 +265,9 @@ printf("CLOSEPAREN\n");
       break;
     }
   }
+#undef CHECK_MULTI_QUANTIFIER_ERROR
+#undef DISCARD_WHITESPACE
+#undef CONVERT_TO_UINT
 }
 
 
@@ -321,8 +319,8 @@ parse_matching_list(Parser * parser, NFA * range_nfa, int negate)
   ((negate)) ? new_literal_nfa((token).value, NFA_NGLITERAL)   \
              : new_literal_nfa((token).value, 0)
 
-#define update_mlliteral_type(nfa_node, negate)           \
-  ((negate)) ? ((nfa_node)->value.type = NFA_NGLITERAL)   \
+#define update_mlliteral_type(nfa_node, negate)                \
+  ((negate)) ? ((nfa_node)->value.type = NFA_NGLITERAL)        \
              : 0 // do nothing
 
 printf("PARSE MATCHING LIST: parser->lookahead: %c\n", parser->lookahead.value);
@@ -330,6 +328,7 @@ printf("PARSE MATCHING LIST: parser->lookahead: %c\n", parser->lookahead.value);
   NFA * open_delim_p;
   char found = 0;
   unsigned int prev_token_val;
+  static int matching_list_len = 0;
  
   Token prev_token = parser->lookahead;
   parser_consume_token(parser);
@@ -337,7 +336,6 @@ printf("PARSE MATCHING LIST: parser->lookahead: %c\n", parser->lookahead.value);
 
   
   if(prev_token.type == __EOF) {
-printf("HERE!!!\n");
     return;
   }
 
@@ -351,7 +349,7 @@ printf("HERE!!!\n");
     push(parser->symbol_stack, open_delim_p); 
     parser_consume_token(parser);
 
-    // handle case where ']' immediately follows '[<delim> (e.x. '[.].]')
+    // handle case where ']' immediately follows '['<delim> ... (e.x. '[.].]')
     if(parser->lookahead.type == CLOSEBRACKET) {
       prev_token = parser->lookahead;
       push(parser->symbol_stack, new_literal_nfa(parser->lookahead.value, 0));
@@ -403,25 +401,31 @@ free(open_delim_p);
     // discard the current ']' token
     parser_consume_token(parser);
   }
+  else if(prev_token.type == CLOSEBRACKET && matching_list_len > 0) {
+printf("HERE: prev_token: %c, lookahead: %c\n", prev_token.value, lookahead.value);
+    parser_backtrack(parser, &prev_token);
+    return;
+  }
+/*
   else if(prev_token.type == CLOSEBRACKET ) {
+printf("HERE: prev_token: %c, lookahead: %c\n", prev_token.value, lookahead.value);
     if(lookahead.type != CLOSEBRACKET) {
       // restore input buffer to how it was when entered this function
       parser_backtrack(parser, &prev_token);
       // let parse_bracket_expressoin() handle the error
-      return;
     }
-    if(!token_in_charclass(prev_token.value, 0)) {
+    else if(!token_in_charclass(prev_token.value, 0)) {
       update_range_nfa(prev_token.value, prev_token.value, range_nfa, negate);
-      //push(parser->symbol_stack, new_mlliteral_nfa(prev_token, negate));
     }
+    return;
   }
+*/
   else if(lookahead.type == __EOF) {
     // If we hit this point we're missing the closing ']'
     // handle error in parse_bracket_expression()
     return;
   }
-  else {//if(!token_in_charclass(prev_token.value, 0)) {
-    NFA * left;
+  else {
 printf("HERE: prev_token: %c, lookahead: %c\n", prev_token.value, lookahead.value);
     if(lookahead.type == HYPHEN) {
       // process a range expression like [a-z], [a-Z], [A-Z], etc.
@@ -431,26 +435,22 @@ printf("HERE: prev_token: %c, lookahead: %c\n", prev_token.value, lookahead.valu
 
       // Note that we accept the range [A-z]
       if(prev_token.value >= 'a' && prev_token.value <= 'z') {
-        if(lookahead.value >= 'A' && lookahead.value <= 'Z') {
-           //left = new_range_nfa(prev_token.value, 'z', negate);
-           //update_range_nfa('A', lookahead.value, left->parent->value.range, negate);
-           update_range_nfa('A', lookahead.value, range_nfa, negate);
-           range_invalid = 0;
-        }
-        else if(lookahead.value >= prev_token.value && lookahead.value <= 'z') {
-          //left = new_range_nfa(prev_token.value, lookahead.value, negate);
+        if(lookahead.value >= 'a' && lookahead.value <= 'z') {
           update_range_nfa(prev_token.value, lookahead.value, range_nfa, negate);
-           range_invalid = 0;
+          range_invalid = 0;
+        }
+        else if(lookahead.value >= 'A' && lookahead.value <= 'Z') {
+          update_range_nfa(prev_token.value, 'z', range_nfa, negate);
+          update_range_nfa('A', lookahead.value, range_nfa, negate);
+          range_invalid = 0;
         }
       }
       else if((prev_token.value >= 'A' && prev_token.value <= 'Z') && 
               (lookahead.value >= prev_token.value && lookahead.value <= 'Z')) {
-        //left = new_range_nfa('A', 'Z', negate);
         update_range_nfa('A', 'Z', range_nfa, negate);
         range_invalid = 0;
       }
       else if(prev_token.value <= lookahead.value) {
-        //left = new_range_nfa(prev_token.value, lookahead.value, negate);
         update_range_nfa(prev_token.value, lookahead.value, range_nfa, negate);
         range_invalid = 0;
       }
@@ -461,17 +461,14 @@ printf("HERE: prev_token: %c, lookahead: %c\n", prev_token.value, lookahead.valu
       }
 
       parser_consume_token(parser); // consume end bound
-      //push(parser->symbol_stack, left);
     }
     else if(!token_in_charclass(prev_token.value, 0)) {
       update_range_nfa(prev_token.value, prev_token.value, range_nfa, negate);
-      //left = new_mlliteral_nfa(prev_token, negate);
-      //push(parser->symbol_stack, left);
     }
   }
-
+  ++matching_list_len;
   parse_matching_list(parser, range_nfa, negate);
-
+  --matching_list_len;
 #undef new_mlliteral_nfa
 #undef update_mlliteral_type
 }
@@ -497,7 +494,7 @@ printf("\tTOKEN: %c\n", parser->lookahead.value);
   if(parser->lookahead.type == CIRCUMFLEX) {
     parser_consume_token(parser);
     negate_match = 1;
-printf("NEGATE MATCH!\n");
+//printf("NEGATE MATCH!\n");
   }
 
   NFA * range_nfa = new_range_nfa(negate_match);
@@ -511,10 +508,11 @@ printf("NEGATE MATCH!\n");
   else {
     // resets charclass array
     token_in_charclass(0, 1); 
-    parser_consume_token(parser);
+    
     // re-enable scanning escape sequences
     parser->scanner->parse_escp_seq = 1;
 
+    parser_consume_token(parser);
     NFA * right = pop(parser->symbol_stack);
 
     if(right == open_delim_p) {
@@ -526,20 +524,16 @@ printf("NEGATE MATCH!\n");
     if(left != open_delim_p) {
       fatal("Error parsing bracket expression\n");
     }
-/*
-    while((left = pop(parser->symbol_stack)) != open_delim_p) {
-      right = new_alternation_nfa(left, right);
-    }
-*/
 
 // release open_delim_p
 free_nfa(open_delim_p);
 
     push(parser->symbol_stack, right);
-printf("PUSHED NFA BACK ONTO STACK: symbol stack top: 0x%x\n", peek(parser->symbol_stack));
+//printf("PUSHED NFA BACK ONTO STACK: symbol stack top: 0x%x\n", peek(parser->symbol_stack));
     parse_quantifier_expression(parser);
   }
 
+printf("done bracket expression: lookahead now: %c\n", parser->lookahead.value);
 }
 
 
@@ -548,11 +542,9 @@ parse_literal_expression(Parser * parser)
 {
   NFA * nfa;
   if(parser->lookahead.type == DOT) {
-    //nfa = new_literal_nfa(DOT);
     nfa = new_literal_nfa(parser->lookahead.value, NFA_ANY);
   }
   else {
-    //nfa = new_literal_nfa(parser->lookahead.value.name[0]);
     nfa = new_literal_nfa(parser->lookahead.value, 0);
   }
 printf("parse_literal: '%c' (%u)\n\n", nfa->parent->value.literal, nfa->parent->value.literal);
@@ -593,8 +585,9 @@ parse_sub_expression(Parser * parser)
 {
   NFA * right;
   switch(parser->lookahead.type) {
-    case DOT: // fallthrough
-    case ALPHA: {
+    case DOT:   // fallthrough
+    case ALPHA: // fallthrough
+    case CLOSEBRACKET: {
       parse_literal_expression(parser);
       parse_sub_expression(parser);
       right = pop(parser->symbol_stack);
@@ -602,14 +595,16 @@ parse_sub_expression(Parser * parser)
       push(parser->symbol_stack, concatenate_nfa(left, right));
     } break;
     case DOLLAR: {
-      push(parser->symbol_stack, new_nfa(NFA_EOL_ANCHOR));
+      push(parser->symbol_stack, new_anchor_nfa(NFA_EOL_ANCHOR));
+      parser_consume_token(parser);
       parse_sub_expression(parser);
       right = pop(parser->symbol_stack);
       NFA * left = pop(parser->symbol_stack);
       push(parser->symbol_stack, concatenate_nfa(left, right));
     } break;
     case CIRCUMFLEX: {
-      push(parser->symbol_stack, new_nfa(NFA_BOL_ANCHOR));
+      push(parser->symbol_stack, new_anchor_nfa(NFA_BOL_ANCHOR));
+      parser_consume_token(parser);
       parse_sub_expression(parser);
       right = pop(parser->symbol_stack);
       NFA * left = pop(parser->symbol_stack);
@@ -623,14 +618,18 @@ parse_sub_expression(Parser * parser)
       push(parser->symbol_stack, concatenate_nfa(left, right));
     } break;
     case OPENBRACKET: {
-printf("OPEN BRACKET!\n");
       parse_bracket_expression(parser);
       parse_sub_expression(parser);
       right = pop(parser->symbol_stack);
       NFA * left = pop(parser->symbol_stack);
       push(parser->symbol_stack, concatenate_nfa(left, right));
     } break;
+    case __EOF: {
+      printf("__EOF\n");
+      return;
+    }
     default: {
+printf("ERROR? %c is this EOF? ==> %s\n", parser->lookahead.value, (parser->lookahead.value == EOF)? "YES": "NO");
     } break;
   }
 }
@@ -640,6 +639,7 @@ void
 parse_regex(Parser * parser)
 {
   if(parser->lookahead.type == ALPHA
+     || parser->lookahead.type == CLOSEBRACKET
      || parser->lookahead.type == CIRCUMFLEX
      || parser->lookahead.type == DOLLAR
      || parser->lookahead.type == DOT
@@ -664,22 +664,22 @@ get_states(NFA * nfa, List * lp)
   if(nfa->value.type & ~(NFA_SPLIT|NFA_EPSILON)) {
     if(nfa->value.type == NFA_ACCEPTING) {
       found_accepting_state = 1;
-printf("\t\tACCEPTING: nfa->value.type: %d vs. %d\n", nfa->value.type, NFA_ACCEPTING);
+//printf("\t\tACCEPTING: nfa->value.type: %d vs. %d\n", nfa->value.type, NFA_ACCEPTING);
     }
     else if(nfa->value.type == NFA_BOL_ANCHOR) {
-printf("\t\tBOL ANCHOR: nfa->value.type: %d vs. %d\n", nfa->value.type, NFA_ACCEPTING);
+//printf("\t\tBOL ANCHOR: nfa->value.type: %d vs. %d\n", nfa->value.type, NFA_ACCEPTING);
     }
     else if(nfa->value.type == NFA_EOL_ANCHOR) {
-printf("\t\tEOL ANCHOR: nfa->value.type: %d vs. %d\n", nfa->value.type, NFA_ACCEPTING);
+//printf("\t\tEOL ANCHOR: nfa->value.type: %d vs. %d\n", nfa->value.type, NFA_ACCEPTING);
     }
     else if(nfa->value.type == NFA_RANGE) {
-printf("\t\tAPPENDING: RANGE\n");
+//printf("\t\tAPPENDING: RANGE\n");
     }
     else if(nfa->value.type == NFA_NGLITERAL) {
-printf("\t\tNEGATED LITREAL\n");
+//printf("\t\tNEGATED LITREAL\n");
     }
     else {
-printf("\t\tAPPENDING: '%c', type was: %d\n", nfa->value.literal, nfa->value.type);
+//printf("\t\tAPPENDING: '%c', type was: %d\n", nfa->value.literal, nfa->value.type);
     }
     list_push(lp, nfa);
   }
@@ -698,12 +698,14 @@ printf("\t\tAPPENDING: '%c', type was: %d\n", nfa->value.literal, nfa->value.typ
 static inline int
 is_literal_in_range(nfa_range range, unsigned int c)
 {
-  unsigned int mask = 0x001 << (c % 32 - 1);
-  if(range[c/32 - 1] & mask) {
-printf("LITERAL IN RANGE\n");
+  #define index(c)  ((c) / 32)
+  #define offset(c) ((c) % 32)
+  unsigned int mask = 0x001 << (offset(c));
+  if(range[index(c)] & mask) {
+//printf("LITERAL IN RANGE\n");
     return 1;
   }
-printf("LITERAL NOT IN RANGE\n");
+//printf("LITERAL NOT IN RANGE\n");
    return 0;
 }
 
@@ -714,18 +716,21 @@ match(NFA * nfa, int c)
   int ret = 0;
   switch(nfa->value.type) {
     case NFA_ANY: {
-printf("\tmatching DOT\n");
+//printf("\tmatching DOT\n");
       ret = 1;
     } break;
     case NFA_RANGE: {
+//printf("CHECK CHARCLASS for '%c'(%d): range[%u] & 0x%x\n", c, c, c/32 - 1, 0x001 << (c % 32 - 1));
       ret = is_literal_in_range(*(nfa->value.range), c);
     } break;
     case NFA_NGLITERAL: {
 //printf("\tmatch: '%c' != '%c'\n", nfa->value.literal, c);
       ret = !(c == nfa->value.literal);
     } break;
+    case NFA_ACCEPTING: break;
     default: {
-//printf("\tmatch: '%c'(%lu) vs '%c'(%lu)\n", nfa->value.literal, nfa->value.literal, c, c);
+//printf("\tnfa type: %d -- ", nfa->value.type);
+//printf("match: '%c'(%lu) vs '%c'(%lu)\n", nfa->value.literal, nfa->value.literal, c, c);
       ret = (c == nfa->value.literal);
     } break;
   } 
@@ -743,12 +748,9 @@ typedef struct Match {
 void *
 free_match_string(void * m)
 {
-printf("HERE1\n");
   if(m) {
-    printf("FREE MATCH STRING 2\n");
     free(m);
   }
-printf("HERE2\n");
 }
 
 
@@ -808,6 +810,13 @@ new_nfa_sim(NFA * nfa, char * buffer)
   return sim;
 }
 
+void
+nfa_sim_reset_buffer(NFASim * sim, char * buffer)
+{
+  sim->input_ptr = sim->buffer = buffer;
+  sim->match_start = 0;
+}
+
 
 void
 reset_nfa_sim(NFASim * sim)
@@ -823,6 +832,7 @@ reset_nfa_sim(NFASim * sim)
 int
 run_nfa(NFASim * sim)
 {
+#include <unistd.h>
 #define MOVE(n) ((NFA *)(n)->data)->out2
   reset_nfa_sim(sim);
   ListItem * current_state;
@@ -836,6 +846,7 @@ run_nfa(NFASim * sim)
       // on matching char and transition to Accepting state
       if(match(current_state->data, sim->input_ptr[0]) &&
          get_states(MOVE(current_state), sim->state_set2)) {
+//printf("MATCH FOUND!\n");
           if((m = new_matched_string(sim->buffer, match_start, match_end, sim->matches))) {
             list_push(sim->matches, m);
           }
@@ -847,10 +858,10 @@ run_nfa(NFASim * sim)
       if(sim->state == START) {
         sim->input_ptr++;
       }
-      else if((match_end - match_start - 1) > 0) {
+/*      else if((match_end - match_start - 1) > 0) {
 printf("Backtraking input pointer by : %d\n", match_end - match_start - 1);
         sim->input_ptr -= (match_end - match_start - 1);
-      }
+      }*/
       reset_nfa_sim(sim);
       match_start = match_end = sim->input_ptr - sim->buffer;
     }
@@ -861,6 +872,7 @@ printf("Backtraking input pointer by : %d\n", match_end - match_start - 1);
       sim->input_ptr++;
       match_end += 1;
     }
+//sleep(3);
   }
 #undef MOVE
   return SUCCESS;
@@ -871,19 +883,19 @@ void
 print_matches(List * match_list)
 {
   ListItem * m = match_list->head = list_reverse(match_list->head);
-printf("\n%d MATCHES FOUND IN INPUT: %s\n\n", match_list->size, ((Match *)(m->data))->buffer);
 //printf("MATCH FOUND IN INPUT: %c\n", (((Match *)(m->data))->buffer)[0]);
   for(int i = 0; i < match_list->size; ++i, m = m->next) {
     int start = ((Match *)m->data)->start; 
     int end = ((Match *)m->data)->end;
     int match_len = end - start + 1;
-printf("START: %d\n", start);
-printf("END: %d\n", end);
-printf("len: %d\n'", match_len);
+printf("col: %d len: %d match: ", start+1, match_len);
+//printf("START: %d\n", start);
+//printf("END: %d\n", end);
+//printf("len: %d\n'", match_len);
     for(int j = 0; j < match_len; j++) {
 printf("%c", (((Match *)(m->data))->buffer)[j+start]);
     }
-printf("'\n\n");
+printf("\n");
   }
 }
 
@@ -902,25 +914,55 @@ parser_free(Parser * parser)
 void
 free_nfa_sim(NFASim* nfa_sim)
 {
-printf("\nFREE SIM\n");
   list_free(nfa_sim->state_set1, NULL);
   list_free(nfa_sim->state_set2, NULL);
-printf("FREE MATCH STRING\n");
   list_free(nfa_sim->matches, free_match_string);
   free(nfa_sim);
 }
 
 
 int
-main(void)
+main(int argc, char ** argv)
 {
-  Parser * parser  = init_parser(stdin);
+  Parser * parser;
   NFASim * nfa_sim = NULL;
+
+  if(argc >= 2) {
+    printf("Parsing file: %s\n", argv[1]);
+    parser = init_parser(fopen(argv[1], "r"));
+  }
+  else {
+    parser = init_parser(stdin);
+  }
+
   printf("--> PHASE1: PARSING/COMPILING regex\n\n");
   parse_regex(parser);
 
   if(parser->err_msg_available) {
     printf("%s\n", parser->err_msg);
+  }
+  else if(argc > 2) {
+    FILE * search_input = fopen(argv[2], "r");
+    char * buffer;
+    size_t buffer_len = 0;
+    int line = 0;
+
+    printf("\n--> RUNNING NFA SIMULAITON\n\n");
+    nfa_sim = new_nfa_sim(peek(parser->symbol_stack), buffer);
+    while(getline(&buffer, &buffer_len, search_input) != EOF) {
+      ++line;
+      nfa_sim_reset_buffer(nfa_sim, buffer);
+      run_nfa(nfa_sim);
+      if(nfa_sim->matches->size) {
+        printf("%s:%d\t%s", argv[2], line, nfa_sim->buffer);
+        //printf("line: %d ", line);
+        print_matches(nfa_sim->matches);
+        list_clear(nfa_sim->matches);
+      }
+      reset_nfa_sim(nfa_sim);
+//printf("LOAD NEXT LINE\n");
+    }
+    free(buffer);
   }
   else {
     //char * target = "HELLo HOW ARRRE YOU TODAY\?";
@@ -948,7 +990,7 @@ main(void)
     }
 
   }
-printf("Releasing parser and sim\n");
+
   parser_free(parser);
   if(nfa_sim) {
     free_nfa_sim(nfa_sim);

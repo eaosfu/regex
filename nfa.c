@@ -23,8 +23,10 @@ new_nfa(unsigned int type)
 void
 update_range_nfa(unsigned int low, unsigned int high, NFA * range_nfa, int negate)
 {
-#define set_bit(r, i)   (*(r))[(i) / 32 - 1] |= 0x01 << ((i) % 32 - 1)
-#define unset_bit(r, i) (*(r))[(i) / 32 - 1] &= (0xFFFFFFFF ^ (0x01 << ((i) % 32 - 1)))
+#define index(i)  ((i) / 32)
+#define offset(i) ((i) % 32)
+#define set_bit(r, i)   (*(r))[index(i)] |= 0x01 << offset(i)
+#define unset_bit(r, i) (*(r))[index(i)] &= (0xFFFFFFFF ^ (0x01 << offset(i)))
 printf("UPDATED RANGE NFA\n");
   if(negate) {
     for(int i = low; i <= high; ++i) {
@@ -89,6 +91,18 @@ printf("NEW RANGE NFA FROM %d TO %d\n", low, high);
    return accept;
 }
 */
+
+NFA *
+new_anchor_nfa(unsigned int anchor)
+{
+  NFA * start = new_nfa(anchor);
+  NFA * accept = new_nfa(NFA_ACCEPTING);
+
+  start->out1 = start->out2 = accept;
+  accept->parent = start;
+
+  return accept;
+}
 
 NFA *
 new_literal_nfa(unsigned int literal, unsigned int special_meaning)
@@ -274,7 +288,6 @@ nfa_compare_equal(void * nfa1, void *nfa2)
 
   if(nfa1 == nfa2) {
     // just return a non null
-printf("compare 0x%x vs 0x%x\n", nfa1, nfa2);
     ret = nfa1;
   }
 
