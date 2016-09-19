@@ -6,7 +6,7 @@
 void
 fatal(const char * msg)
 {
-  fprintf(stderr, "%s", msg);
+  fprintf(stderr, "ERROR: %s", msg);
   exit(1);
 }
 
@@ -14,7 +14,7 @@ fatal(const char * msg)
 void
 warn(const char * msg)
 {
-  fprintf(stderr, "%s", msg);
+  fprintf(stderr, "WARNING: %s", msg);
 }
 
 void *

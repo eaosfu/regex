@@ -1,3 +1,6 @@
+#ifndef SCANNER_H_
+#define SCANNER_H_
+
 #include <stdio.h>
 #include "token.h"
 #include <limits.h>
@@ -20,3 +23,5 @@ void unput(Scanner *);
 void reset(Scanner *);
 Token * scan(Scanner *);
 void free_scanner(Scanner *);
+
+#endif

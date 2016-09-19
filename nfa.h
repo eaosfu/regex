@@ -34,19 +34,17 @@ typedef struct NFA {
   struct NFA * out2;
 } NFA;
 
-NFA * new_nfa(unsigned int);
-NFA * new_kleene_nfa(NFA *);
 NFA * concatenate_nfa(NFA *, NFA *);
-NFA * new_kleene_nfa(NFA *);
-NFA * new_qmark_nfa(NFA *);
-NFA * new_posclosure_nfa(NFA *);
-NFA * new_alternation_nfa(NFA *, NFA *);
-//NFA * new_range_nfa(unsigned int, unsigned int, int);
-NFA * new_range_nfa(int);
-//void update_range_nfa(unsigned int, unsigned int, nfa_range *, int);
-void update_range_nfa(unsigned int, unsigned int, NFA *, int);
 void free_nfa(NFA *);
-
-NFA * new_literal_nfa(unsigned int, unsigned int);
+NFA * new_nfa(unsigned int);
+NFA * new_alternation_nfa(NFA *, NFA *);
 NFA * new_anchor_nfa(unsigned int);
+NFA * new_kleene_nfa(NFA *);
+NFA * new_literal_nfa(unsigned int, unsigned int);
+NFA * new_posclosure_nfa(NFA *);
+NFA * new_qmark_nfa(NFA *);
+NFA * new_range_nfa(int);
+void update_range_nfa(unsigned int, unsigned int, NFA *, int);
+int  update_range_w_collation(char *, NFA *, int);
+
 #endif

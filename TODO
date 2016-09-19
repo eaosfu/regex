@@ -65,11 +65,9 @@ TODO ITEMS LISTED IN ORDER:
 
 (H) - UPDATE simulartor to handle interval expressions (i.e. <expression>{<RE_DUP_MIN>, <RE_DUP_MAX>}
              Actually I think redesigning the simulator would clean things up quite a bit.
-             One thing that might help is having a stack of which nodes need special processing.
-             For example which nodes have intervals associated with them or which nodes have
-             negated bracket expressions. In the latter case particularly I could avoid having
-             a special negation flag in the NFA itself and simply mark that node in the simulator
-             stack as have a special matching case (i.e. don't match).
+             One thing that might help is having a stack for nodes interval expression nodes.
+             If the simulator detects that we have transition to such a node then we reset back to
+             that nodes parent as many times as need to be counted before declaring a match.
 
 (I) - CREATE test cases for regex engine, implement test cases
 

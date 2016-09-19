@@ -26,11 +26,6 @@ List * new_list();
 List * list_deep_copy(ListItem *);
 ListItem * list_reverse(ListItem *);
 
-//ListItem * list_release_to_pool(ListItem *);
-
-//ListItem * list_push(List *, void *);
-//ListItem * list_insert_at(List *, void *, int);
-//ListItem * list_append(List *, void *);
 int list_push(List *, void *);
 int list_insert_at(List *, void *, int);
 int list_append(List *, void *);

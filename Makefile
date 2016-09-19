@@ -21,14 +21,14 @@ nfa: misc
 list: misc
 	$(CC) -o $(OBJDIR)/list.o -c ${CFLAGS} slist.c
 
-token: misc
+token:
 	$(CC) -o $(OBJDIR)/token.o ${CFLAGS} -c token.c
 
-charclass: misc
-	$(CC) $(OBJDIR)/charclass.o $(CFLAGS) -c charclass.c
+regex_parser:
+	$(CC) -o $(OBJDIR)/regex_parser.o $(CFLAGS) -c regex_parser.c
 
-regex_parser: list token nfa scanner
-	$(CC) ${CFLAGS} regex_parser.c $(ALLOBJ)
+nfa_sim: list token nfa scanner regex_parser misc
+	$(CC) ${CFLAGS} nfa_sim.c $(ALLOBJ)
 
 
 test: list

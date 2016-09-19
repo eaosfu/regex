@@ -20,6 +20,71 @@ new_nfa(unsigned int type)
 }
 
 
+int
+update_range_w_collation(char * collation_string, NFA * range_nfa, int negate)
+{
+  int ret = 0;
+
+  typedef struct {
+    int low;
+    int high;
+  } coll_ranges;
+
+  typedef struct { 
+    const char * name;
+    int name_len;
+    int range_num;
+    coll_ranges ranges[4];
+  } named_collations;
+
+  named_collations alnum  = {"alnum", 5, 3, {{65,90}, {97,122}, {48,57}}}; // [a-zA-Z0-9]
+  named_collations alpha  = {"alpha", 5, 2, {{65,90}, {97,122}}}; // [a-zA-Z]
+  named_collations blank  = {"blank", 5, 2, {{32,32}, {11,11}}};  // [ \t]
+  named_collations cntrl  = {"cntrl", 5, 2, {{0,31,}, {127,127}}};   
+  named_collations digit  = {"digit", 5, 1, {{48,57}}};  // [0-9]
+  named_collations graph  = {"graph", 5, 1, {{33,126}}}; // [^[:cntrl:]]
+  named_collations lower  = {"lower", 5, 1, {{97,122}}}; // [a-z]
+  named_collations print  = {"print", 5, 1, {{32,126}}}; // [[:graph:] ]
+  named_collations punct  = {"punct", 5, 4, {{33,47}, {58,64}, {91,96}, {123,126}}};
+  named_collations space  = {"space", 5, 2, {{9,13}, {2,32}}}; // [ \t\v\f\c\r]
+  named_collations upper  = {"upper", 5, 1, {{65,90}}}; // [A-Z]
+  named_collations xdigit = {"xdigit",6, 2, {{65,78}, {97,102}}}; // [0-9A-Fa-f]
+
+
+  int ncoll = 12;
+  named_collations collations[] = {
+    punct, alnum, 
+    cntrl, alpha,
+    blank, space, 
+    xdigit, graph,
+    digit, print,
+    lower, upper
+  };
+
+printf("COLLATION STRING: '%s'\n", collation_string);
+
+#define low_bound(i, j)  collations[(i)].ranges[(j)].low
+#define high_bound(i, j) collations[(i)].ranges[(j)].high
+#define NAMEQ(i) \
+  (strncmp(collation_string, collations[(i)].name, collations[(i)].name_len))
+
+  for(int i = 0; i < ncoll; ++i) {
+    if(NAMEQ(i) == 0) {
+      for(int j = 0; j < collations[i].range_num; ++j) {
+        update_range_nfa(low_bound(i,j),high_bound(i,j), range_nfa, negate);
+      }
+      ret = 1;
+      break;
+    }
+  }
+
+#undef collation_low
+#undef collation_high
+#undef NAMEQ
+  return ret;
+}
+
+
 void
 update_range_nfa(unsigned int low, unsigned int high, NFA * range_nfa, int negate)
 {

@@ -98,6 +98,7 @@ scan(Scanner * s)
       case '.': update_token(s->curtoken, c, DOT);          ret = 1; break;
       case '*': update_token(s->curtoken, c, KLEENE);       ret = 1; break;
       case '+': update_token(s->curtoken, c, PLUS);         ret = 1; break;
+      case ':': update_token(s->curtoken, c, COLON);         ret = 1; break;
       case '|': update_token(s->curtoken, c, PIPE);         ret = 1; break;
       case '?': update_token(s->curtoken, c, QMARK);        ret = 1; break;
       case '(': update_token(s->curtoken, c, OPENPAREN);    ret = 1; break;
