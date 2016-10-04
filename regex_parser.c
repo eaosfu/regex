@@ -2,11 +2,8 @@
 #include <stdlib.h>
 #include <string.h>
 #include "misc.h"
-#include "stack.h"
-#include "scanner.h"
 #include "errmsg.h"
 #include "regex_parser.h"
-//#include "charset.h"
 
 #include <stdio.h>
 
@@ -50,7 +47,6 @@ new_interval_record(NFA * nfa, unsigned int min, unsigned int max)
 void parse_paren_expression(Parser * parser);
 void parse_literal_expression(Parser * parser);
 void parse_quantifier_expression(Parser * parser);
-void parse_regex(Parser * parser);
 void parse_sub_expression(Parser * parser);
 void parse_bracket_expression(Parser * parser);
 
@@ -112,6 +108,7 @@ parse_quantifier_expression(Parser * parser)
 printf("POS CLOSURE\n");
       CHECK_MULTI_QUANTIFIER_ERROR;
       parser_consume_token(parser);
+printf("HERE3: LOOKAHEAD NOW %c\n", parser->lookahead.value);
       nfa = pop(parser->symbol_stack);
       push(parser->symbol_stack, new_posclosure_nfa(nfa));
       quantifier_count++;
@@ -373,6 +370,7 @@ printf("0 - HERE: prev_token: %c, lookahead: %c\n", prev_token.value, lookahead.
   else if(prev_token.type == CLOSEBRACKET && matching_list_len > 0) {
 printf("HERE: prev_token: %c, lookahead: %c\n", prev_token.value, lookahead.value);
     parser_backtrack(parser, &prev_token);
+printf("NOW: lookahead: %c\n", parser->lookahead.value);
     return;
   }
   else if(lookahead.type == __EOF) {
@@ -471,6 +469,7 @@ printf("\tTOKEN: %c\n", parser->lookahead.value);
     parser->scanner->parse_escp_seq = 1;
 
     parser_consume_token(parser);
+printf("HERE2: LOOKAHEAD NOW %c\n", parser->lookahead.value);
     NFA * right = pop(parser->symbol_stack);
 
     if(right == open_delim_p) {

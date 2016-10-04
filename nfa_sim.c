@@ -270,7 +270,7 @@ main(int argc, char ** argv)
       if(nfa_sim->matches->size) {
         printf("%s:%d\t%s", argv[2], line, nfa_sim->buffer);
         //printf("line: %d ", line);
-        print_matches(nfa_sim->matches);
+        printf("\t"); print_matches(nfa_sim->matches);
         list_clear(nfa_sim->matches);
       }
       reset_nfa_sim(nfa_sim);

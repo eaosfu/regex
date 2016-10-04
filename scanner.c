@@ -5,7 +5,53 @@
 #include "scanner.h"
 #include "token.h"
 
-#define REMAINING_BUFFER (MAX_BUFFER_SZ - 1 - s->bytes_read)
+#define REMAINING_BUFFER(s) ((s)->buffer_len - s->bytes_read)
+
+int
+fill_buffer(Scanner * s)
+{
+  int buffer_len = 0;
+  int eol_only = 0;
+  char first, last, c;
+
+printf("ORIGINAL REGEX: ");
+  if((c = fgetc(s->input)) == EOF || c == '\n') {
+    fatal("EMPTY REGULAR EXPRESSION\n");
+  }
+
+  (s->buffer)[buffer_len] = first = c;
+  buffer_len++;
+printf("%c", c);
+
+  while(buffer_len < MAX_BUFFER_SZ - 1) {
+    if((c = fgetc(s->input)) == EOF || c == '\n') {
+      (s->buffer)[buffer_len] == '\n';
+      break;
+    }
+printf("%c", c);
+    (s->buffer)[buffer_len] = last = c;
+    buffer_len++;
+  }
+printf("\n");
+
+  s->buffer_len = buffer_len;
+  int max_index = buffer_len - 1;
+  int i = max_index;
+
+  if(first != '^' && last == '$') {
+    eol_only = 1;
+    while(i > (max_index)/2) {
+      last = (s->buffer)[i];
+printf("SWAP FIRST: %c WITH LAST: %c\n", (s->buffer)[i], (s->buffer)[max_index - i]);
+      (s->buffer)[i] = (s->buffer)[max_index - i];
+      (s->buffer)[max_index - i] = last;
+printf("RESULT SWAP FIRST: %c WITH LAST: %c\n", (s->buffer)[i], (s->buffer)[max_index - i]);
+      --i;
+    }
+  }
+
+  return eol_only;
+}
 
 Scanner *
 init_scanner(FILE * stream)
@@ -16,9 +62,11 @@ printf("SCANNER INIT START\n");
   s->unput = 0;
   s->parse_escp_seq = 1;
   memset(s->buffer, 0, MAX_BUFFER_SZ);
+  s->eol_only = fill_buffer(s);
   s->readhead = s->buffer;
   s->curtoken = new_token();
-printf("SCANNER INIT END\n");
+printf("SCANNER INIT END -- ");
+printf("REGEX BUFFER CONTAINS: '%s'\n", s->readhead);
   return s;
 }
 
@@ -26,8 +74,8 @@ printf("SCANNER INIT END\n");
 void
 reset(Scanner *s)
 {
-  if(s != NULL)
-    s->readhead = NULL;
+  if(s != NULL && s->buffer != NULL)
+    s->readhead = s->buffer;
 }
 
 
@@ -36,18 +84,22 @@ next_char(Scanner * s)
 {
   int nc = EOF;
   if(s != NULL) {
-    if(REMAINING_BUFFER > 0) {
+printf("REMAINING BUFFER: %d\n", REMAINING_BUFFER(s));
+    if(REMAINING_BUFFER(s) > 0) {
       if(s->unput) {
-        nc = *++(s->readhead);
         s->unput = 0;
+        nc = *s->readhead;
+        ++s->readhead;
       }
       else {
         // move readhead forward and update buffer
-        nc = *++(s->readhead) = fgetc(s->input);
+        nc = *(s->readhead);
+        ++s->readhead;
         ++(s->bytes_read);
       }
     }
   }
+printf("BYTES READ: %d vs. BUFFER_LEN: %d, CHAR: %c\n", s->bytes_read, s->buffer_len, nc);
   return nc;
 }
 
@@ -57,7 +109,7 @@ unput(Scanner * s)
 {
   if(s != NULL)
     if(s->bytes_read > 0) {
-      *--(s->readhead);
+      --(s->readhead);
       s->unput = 1;
     }
 }

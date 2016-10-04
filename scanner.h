@@ -11,8 +11,10 @@ typedef struct Scanner {
   FILE * input;
   char buffer[MAX_BUFFER_SZ];
   char * readhead;
+  int buffer_len;
   int bytes_read;
   int unput;
+  int eol_only;
   int parse_escp_seq;
   Token * curtoken;
 } Scanner;

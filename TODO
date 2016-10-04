@@ -10,10 +10,10 @@ FORMAT:
 /////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 Notes:
 /////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-POSIX: REGEX GENERAL REQUIREMENTS
-SOURCE: http://pubs.opengroup.org/onlinepubs/009696899/basedefs/xbd_chap09.html#tag_09_03_05
+- POSIX: REGEX GENERAL REQUIREMENTS
+  SOURCE: http://pubs.opengroup.org/onlinepubs/009696899/basedefs/xbd_chap09.html#tag_09_03_05
 
-"The implementation shall support any regular expression that does not exceed 256 bytes in length."
+  "The implementation shall support any regular expression that does not exceed 256 bytes in length."
 
 /////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 TODO ITEMS LISTED IN ORDER:
@@ -58,16 +58,60 @@ TODO ITEMS LISTED IN ORDER:
 (D) - FIX    nfa.c and parser/simulator to make sure we aren't leaking memory. Even though I'm planning 
              on updating how memory is being managed we still should be careful with this.
 
-(I) - UPDATE parse_matching_list():regex_parser.c so that we only update the range nfa passed in by the
+(H) - UPDATE parse_matching_list():regex_parser.c so that we only update the range nfa passed in by the
              caller (i.e. parse_bracket_expression).
-             -- Note this is mostly done still need to handle 'named' character classes like [:alpha:],
-                etc.
 
-(H) - UPDATE simulartor to handle interval expressions (i.e. <expression>{<RE_DUP_MIN>, <RE_DUP_MAX>}
+       (D) - implement range expressions (i.e. '[lowbound-highbound]')
+       (I) - Research and implement collation expressions (i.e. '[[.<collation_expression>.]]')
+       (I) - Research and implement character equivalence expressions (i.e. '[[=<char_equiv_expression>=]]')
+
+(I) - UPDATE scanner.c so that if first reads in the entire regex string and check for the following cases
+             performs the prescribed actions based on the presence of the '^' and '$' characters:
+
+             - <regex> 
+                 -- No action required
+             - '^'<regex>'$'
+                 -- No action required
+             - <regex>'$':    
+                 -- Reverse the regex (i.e. if regex = 'ab$' store it as '$ba' before the parser builds 
+                    the nfa).
+
+(I) - UPDATE simulator so it stops trying to find matches in input string when regex it fails to 
+
+(I) - UPDATE simulartor to handle interval expressions (i.e. <expression>{<RE_DUP_MIN>, <RE_DUP_MAX>}
              Actually I think redesigning the simulator would clean things up quite a bit.
              One thing that might help is having a stack for nodes interval expression nodes.
              If the simulator detects that we have transition to such a node then we reset back to
              that nodes parent as many times as need to be counted before declaring a match.
+
+       (D) - UPDATE source and headesr so we can separate nfa_sim from regex_parser
+
+       (I) - UPDATE scan():scanner.c so that it inserts a special token that identifies the BOL/EOL
+                    This way the simulator will be able to process anchored expressions without having to
+                    constantly check flags, etc.
+
+       (I) - UPDATE nfa.c so that individual 'interval expression' nodes have a sequentially assinged
+                    ID and a pointer back to the beginning of the expression they affect. Since the ID is
+                    sequentially assigned we can then store the 'reach count' in an array within the nfa_sim.
+                    The count can then be accessed by using the 'interval node''s ID as an index.
+                    When the simulator encounters one of these 'interval nodes' it automatically checks the
+                    'reach count' (rc) and decrements it if rc > 0. Otherwise the nfa_sim follows the 'out2'*
+                    pointer.
+
+                    * NOTE: 'out1' pointers for nfas that loop always point back to the affected expression's 
+                            start state
+
+       (I) - UPDATE match():nfa_sim.c so that it detects interval node and performs the behaviour described
+                    in the bullet point above
+
+       (I) - 
+       (I) - 
+       (I) - 
+
+(I) - UPDATE nfa_sim.c so that it reads its input from a file rather than stdin.
+
+(I) - UPDATE nfa_sim.c so that on a match it prints out the following formatted string:
+             file: <input file name> line:<match line> col: <match col> <match string>
 
 (I) - CREATE test cases for regex engine, implement test cases
 
