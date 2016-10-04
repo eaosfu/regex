@@ -74,7 +74,8 @@ TODO ITEMS LISTED IN ORDER:
                  -- No action required
              - <regex>'$':    
                  -- Reverse the regex (i.e. if regex = 'ab$' store it as '$ba' before the parser builds 
-                    the nfa).
+                    the nfa). Simply reversing the string wont work we need to concatenate the nfa nodes
+                    in reverse order and then read the target input line from end to start.
 
 (I) - UPDATE simulator so it stops trying to find matches in input string when regex it fails to 
 
@@ -104,7 +105,21 @@ TODO ITEMS LISTED IN ORDER:
        (I) - UPDATE match():nfa_sim.c so that it detects interval node and performs the behaviour described
                     in the bullet point above
 
-       (I) - 
+       (I) - UPDATE simulator to adapt its behaviour based on flags. currently it matches globally (i.e.
+                    tries to match everywhere in the target string rather than stopping on first match).
+                    Behaviour like this needs to be controlled by flags:
+
+                    -g: Match globally in the string (i.e. make current behaviour stop as soon as fisrt
+                        match is found)
+
+                    -i: case insensitive match
+
+                    -s: Treat the string as single line. That is, change "." to match any character 
+                        whatsoever, even a newline, which normally it would not match. 
+                        -- Taken from (http://perldoc.perl.org/perlre.html)
+
+                    To achieve thise we will probably have to add a 'global configuraiton' item accessible to
+                    all components in the regex engine 
        (I) - 
        (I) - 
 
