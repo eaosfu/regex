@@ -1,4 +1,3 @@
-
 #include <stdio.h>
 #include <string.h>
 #include <error.h>
@@ -110,7 +109,6 @@ unput(Scanner * s)
 void
 restart_from(Scanner * s, char * pos)
 {
-//printf("restarting scanner: (0x%x) %s\n", s->buffer, pos);
   int offset = pos - s->buffer;
   if(offset >= 0 && offset < s->line_len) {
     s->str_begin = s->readhead = pos;
@@ -119,7 +117,6 @@ restart_from(Scanner * s, char * pos)
   else {
     s->readhead = s->buffer + (s->line_len);
     SET_AT_EOL_FLAG(&s->ctrl_flags);
-//printf("FIXING TO EOL: %d '%s'\n", s->readhead - s->buffer, s->readhead);
   }
 }
 
@@ -133,20 +130,7 @@ next_char(Scanner * s)
       ++s->readhead;
     }
   }
-//printf("next char: %c\n", nc);
-//printf("distance: %d, next char: %d, EOF: %d, EOL symbol: %d\n", s->readhead - s->buffer, nc, EOF, s->eol_symbol);
   return nc;
-}
-
-
-Token *
-scanner_curtoken(Scanner * s)
-{
-  Token * curtoken = NULL;
-  if(s) {
-    curtoken = s->curtoken;
-  }
-  return curtoken;
 }
 
 
@@ -218,7 +202,6 @@ regex_scan(Scanner * s)
   }
 
   if(c == s->eol_symbol) {
-//printf("SCANNER EOF HERE!\n");
     update_token(s->curtoken, 0, __EOF);
   }
 
