@@ -1,0 +1,11 @@
+#!/bin/bash
+num_tests=22;
+echo "Diff results"
+testdir="tests"
+rdir="$testdir/regex_output";
+gdir="$testdir/grep_output";
+rinput="$testdir/regex_input"
+for i in $(ls $rinput | sort -g| grep -o '[0-9]\+$'); do
+  diff $rdir/regex_$i $gdir/grep_$i >& /dev/null; 
+  echo test_$i: $?;
+done;
