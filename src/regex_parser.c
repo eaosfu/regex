@@ -56,6 +56,7 @@ new_interval_record(NFA * nfa, unsigned int min, unsigned int max)
   ir->node = nfa;
   ir->min_rep = min;
   ir->max_rep = max;
+  ir->count = 0;
   return ir;
 }
 

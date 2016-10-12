@@ -21,7 +21,7 @@
 typedef unsigned int nfa_range[SIZE_OF_RANGE];
 
 typedef struct NFA {
-  //nfa_type type;
+  unsigned int id;
   struct {
     unsigned int type;
     union {

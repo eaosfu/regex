@@ -14,12 +14,6 @@
 #define CTRL_FLAGS(s) (s)->parser->scanner->ctrl_flags
 
 int
-extend_states()
-{
-}
-
-
-int
 get_states(NFA * nfa, List * lp)
 {
   int found_accepting_state = 0;
@@ -205,7 +199,6 @@ run_nfa(NFASim * sim)
       current_state = current_state->next;
     }
 
-    //if(sim->state_set2->size == 0) {
     if(MATCH_FAILED(sim)) {
       if(CONTINUE_MATCHING(sim) == 0) {
         break;
@@ -290,7 +283,7 @@ main(int argc, char ** argv)
     parser = init_parser(scanner);
   }
   else {
-    fatal("NO INPUT FILE PROVIDED");
+    fatal("NO INPUT FILE PROVIDED\n");
   }
 
   /*printf("--> PHASE1: PARSING/COMPILING regex\n\n")*/
@@ -310,6 +303,10 @@ printf("SET SCANNER REVERSE\n");
   }
   else if(argc > 2) {
     FILE * search_input = fopen(argv[2], "r");
+
+    if(search_input == NULL) {
+      fatal("Unable to open file\n");
+    }
     int line = 0;
 
     /*printf("\n--> RUNNING NFA SIMULAITON\n\n")*/

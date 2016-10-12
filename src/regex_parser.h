@@ -10,6 +10,7 @@ typedef struct IntervalRecord {
   NFA * node;
   unsigned int min_rep;
   unsigned int max_rep;
+  unsigned int count;
 } IntervalRecord;
 
 

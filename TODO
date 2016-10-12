@@ -65,7 +65,7 @@ TODO ITEMS LISTED IN ORDER:
        (I) - Research and implement collation expressions (i.e. '[[.<collation_expression>.]]')
        (I) - Research and implement character equivalence expressions (i.e. '[[=<char_equiv_expression>=]]')
 
-(I) - UPDATE scanner.c so that if first reads in the entire regex string and check for the following cases
+(D) - UPDATE scanner.c so that if first reads in the entire regex string and check for the following cases
              performs the prescribed actions based on the presence of the '^' and '$' characters:
 
              - <regex> 
@@ -77,7 +77,14 @@ TODO ITEMS LISTED IN ORDER:
                     the nfa). Simply reversing the string wont work we need to concatenate the nfa nodes
                     in reverse order and then read the target input line from end to start.
 
-(I) - UPDATE simulator so it stops trying to find matches in input string when regex it fails to 
+      NOTE:  I decied the change how this is handled. Instead of prereading the regex string this is now
+             handled entirely by coordinating the scanner and nfa_sim. The scanner will add an extra
+             'special' value at the end of the target string which is interpreted as an EOL symbol.
+             Similarly, when the scanner is reading from the start of a string it sets a BOL flag which
+             the nfa_sim checks for when it encounters a NFA node marked BOL.
+
+(I) - CREATE a global memory management system so we can allocate from a memory pool instead of
+             always having to call malloc()
 
 (I) - UPDATE simulartor to handle interval expressions (i.e. <expression>{<RE_DUP_MIN>, <RE_DUP_MAX>}
              Actually I think redesigning the simulator would clean things up quite a bit.
@@ -123,19 +130,13 @@ TODO ITEMS LISTED IN ORDER:
        (I) - 
        (I) - 
 
-(I) - UPDATE nfa_sim.c so that it reads its input from a file rather than stdin.
+(D) - UPDATE nfa_sim.c so that it reads its input from a file rather than stdin.
 
-(I) - UPDATE nfa_sim.c so that on a match it prints out the following formatted string:
-             file: <input file name> line:<match line> col: <match col> <match string>
-
-(I) - CREATE test cases for regex engine, implement test cases
+(P) - CREATE test cases for regex engine, implement test cases
 
 (I) - CREATE test cases for library code, implement test cases
 
 (I) - CREATE test suite that integrates test cases for the different components
-
-(I) - CREATE a global memory management system so we can allocate from a memory pool instead of
-             always having to call malloc()
 
 (I) - UPDATE list.c and nfa.c to use the new memory management system
 

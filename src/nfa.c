@@ -5,6 +5,8 @@
 #include "nfa.h"
 #include "misc.h"
 
+static unsigned int next_nfa_id = 0;
+
 #include <stdio.h>
 
 NFA *
@@ -17,6 +19,7 @@ new_nfa(unsigned int type)
   NFA * nfa = xmalloc(sizeof * nfa);
   nfa->value.type = type;
   nfa->parent = nfa->out1 = nfa->out2 = NULL;
+  nfa->id = ++next_nfa_id;
 //printf("ALLOCATED NEW NFA: 0x%x\n", nfa);
   return nfa;
 }
