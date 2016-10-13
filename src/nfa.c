@@ -9,17 +9,41 @@ static unsigned int next_nfa_id = 0;
 
 #include <stdio.h>
 
+
+NFACtrl *
+new_nfa_ctrl()
+{
+  NFACtrl * nfa_ctrl = xmalloc(sizeof * nfa_ctrl);
+  nfa_ctrl->next_seq_id = 1;
+  return nfa_ctrl;
+}
+
+
+static inline void
+mark_nfa(NFA * nfa)
+{
+  if(nfa->id == 0) {
+    if(nfa->ctrl->next_seq_id + 1 > MAX_NFA_STATES) {
+      fatal("Too many states. Maximum is 512\n");
+    }
+    nfa->id = nfa->ctrl->next_seq_id;
+    ++(nfa->ctrl->next_seq_id);
+  }
+}
+
+
 NFA *
-new_nfa(unsigned int type)
+new_nfa(NFACtrl * ctrl, unsigned int type)
 {
 //printf("ALLOCATED NFA: ");
   // TOOD: check nfa_pool, if not empty pop an nfa from the pool
   //       set its type to 't' and it's parent, out1, out2 pointers to NULL and
   //       return that as the new nfa
   NFA * nfa = xmalloc(sizeof * nfa);
+  nfa->id = 0;
+  nfa->ctrl = ctrl;
   nfa->value.type = type;
   nfa->parent = nfa->out1 = nfa->out2 = NULL;
-  nfa->id = ++next_nfa_id;
 //printf("ALLOCATED NEW NFA: 0x%x\n", nfa);
   return nfa;
 }
@@ -117,10 +141,12 @@ if(low == high && low == '.') {
 
 
 NFA *
-new_range_nfa(int negate)
+new_range_nfa(NFACtrl * ctrl, int negate)
 {
-  NFA * start  = new_nfa(NFA_RANGE);
-  NFA * accept = new_nfa(NFA_ACCEPTING);
+  NFA * start  = new_nfa(ctrl, NFA_RANGE);
+  NFA * accept = new_nfa(ctrl, NFA_ACCEPTING);
+  
+  mark_nfa(start);
   
   start->value.range = xmalloc(sizeof *(start->value.range));
 
@@ -166,8 +192,9 @@ new_range_nfa(unsigned int low, unsigned int high, int negate)
 }
 */
 
+/*
 NFA *
-new_anchor_nfa(unsigned int anchor)
+new_anchor_nfa(NFACtrl * ctrl, unsigned int anchor)
 {
   NFA * start = new_nfa(anchor);
   NFA * accept = new_nfa(NFA_ACCEPTING);
@@ -177,21 +204,24 @@ new_anchor_nfa(unsigned int anchor)
 
   return accept;
 }
-
+*/
 
 NFA *
-new_literal_nfa(unsigned int literal, unsigned int special_meaning)
+new_literal_nfa(NFACtrl * ctrl, unsigned int literal, unsigned int special_meaning)
 {
   NFA * start;
-  NFA * accept = new_nfa(NFA_ACCEPTING);
+  NFA * accept = new_nfa(ctrl, NFA_ACCEPTING);
 
   if(special_meaning) {
 //printf("SPECIAL MEANING: %d for char: %c\n", special_meaning, literal);
-    start = new_nfa(special_meaning);
+    start = new_nfa(ctrl, special_meaning);
   }
   else {
-    start = new_nfa(NFA_LITERAL);
+//printf("NEW LITERAL NFA: %c\n", literal);
+    start = new_nfa(ctrl, NFA_LITERAL);
   }
+
+  mark_nfa(start);
   
   start->value.literal = literal;
   start->out1 = start->out2 = accept;
@@ -223,8 +253,8 @@ new_literal_nfa(unsigned int literal, unsigned int special_meaning)
 NFA *
 new_kleene_nfa(NFA * body)
 {
-  NFA * start  = new_nfa(NFA_SPLIT);
-  NFA * accept = new_nfa(NFA_ACCEPTING);
+  NFA * start  = new_nfa(body->ctrl, NFA_SPLIT);
+  NFA * accept = new_nfa(body->ctrl, NFA_ACCEPTING);
 
   start->out1 = body->parent;
   start->out2 = accept;
@@ -242,8 +272,8 @@ new_kleene_nfa(NFA * body)
 NFA *
 new_qmark_nfa(NFA * body)
 {
-  NFA * start  = new_nfa(NFA_SPLIT);
-  NFA * accept = new_nfa(NFA_ACCEPTING);
+  NFA * start  = new_nfa(body->ctrl, NFA_SPLIT);
+  NFA * accept = new_nfa(body->ctrl, NFA_ACCEPTING);
 
   start->out1 = body->parent;
   start->out2 = accept;
@@ -268,8 +298,8 @@ new_qmark_nfa(NFA * body)
 NFA *
 new_posclosure_nfa(NFA * body)
 {
-  NFA * start  = new_nfa(NFA_EPSILON);
-  NFA * accept = new_nfa(NFA_ACCEPTING);
+  NFA * start  = new_nfa(body->ctrl, NFA_EPSILON);
+  NFA * accept = new_nfa(body->ctrl, NFA_ACCEPTING);
 
   // there is no direct transition to the accepting state
   start->out1 = start->out2 = body->parent;
@@ -296,9 +326,12 @@ new_posclosure_nfa(NFA * body)
 NFA *
 new_alternation_nfa(NFA * nfa1, NFA * nfa2)
 {
+  if(nfa1->ctrl != nfa2->ctrl) {
+    fatal("Alternation between different nfa families not allowed\n");
+  }
 ////printf("BUILDING NEW ALTERNATION NFA\n");
-  NFA * start  = new_nfa(NFA_SPLIT);
-  NFA * accept = new_nfa(NFA_ACCEPTING);
+  NFA * start  = new_nfa(nfa1->ctrl, NFA_SPLIT);
+  NFA * accept = new_nfa(nfa1->ctrl, NFA_ACCEPTING);
 
   // set the accepting states of nfa1 and nfa2 to type EPSILON so we
   // don't confuse them for ACCEPTING states when we simulate the NFA
@@ -330,6 +363,9 @@ new_alternation_nfa(NFA * nfa1, NFA * nfa2)
 NFA *
 concatenate_nfa(NFA * prev, NFA * next)
 {
+  NFA * discard_node = NULL;
+  NFA * tmp          = NULL;
+
   if(next == NULL) {
     return prev;
   }
@@ -337,16 +373,27 @@ concatenate_nfa(NFA * prev, NFA * next)
   if(prev != NULL) {
     // If prev is not null then it's an Accepting state
     //prev->type = next->parent->type;
+
+/*
     prev->value = next->parent->value;
     prev->out1 = next->parent->out1;
     prev->out2 = next->parent->out2;
-    NFA * discard_node = next->parent;
-    next->parent = prev->parent;
+    prev->id   = next->parent->id;
+*/
+    discard_node = next->parent;
+    tmp = prev->parent;
+    *prev = *(next->parent);
+    next->parent = tmp;
+    //next->parent = prev->parent;
+
+
+
 //printf("CONCAT FREEING NODE\n");
 //printf("FREEING NFA: 0x%x\n", discard_node);
 //printf("CONCAT: 0x%x -> 0x%x -> 0x%x\n", prev->parent, prev->out2, next);
     discard_node->parent = discard_node->out1 = discard_node->out2 = NULL;
     //free_nfa(discard_node);
+//printf("discarding node: 0x%x\n", discard_node);
     free(discard_node);
   }
 

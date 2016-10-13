@@ -1,20 +1,52 @@
 #include <stdlib.h>
 #include "scanner.h"
-#include "nfa_sim.h"
-#include "nfa_sim.h"
 #include "slist.h"
 #include "token.h"
 #include "misc.h"
 #include "nfa.h"
 #include "scanner.h"
+#include "recognizer.h"
 
 #include <string.h>
 #include <stdio.h>
 
-#define CTRL_FLAGS(s) (s)->parser->scanner->ctrl_flags
+#define CTRL_FLAGS(s) (*((s)->ctrl_flags))
+
+void
+clear_workingset_ids(NFASim * nfa_sim)
+{
+  memset(nfa_sim->working_set_ids, 0, WORKING_SET_ID_BITS);
+}
 
 int
-get_states(NFA * nfa, List * lp)
+id_in_workingset(NFASim * nfa_sim, unsigned int id)
+{
+#define index(id)  ((id) / UINT_BITS)
+#define offset(id) ((id) % UINT_BITS)
+//printf("CHECK ID: %d vs. WORKING SET: %d -- %d\n", id, 
+//  UINT_BITS * index(id) + offset(id), 
+//  (((nfa_sim->working_set_ids)[index(id)] & (0x01 << offset(id))) == 0) ? 0 : 1);
+  return ((nfa_sim->working_set_ids)[index(id)] & (0x01 << offset(id)));
+#undef index
+#undef offset
+}
+
+
+void
+add_id_to_workingset(NFASim * nfa_sim, unsigned int id)
+{
+#define index(id)  ((id) / UINT_BITS)
+#define offset(id) ((id) % UINT_BITS)
+  (nfa_sim->working_set_ids)[index(id)] |= (0x01 << offset(id));
+//printf("\tADDED ID: %d\n", id);
+#undef index
+#undef offset
+  return;
+}
+
+
+int
+get_states(NFASim * nfa_sim, NFA * nfa, List * lp)
 {
   int found_accepting_state = 0;
   if(nfa->value.type & ~(NFA_SPLIT|NFA_EPSILON)) {
@@ -22,14 +54,17 @@ get_states(NFA * nfa, List * lp)
       found_accepting_state = 1;
     }
     else {
-      list_push(lp, nfa);
+      if(id_in_workingset(nfa_sim, nfa->id) == 0) {
+        add_id_to_workingset(nfa_sim, nfa->id);
+        list_push(lp, nfa);
+      }
     }
   }
   else {
     if(nfa->value.type & NFA_SPLIT) {
-      found_accepting_state += get_states(nfa->out1, lp);
+      found_accepting_state += get_states(nfa_sim, nfa->out1, lp);
     }
-    found_accepting_state += get_states(nfa->out2, lp);
+    found_accepting_state += get_states(nfa_sim, nfa->out2, lp);
   }
   return found_accepting_state;
 }
@@ -87,7 +122,7 @@ static unsigned int new_match_count = 0;
 
   list_push(matches, match);
 
-#undef BUFFER
+#undef MATCH_BUFFER
 RETURN:
   return match;
   
@@ -95,14 +130,16 @@ RETURN:
 
 
 NFASim *
-new_nfa_sim(Parser * parser)
+new_nfa_sim(Parser * parser, Scanner * scanner, ctrl_flags * cfl)
 {
   NFASim * sim = xmalloc(sizeof * sim);
+  sim->ctrl_flags = cfl;
+  sim->scanner = scanner;
   sim->parser = parser;
   sim->nfa = peek(parser->symbol_stack);
-  sim->ctrl_flags = parser->scanner->ctrl_flags;
   sim->state_set1 = new_list();
   sim->state_set2 = new_list();
+  sim->tmp        = new_list();
   sim->matches = new_list();
   return sim;
 }
@@ -111,9 +148,13 @@ new_nfa_sim(Parser * parser)
 void
 reset_nfa_sim(NFASim * sim)
 {
+//printf("\treset nfa sim\n");
   list_clear(sim->state_set1);
   list_clear(sim->state_set2);
-  get_states(sim->nfa->parent, sim->state_set1);
+//printf("WORKING SET ID BITS: %d\n", WORKING_SET_ID_BITS);
+  clear_workingset_ids(sim);
+  get_states(sim, sim->nfa->parent, sim->state_set1);
+  clear_workingset_ids(sim);
 }
 
 
@@ -140,9 +181,8 @@ run_nfa(NFASim * sim)
   int new_match = 1;
   NFA * nfa;
 
-  List * tmp = new_list();
-
   while(c != '\0') {
+//printf("c: %c\n", c);
     current_state = sim->state_set1->head;
     for(int i = 0; i < sim->state_set1->size; ++i) {
       nfa = current_state->data;
@@ -151,13 +191,15 @@ run_nfa(NFASim * sim)
       switch(nfa->value.type) {
         case NFA_ANY: {
           if(c != sim->parser->scanner->eol_symbol) {
-            accept = get_states(NEXT_STATE(current_state), sim->state_set2);
+            accept = get_states(sim, NEXT_STATE(current_state), sim->state_set2);
           }
         } break;
         case NFA_RANGE: {
           if(c != sim->parser->scanner->eol_symbol) {
             if(is_literal_in_range(*(nfa->value.range), c)) {
-              accept = get_states(NEXT_STATE(current_state), sim->state_set2);
+//printf("%c IS IN RANGE -- ", c);
+              accept = get_states(sim, NEXT_STATE(current_state), sim->state_set2);
+//printf("ACCEPT: %d\n", accept);
             }
           }
         } break;
@@ -165,10 +207,10 @@ run_nfa(NFASim * sim)
           if(CTRL_FLAGS(sim) & AT_BOL_FLAG) {
           // need to extend state_set1
           // GET RID OF THE TMP list
-            accept = get_states(NEXT_STATE(current_state), tmp);
-            if(tmp->size > 0) {
-              list_append(sim->state_set1, tmp->head->data);
-              list_clear(tmp);
+            accept = get_states(sim, NEXT_STATE(current_state), sim->tmp);
+            if(sim->tmp->size > 0) {
+              list_append(sim->state_set1, sim->tmp->head->data);
+              list_clear(sim->tmp);
             }
           }
         } break;
@@ -180,12 +222,15 @@ run_nfa(NFASim * sim)
         } break;
         default: {
           if(c == nfa->value.literal) {
-            accept = get_states(NEXT_STATE(current_state), sim->state_set2);
+//printf("%c MATCH -- ", c);
+            accept = get_states(sim, NEXT_STATE(current_state), sim->state_set2);
+//printf("ACCEPT: %d\n", accept);
           }
         } break;
       }
 
       if(accept) {
+//printf("NEW MATCH\n");
         record_match(sim->parser->scanner->buffer,
                      sim->matches, 
                      sim->parser->scanner->str_begin,
@@ -203,6 +248,7 @@ run_nfa(NFASim * sim)
       if(CONTINUE_MATCHING(sim) == 0) {
         break;
       }
+//printf("\tRESET ON: %c\n", c);
       reset_nfa_sim(sim);
       ++match_start;
       restart_from(sim->parser->scanner, (sim->parser->scanner->buffer + match_start));
@@ -213,12 +259,11 @@ run_nfa(NFASim * sim)
     else {
       list_swap(sim->state_set1, sim->state_set2);
       list_clear(sim->state_set2);
+      clear_workingset_ids(sim);
       match_end += 1;
       c = next_char(sim->parser->scanner);
     }
   }
-
-  list_free(tmp, NULL);
 
 #undef NEXT_STATE
 #undef GLOBAL_MATCH
@@ -250,6 +295,7 @@ free_nfa_sim(NFASim* nfa_sim)
 {
   list_free(nfa_sim->state_set1, NULL);
   list_free(nfa_sim->state_set2, NULL);
+  list_free(nfa_sim->tmp, NULL);
   //list_free(nfa_sim->matches, free_match_string);
   list_free(nfa_sim->matches, NULL);
   free(nfa_sim);
@@ -259,10 +305,11 @@ free_nfa_sim(NFASim* nfa_sim)
 int
 main(int argc, char ** argv)
 {
-  Parser * parser   = NULL;
-  NFASim * nfa_sim  = NULL;
-  Scanner * scanner = new_scanner();
-  FILE * file;
+  ctrl_flags cfl;
+  Scanner * scanner = NULL;
+  Parser  * parser  = NULL;
+  NFASim  * nfa_sim = NULL;
+  FILE    * file    = NULL;
 
   if(argc >= 2) {
     /*printf("Parsing file: %s\n", argv[1])*/
@@ -273,14 +320,14 @@ main(int argc, char ** argv)
     char * buffer = NULL;
     unsigned long int buf_len = 0;
     unsigned int line_len = getline(&buffer, &buf_len, file);
-    init_scanner(scanner, buffer, buf_len, line_len);
+    scanner = init_scanner(buffer, buf_len, line_len, &cfl);
 /*printf("REGEX: '%s'\n", scanner->buffer)*/
 
 //check_match_anchors(scanner);
     if(scanner->line_len < 0) {
       fatal("UNABLE READ REGEX FILE\n");
     }
-    parser = init_parser(scanner);
+    parser = init_parser(scanner, &cfl);
   }
   else {
     fatal("NO INPUT FILE PROVIDED\n");
@@ -291,17 +338,7 @@ main(int argc, char ** argv)
   parse_regex(parser);
   fclose(file);
 
-  //if(scanner->ctrl_flags & EOL_FLAG) {
-/*
-  if(REVERSE(scanner->ctrl_flags)) {
-    SET_REVERSE_FLAG(&scanner->ctrl_flags);
-printf("SET SCANNER REVERSE\n");
-  }
-*/
-  if(parser->err_msg_available) {
-    /*printf("%s\n", parser->err_msg)*/
-  }
-  else if(argc > 2) {
+  if(argc > 2) {
     FILE * search_input = fopen(argv[2], "r");
 
     if(search_input == NULL) {
@@ -310,14 +347,16 @@ printf("SET SCANNER REVERSE\n");
     int line = 0;
 
     /*printf("\n--> RUNNING NFA SIMULAITON\n\n")*/
-    nfa_sim = new_nfa_sim(parser);
-SET_MGLOBAL_FLAG(&scanner->ctrl_flags);
+    nfa_sim = new_nfa_sim(parser, scanner, &cfl);
+SET_MGLOBAL_FLAG(scanner->ctrl_flags);
 //printf("MGLOBAL MATCH IS %s SET\n", (scanner->ctrl_flags & MGLOBAL_FLAG) ? "": "NOT");
     while((scanner->line_len = getline(&scanner->buffer, &scanner->buf_len, search_input)) > 0) {
       ++line;
       scanner->line_no = line;
       reset_scanner(scanner);
-///*printf("NEW BUFFER:%d %d, '%s'\n", line, scanner->line_len, nfa_sim->parser->scanner->buffer)*/
+//printf("NEW BUFFER:%d %d, '%s'\n", line, scanner->line_len, nfa_sim->parser->scanner->buffer);
+//#include<unistd.h>
+//sleep(1);
       run_nfa(nfa_sim);
       if(nfa_sim->matches->size) {
 //printf("%s:%d\t'%s'\n", argv[2], line, nfa_sim->parser->scanner->buffer);

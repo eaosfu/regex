@@ -20,7 +20,13 @@
 
 typedef unsigned int nfa_range[SIZE_OF_RANGE];
 
+typedef struct NFACtrl {
+  struct NFACtrl * ctrl_id;
+  unsigned int next_seq_id;
+} NFACtrl;
+
 typedef struct NFA {
+  struct NFACtrl * ctrl;
   unsigned int id;
   struct {
     unsigned int type;
@@ -34,16 +40,18 @@ typedef struct NFA {
   struct NFA * out2;
 } NFA;
 
+NFACtrl * new_nfa_ctrl(void);
 NFA * concatenate_nfa(NFA *, NFA *);
-void free_nfa(NFA *);
-NFA * new_nfa(unsigned int);
+NFA * new_nfa(NFACtrl *, unsigned int);
 NFA * new_alternation_nfa(NFA *, NFA *);
-NFA * new_anchor_nfa(unsigned int);
+//NFA * new_anchor_nfa(NFACtrl *, unsigned int);
 NFA * new_kleene_nfa(NFA *);
-NFA * new_literal_nfa(unsigned int, unsigned int);
+NFA * new_literal_nfa(NFACtrl *, unsigned int, unsigned int);
 NFA * new_posclosure_nfa(NFA *);
 NFA * new_qmark_nfa(NFA *);
-NFA * new_range_nfa(int);
+NFA * new_range_nfa(NFACtrl *, int);
+
+void free_nfa(NFA *);
 void update_range_nfa(unsigned int, unsigned int, NFA *, int);
 int  update_range_w_collation(char *, int, NFA *, int);
 

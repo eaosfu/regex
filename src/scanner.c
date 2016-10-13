@@ -10,16 +10,16 @@ update_flags(Scanner * s)
 {
   if(s && s->buffer) {
     if((s->readhead == s->buffer) || (s->readhead - s->last_newline) == 1) {
-      SET_AT_BOL_FLAG(&s->ctrl_flags);
+      SET_AT_BOL_FLAG(s->ctrl_flags);
     }
     else {
-      CLEAR_AT_BOL_FLAG(&s->ctrl_flags);
+      CLEAR_AT_BOL_FLAG(s->ctrl_flags);
     }
     if((s->readhead[0] == s->eol_symbol) || s->readhead[0] == '\n') {
-      SET_AT_EOL_FLAG(&s->ctrl_flags);
+      SET_AT_EOL_FLAG(s->ctrl_flags);
     }
     else {
-      CLEAR_AT_EOL_FLAG(&s->ctrl_flags);
+      CLEAR_AT_EOL_FLAG(s->ctrl_flags);
     }
   }
 }
@@ -39,7 +39,6 @@ free_scanner(Scanner * s)
   s->readhead  = NULL;
 
   if(s->curtoken != NULL) {
-    //free(s->curtoken);
     free_token(s->curtoken);
     s->curtoken = NULL;
   }
@@ -48,23 +47,18 @@ free_scanner(Scanner * s)
 
 
 Scanner *
-new_scanner()
+init_scanner(char * buffer, unsigned int buffer_len, unsigned line_len, ctrl_flags * cfl)
 {
   struct Scanner * s = xmalloc(sizeof * s);
   s->curtoken = new_token();
-  return s;
-}
-
-
-void
-init_scanner(Scanner * s, char * buffer, unsigned int buffer_len, unsigned line_len)
-{
   buffer[buffer_len - 1] = '\0';
-  s->buf_len = buffer_len;
-  s->line_len = line_len; 
-  s->buffer = buffer;
+  s->buf_len    = buffer_len;
+  s->buffer     = buffer;
+  s->line_len   = line_len; 
+  s->ctrl_flags = cfl;
   s->eol_symbol = (EOF < -1) ? -1 : -2;
   reset_scanner(s);
+  return s;
 }
 
 
@@ -89,7 +83,7 @@ reset_scanner(Scanner * s)
     s->buffer[s->line_len + 1] = '\0';
     s->line_len++;
   }
-  SET_ESCP_FLAG(&s->ctrl_flags);
+  SET_ESCP_FLAG(s->ctrl_flags);
   update_flags(s);
 }
 
@@ -116,7 +110,7 @@ restart_from(Scanner * s, char * pos)
   }
   else {
     s->readhead = s->buffer + (s->line_len);
-    SET_AT_EOL_FLAG(&s->ctrl_flags);
+    SET_AT_EOL_FLAG(s->ctrl_flags);
   }
 }
 
@@ -131,6 +125,17 @@ next_char(Scanner * s)
     }
   }
   return nc;
+}
+
+
+char *
+get_scanner_readhead(Scanner * s)
+{
+  char * ret = NULL;
+  if(s && s->readhead) {
+    ret = s->readhead;
+  }
+  return ret;
 }
 
 

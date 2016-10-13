@@ -4,14 +4,6 @@
 #include "misc.h"
 #include "errmsg.h"
 #include "regex_parser.h"
-/*
-#define concatenate(left, right, flag)                  \
-  ((*(flag) & EOL_FLAG) ? concatenate_nfa(right, left) \
-                        : concatenate_nfa(left, right))
-*/
-#define concatenate(left, right, flag)                  \
-  (REVERSE((*(flag))) ? concatenate_nfa(right, left) \
-                      : concatenate_nfa(left, right))
 
 #include <stdio.h>
 
@@ -23,15 +15,7 @@ void parse_sub_expression(Parser * parser);
 void parse_bracket_expression(Parser * parser);
 
 
-static void
-parser_assert(void * p)
-{
-  if(p == NULL) {
-    fatal("PARSER ASSERT FAIL\n");
-  }
-}
-
-
+/*
 static inline void
 clear_err_msg(Parser * parser)
 {
@@ -47,7 +31,7 @@ set_err_msg(Parser * parser, char * msg)
   strncpy(parser->err_msg, msg, 49);
   parser->err_msg_available = 1;
 }
-
+*/
 
 IntervalRecord *
 new_interval_record(NFA * nfa, unsigned int min, unsigned int max)
@@ -79,15 +63,17 @@ parser_backtrack(Parser * parser, Token * lookahead_reset)
 
 
 Parser *
-init_parser(Scanner * scanner)
+init_parser(Scanner * scanner, ctrl_flags * cfl)
 {
   if(!scanner) {
     fatal("FAILED TO INITIALIZE PARSER, NO SCANNER PROVIDED\n");
   }
   Parser * parser        = xmalloc(sizeof(*parser));
   parser->scanner        = scanner;
+  parser->ctrl_flags     = cfl;
   parser->symbol_stack   = new_stack();
   parser->interval_stack = new_stack();
+  parser->nfa_ctrl       = new_nfa_ctrl();
   parser_consume_token(parser);
 //printf("HERE :)\n");
   return parser;
@@ -243,7 +229,6 @@ parse_quantifier_expression(Parser * parser)
           break;
         }
         push(parser->symbol_stack, concatenate_nfa(left, right));
-        //push(parser->symbol_stack, concatenate(left, right, &(parser->scanner->ctrl_flags)));
       }
       left = pop(parser->symbol_stack);
       push(parser->symbol_stack, (void *)NULL);
@@ -302,14 +287,6 @@ token_in_charclass(unsigned int element, int reset)
 void
 parse_matching_list(Parser * parser, NFA * range_nfa, int negate)
 {
-#define new_mlliteral_nfa(token, negate)                       \
-  ((negate)) ? new_literal_nfa((token).value, NFA_NGLITERAL)   \
-             : new_literal_nfa((token).value, 0)
-
-#define update_mlliteral_type(nfa_node, negate)                \
-  ((negate)) ? ((nfa_node)->value.type = NFA_NGLITERAL)        \
-             : 0 // do nothing
-
 //printf("PARSE MATCHING LIST: parser->lookahead: %c\n", parser->lookahead.value);
   
   NFA * open_delim_p;
@@ -335,14 +312,16 @@ parse_matching_list(Parser * parser, NFA * range_nfa, int negate)
     symbol_type delim = lookahead.type;
     prev_token = parser->lookahead;
 
-    char * str_start = parser->scanner->readhead;
+    //char * str_start = parser->scanner->readhead;
+    char * str_start = get_scanner_readhead(parser->scanner);
     parser_consume_token(parser);
 
     // handle case where ']' immediately follows '['<delim> ... (e.x. '[.].]')
     if(parser->lookahead.type == CLOSEBRACKET) {
-      str_start = parser->scanner->readhead;
+      //str_start = parser->scanner->readhead;
+      str_start = get_scanner_readhead(parser->scanner);
       prev_token = parser->lookahead;
-      push(parser->symbol_stack, new_literal_nfa(parser->lookahead.value, 0));
+      push(parser->symbol_stack, new_literal_nfa(parser->nfa_ctrl, parser->lookahead.value, 0));
       parser_consume_token(parser);
     }
 
@@ -361,7 +340,8 @@ parse_matching_list(Parser * parser, NFA * range_nfa, int negate)
     }
 
     // notice that -1 removes the trailing delim
-    int coll_str_len = parser->scanner->readhead - str_start - 2;
+    //int coll_str_len = parser->scanner->readhead - str_start - 2;
+    int coll_str_len = get_scanner_readhead(parser->scanner) - str_start - 2;
 
     if(coll_str_len <= 0) {
       return;
@@ -450,8 +430,6 @@ parse_matching_list(Parser * parser, NFA * range_nfa, int negate)
   ++matching_list_len;
   parse_matching_list(parser, range_nfa, negate);
   --matching_list_len;
-#undef new_mlliteral_nfa
-#undef update_mlliteral_type
 }
 
 
@@ -463,10 +441,10 @@ void
 parse_bracket_expression(Parser * parser)
 {
   // use this as the new bottom of the stack
-  NFA * open_delim_p = new_literal_nfa(parser->lookahead.value, 0);
+  NFA * open_delim_p = new_literal_nfa(parser->nfa_ctrl, parser->lookahead.value, 0);
   push(parser->symbol_stack, open_delim_p);
   //parser->scanner->parse_escp_seq = 0;
-  CLEAR_ESCP_FLAG(&(parser->scanner->ctrl_flags));
+  CLEAR_ESCP_FLAG(parser->ctrl_flags);
   parser_consume_token(parser);
 //printf("PARSE BRACKET EXPRESSION\n");
   
@@ -479,7 +457,7 @@ parse_bracket_expression(Parser * parser)
 //printf("NEGATE MATCH!\n");
   }
 
-  NFA * range_nfa = new_range_nfa(negate_match);
+  NFA * range_nfa = new_range_nfa(parser->nfa_ctrl, negate_match);
   push(parser->symbol_stack, range_nfa);
 
   parse_matching_list(parser, range_nfa->parent, negate_match);
@@ -493,7 +471,7 @@ parse_bracket_expression(Parser * parser)
     
     // re-enable scanning escape sequences
    // parser->scanner->parse_escp_seq = 1;
-    SET_ESCP_FLAG(&(parser->scanner->ctrl_flags));
+    SET_ESCP_FLAG(parser->ctrl_flags);
 
     parser_consume_token(parser);
 //printf("HERE2: LOOKAHEAD NOW %c\n", parser->lookahead.value);
@@ -527,16 +505,16 @@ parse_literal_expression(Parser * parser)
   NFA * nfa;
   switch(parser->lookahead.type) {
     case DOT: {
-      nfa = new_literal_nfa(parser->lookahead.value, NFA_ANY);
+      nfa = new_literal_nfa(parser->nfa_ctrl, parser->lookahead.value, NFA_ANY);
     } break;
     case DOLLAR: {
-      nfa = new_literal_nfa(parser->lookahead.value, NFA_EOL_ANCHOR);
+      nfa = new_literal_nfa(parser->nfa_ctrl, parser->lookahead.value, NFA_EOL_ANCHOR);
     } break;
     case CIRCUMFLEX: {
-      nfa = new_literal_nfa(parser->lookahead.value, NFA_BOL_ANCHOR);
+      nfa = new_literal_nfa(parser->nfa_ctrl, parser->lookahead.value, NFA_BOL_ANCHOR);
     } break;
     default: {
-      nfa = new_literal_nfa(parser->lookahead.value, 0);
+      nfa = new_literal_nfa(parser->nfa_ctrl, parser->lookahead.value, 0);
     }
   }
 //printf("parse_literal: '%c' (%u)\n\n", nfa->parent->value.literal, nfa->parent->value.literal);
@@ -592,7 +570,6 @@ parse_sub_expression(Parser * parser)
       right = pop(parser->symbol_stack);
       NFA * left = pop(parser->symbol_stack);
       push(parser->symbol_stack, concatenate_nfa(left, right));
-      //push(parser->symbol_stack, concatenate(left, right, &(parser->scanner->ctrl_flags)));
     } break;
     case OPENPAREN: {
       parse_paren_expression(parser);
@@ -600,7 +577,6 @@ parse_sub_expression(Parser * parser)
       right = pop(parser->symbol_stack);
       NFA * left = pop(parser->symbol_stack);
       push(parser->symbol_stack, concatenate_nfa(left, right));
-      //push(parser->symbol_stack, concatenate(left, right, &(parser->scanner->ctrl_flags)));
     } break;
     case OPENBRACKET: {
       parse_bracket_expression(parser);
@@ -608,7 +584,6 @@ parse_sub_expression(Parser * parser)
       right = pop(parser->symbol_stack);
       NFA * left = pop(parser->symbol_stack);
       push(parser->symbol_stack, concatenate_nfa(left, right));
-      //push(parser->symbol_stack, concatenate(left, right, &(parser->scanner->ctrl_flags)));
     } break;
     case __EOF: {
       //printf("__EOF\n");
@@ -635,8 +610,8 @@ parse_regex(Parser * parser)
     parse_sub_expression(parser);
   }
   else {
-    //fatal("Expected char or '('\n");
-    set_err_msg(parser, "NONFATAL: Expected char or '('\n");
+    fatal("Expected char or '('\n");
+    //set_err_msg(parser, "NONFATAL: Expected char or '('\n");
   }
 }
 

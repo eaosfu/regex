@@ -27,8 +27,8 @@ token:
 regex_parser:
 	$(CC) -o $(OBJDIR)/regex_parser.o $(CFLAGS) -c ${SRC}/regex_parser.c
 
-nfa_sim: list token nfa scanner regex_parser misc
-	$(CC) ${CFLAGS} ${SRC}/nfa_sim.c $(ALLOBJ)
+recognizer: list token nfa scanner regex_parser misc
+	$(CC) ${CFLAGS} ${SRC}/recognizer.c $(ALLOBJ)
 
 
 test: list

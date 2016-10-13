@@ -1,5 +1,5 @@
 #!/bin/bash
-num_tests=22;
+num_tests=23;
 echo "Diff results"
 testdir="tests"
 rdir="$testdir/regex_output";

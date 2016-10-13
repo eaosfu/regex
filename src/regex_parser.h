@@ -15,16 +15,16 @@ typedef struct IntervalRecord {
 
 
 typedef struct Parser {
-  int err_msg_available;
-  char err_msg[50];
   Token lookahead;
   Stack   * symbol_stack;
   Stack   * interval_stack;
   Scanner * scanner;
+  NFACtrl * nfa_ctrl;
+  ctrl_flags * ctrl_flags;
 } Parser;
 
 
-Parser * init_parser(Scanner *);
+Parser * init_parser(Scanner *, ctrl_flags *);
 void parser_free(Parser *);
 void parse_regex(Parser *);
 
