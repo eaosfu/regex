@@ -15,24 +15,6 @@ void parse_sub_expression(Parser * parser);
 void parse_bracket_expression(Parser * parser);
 
 
-/*
-static inline void
-clear_err_msg(Parser * parser)
-{
-  memset(parser->err_msg, 0, 50);
-  parser->err_msg_available = 0;
-}
-
-
-void
-set_err_msg(Parser * parser, char * msg)
-{
-  clear_err_msg(parser);
-  strncpy(parser->err_msg, msg, 49);
-  parser->err_msg_available = 1;
-}
-*/
-
 IntervalRecord *
 new_interval_record(NFA * nfa, unsigned int min, unsigned int max)
 {

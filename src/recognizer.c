@@ -46,7 +46,7 @@ add_id_to_workingset(NFASim * nfa_sim, unsigned int id)
 
 
 int
-get_states(NFASim * nfa_sim, NFA * nfa, List * lp)
+get_states(NFASim * sim, NFA * nfa, List * lp)
 {
   int found_accepting_state = 0;
   if(nfa->value.type & ~(NFA_SPLIT|NFA_EPSILON)) {
@@ -54,17 +54,22 @@ get_states(NFASim * nfa_sim, NFA * nfa, List * lp)
       found_accepting_state = 1;
     }
     else {
-      if(id_in_workingset(nfa_sim, nfa->id) == 0) {
-        add_id_to_workingset(nfa_sim, nfa->id);
+      if(CTRL_FLAGS(sim) & MARK_STATES_FLAG) {
+        if(id_in_workingset(sim, nfa->id) == 0) {
+          add_id_to_workingset(sim, nfa->id);
+          list_push(lp, nfa);
+        }
+      }
+      else {
         list_push(lp, nfa);
       }
     }
   }
   else {
     if(nfa->value.type & NFA_SPLIT) {
-      found_accepting_state += get_states(nfa_sim, nfa->out1, lp);
+      found_accepting_state += get_states(sim, nfa->out1, lp);
     }
-    found_accepting_state += get_states(nfa_sim, nfa->out2, lp);
+    found_accepting_state += get_states(sim, nfa->out2, lp);
   }
   return found_accepting_state;
 }
@@ -153,8 +158,9 @@ reset_nfa_sim(NFASim * sim)
   list_clear(sim->state_set2);
 //printf("WORKING SET ID BITS: %d\n", WORKING_SET_ID_BITS);
   clear_workingset_ids(sim);
+  CLEAR_MARK_STATES_FLAG(&CTRL_FLAGS(sim));
   get_states(sim, sim->nfa->parent, sim->state_set1);
-  clear_workingset_ids(sim);
+  SET_MARK_STATES_FLAG(&CTRL_FLAGS(sim));
 }
 
 
@@ -348,7 +354,7 @@ main(int argc, char ** argv)
 
     /*printf("\n--> RUNNING NFA SIMULAITON\n\n")*/
     nfa_sim = new_nfa_sim(parser, scanner, &cfl);
-SET_MGLOBAL_FLAG(scanner->ctrl_flags);
+SET_MGLOBAL_FLAG(&CTRL_FLAGS(scanner));
 //printf("MGLOBAL MATCH IS %s SET\n", (scanner->ctrl_flags & MGLOBAL_FLAG) ? "": "NOT");
     while((scanner->line_len = getline(&scanner->buffer, &scanner->buf_len, search_input)) > 0) {
       ++line;

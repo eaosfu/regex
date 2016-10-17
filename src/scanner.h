@@ -11,14 +11,15 @@
 #define BOL_FLAG      0x020
 #define AT_EOL_FLAG   0x100
 #define AT_BOL_FLAG   0x200
+#define MARK_STATES_FLAG   0x400
 
 #define PARSE_ESCP_SEQ(ctrl_flags)  (*(ctrl_flags) & ESCP_SEQ_FLAG)
 
 // These control the behaviour of the scanner
 #define SET_ESCP_FLAG(ctrl_flags)      (*(ctrl_flags) = *(ctrl_flags) | ESCP_SEQ_FLAG)
+#define CLEAR_ESCP_FLAG(ctrl_flags)    (*(ctrl_flags) = *(ctrl_flags) & ~ESCP_SEQ_FLAG)
 #define SET_UNPUT_FLAG(ctrl_flag)      (*(ctrl_flag)  = *(ctrl_flag)  | UNPUT_FLAG)
 #define CLEAR_UNPUT_FLAG(ctrl_flag)    (*(ctrl_flag)  = *(ctrl_flag)  & ~UNPUT_FLAG)
-#define CLEAR_ESCP_FLAG(ctrl_flags)    (*(ctrl_flags) = *(ctrl_flags) & ~ESCP_SEQ_FLAG)
 
 // These control the nfa_sim's matching behavour
 // Note that once set these are never cleared
@@ -32,6 +33,8 @@
 #define SET_AT_EOL_FLAG(ctrl_flags)   (*(ctrl_flags) = *(ctrl_flags) | AT_EOL_FLAG)
 #define CLEAR_AT_EOL_FLAG(ctrl_flags) (*(ctrl_flags) = *(ctrl_flags) & ~AT_EOL_FLAG)
 
+#define SET_MARK_STATES_FLAG(ctrl_flags)   (*(ctrl_flags) = *(ctrl_flags) | MARK_STATES_FLAG)
+#define CLEAR_MARK_STATES_FLAG(ctrl_flags) (*(ctrl_flags) = *(ctrl_flags) & ~MARK_STATES_FLAG)
 
 typedef unsigned int ctrl_flags;
 
