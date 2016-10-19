@@ -5,6 +5,7 @@
 #include "../../src/misc.h"
 
 #define NUM_TESTS 11
+#define list_assert(a)  (((a) != 0) ? PASS : FAIL)
 
 typedef enum {FAIL = 0, PASS = 1, FATAL = 2} test_status;
 
@@ -20,8 +21,11 @@ int  g_issued_warning = 0;
 char g_tests_passed[NUM_TESTS] = {0};
 
 
-// TEST UTILITY FUNCTIONS
-#define list_assert(a)  (((a) != 0) ? PASS : FAIL)
+
+/***********************************************************************************************************/
+/****************************************** HELPER FUNC ****************************************************/
+/***********************************************************************************************************/
+
 
 void
 report_test_status(const char * test_name, const char * msg, test_status status)
@@ -56,7 +60,7 @@ report_test_status(const char * test_name, const char * msg, test_status status)
 test_status
 check_list_size(const char * test_name, int expected, int actual)
 {
-  if(!list_assert(expected == actual)) {
+  if(list_assert(expected == actual) == FAIL) {
     report_test_status(test_name, "Unexpected change in list->size", FAIL);
     return FAIL;
   }
@@ -67,7 +71,7 @@ check_list_size(const char * test_name, int expected, int actual)
 test_status
 check_pool_size(const char * test_name, int expected, int actual)
 {
-  if(!list_assert(expected == actual)) {
+  if(list_assert(expected == actual) == FAIL) {
     report_test_status(test_name, "Unexpected change in list->pool_size", FAIL);
     return FAIL;
   }
@@ -126,18 +130,20 @@ reset_list(List * list, void * data_list[], unsigned int data_size)
 {
   const char * test_name = "reste_list";
   if(check_test_passed(LIST_CLEAR) == 0) {
-    report_test_status(test_name, "Unable to reset list unless list_clear is knonw to be good", FATAL);
+    report_test_status(test_name, 
+      "This test needs to run reset_list which can't be run unless "
+      "list_clear has passed its tests", FATAL);
   }
   else {
     list_clear(list);
   }
 }
 
-// DONE TEST UTILITY FUNCTIONS
 
+/***********************************************************************************************************/
+/******************************************* UNIT TESTS ****************************************************/
+/***********************************************************************************************************/
 
-
-// LIST UNIT TESTS
 
 List *
 test_new_list(List * list)
@@ -151,7 +157,7 @@ test_new_list(List * list)
     report_test_status(test_name, NULL, PASS);
   }
   return list;
-}
+} // test_new_list
 
 test_status
 test_list_push(List * list, void * d)
@@ -209,7 +215,7 @@ test_list_push(List * list, void * d)
   }
 
   return ret_status;
-}
+} // test_list_push
 
 
 test_status
@@ -220,8 +226,6 @@ test_list_insert_at(List * list, void * d, int idx)
   int list_size = list->size;
   int pool_size = list->pool_size;
   test_status ret_status = FAIL;
-  test_status node_pointers_match;
-  List * unmodified_list = NULL;
   ListItem * old_head_p = list->head;
   ListItem * pool_p = list->pool;
 
@@ -236,8 +240,6 @@ test_list_insert_at(List * list, void * d, int idx)
     expected_idx = list->size;
   }
 
-//  printf("\tidx: %d\n", idx);
-  
   if(list == NULL) {
     report_test_status(test_name, "This test requires a non-NULL 'list' object as an argument.", FAIL);
   }
@@ -332,7 +334,7 @@ test_list_insert_at(List * list, void * d, int idx)
   }
 
   return ret_status;
-}
+} // test_list_insert_at
 
 
 test_status
@@ -407,49 +409,85 @@ test_list_append(List * list, void * data_list[], int data_list_size)
 
       list_end = list_end->next;
 
-      if(!fail_set) {
-        report_test_status(test_name, NULL, PASS);
-        mark_test_passed(LIST_APPEND);
-        ret_status = PASS;
-      }
-    }
+    } // for
 
     if(!list_assert(list_end->next == NULL)) {
       report_test_status(test_name, "The 'next' pointer at end of list does not point to 'NULL'", FAIL);
       fail_set = 1;
     }
+  } // else
 
-
+  if(!fail_set) {
+    report_test_status(test_name, NULL, PASS);
+    mark_test_passed(LIST_APPEND);
+    ret_status = PASS;
   }
 
   return ret_status;
-}
+} // test_list_append
 
 
 test_status
 test_list_shift(List * list)
 {
   const char * test_name = "test_list_shift";
-  void * list_head = list->head->data;
+  int fail_set = 0;
   test_status ret_status = FAIL;
 
-  if(list_assert(list_shift(list) == list_head) == FAIL) {
-    report_test_status(test_name, "Data returned by list_shift() does not match expected data", FAIL);
+  if(list == NULL) {
+    report_test_status(test_name, "This test requires a non-NULL 'list' object as an argument.", FAIL);
   }
   else {
-    report_test_status(test_name, NULL, PASS);
-    mark_test_passed(LIST_SHIFT);
-    ret_status = PASS;
-  }
+    void * expected_data = (list->head == NULL) ? NULL : list->head->data;
+    unsigned int expected_list_size = list->size;
+    unsigned int expected_pool_size = list->pool_size;
+
+    if(list_assert(list_shift(list) == expected_data) == FAIL) {
+      report_test_status(test_name, "Data returned by list_shift() does not match expected data", FAIL);
+    }
+    else {
+      expected_list_size += (expected_data != NULL) ? -1 : 0;
+      expected_pool_size += (expected_data != NULL) ?  1 : 0;
+
+      // list size should have decreased by 1
+      if(check_list_size(test_name, list->size, expected_list_size) == FAIL) {
+        printf("\tlist size: %d vs. expected list size: %d\n", list->size, expected_list_size);
+        fail_set = 1;
+      }
+
+      // pool size should have increased by 1
+      if(check_pool_size(test_name, list->pool_size, expected_pool_size) == FAIL) {
+        printf("\tpool size: %d vs. expected pool size: %d\n", list->pool_size, expected_pool_size);
+        fail_set = 1;
+      }
+
+      if(fail_set == 0) {
+        report_test_status(test_name, NULL, PASS);
+        mark_test_passed(LIST_SHIFT);
+        ret_status = PASS;
+      }
+    } // else
+  } // else
 
   return ret_status;
-}
+} // test_list_shift
 
 
 test_status
 test_list_remove_at(List * list)
 {
   const char * test_name = "test_list_remove_at";
+
+  if((check_test_passed(LIST_INSERT_AT)) == 0) {
+    report_test_status(test_name,
+      "list_insert_at be tested before this test can run", FATAL);
+  }
+
+  if(check_test_passed(LIST_GET_AT) == 0) {
+    report_test_status(test_name,
+      "list_get_at must have passed its tests before this test can run", FATAL);
+  }
+
   test_status ret_status = FAIL;
   int fail_set = 0;
   void * expected_data;
@@ -458,26 +496,39 @@ test_list_remove_at(List * list)
     report_test_status(test_name, "This test requires a non-NULL 'list' object as an argument.", FAIL);
   }
   else {
-    if((check_test_passed(LIST_INSERT_AT)) == 0) {
-      report_test_status(test_name,
-        "list_insert_at be tested before this test can run", FATAL);
-    }
-
-    if(check_test_passed(LIST_GET_AT) == 0) {
-      report_test_status(test_name,
-        "list_get_at must be tested before this test can run", FATAL);
-    }
+    unsigned int expected_list_size = list->size;
+    unsigned int expected_pool_size = list->pool_size;
 
     // idx == - 1 .. should return NULL
     if(list_assert(list_remove_at(list, -1) == NULL) == FAIL) {
       report_test_status(test_name, "Non NULL value returned at index -1", FAIL);
       fail_set = 1;
     }
+    // list->size should remain unchanged
+    if(check_list_size(test_name, list->size, expected_list_size) == FAIL) {
+      printf("\tlist size: %d vs. expected list size: %d\n", list->size, expected_list_size);
+      fail_set = 1;
+    } // list->pool_size should remain unchanged
+    if(check_pool_size(test_name, list->pool_size, expected_pool_size) == FAIL) {
+      printf("\tpool size: %d vs. expected pool size: %d\n", list->pool_size, expected_pool_size);
+      fail_set = 1;
+    }
+
 
     // idx == 0
     expected_data = list_get_at(list, 0);
     if(list_assert(list_remove_at(list, 0) == expected_data) == FAIL) {
       report_test_status(test_name, "Data returned at idx 0 does not match data at list head", FAIL);
+      fail_set = 1;
+    }
+    expected_list_size += (expected_data != NULL) ? -1 : 0;
+    expected_pool_size += (expected_data != NULL) ?  1 : 0;
+    if(check_list_size(test_name, list->size, expected_list_size) == FAIL) {
+      printf("\tlist size: %d vs. expected list size: %d\n", list->size, expected_list_size);
+      fail_set = 1;
+    }
+    if(check_pool_size(test_name, list->pool_size, expected_pool_size) == FAIL) {
+      printf("\tpool size: %d vs. expected pool size: %d\n", list->pool_size, expected_pool_size);
       fail_set = 1;
     }
 
@@ -487,16 +538,44 @@ test_list_remove_at(List * list)
       report_test_status(test_name, "Data returned at idx 0 does not match data at idx 1", FAIL);
       fail_set = 1;
     }
+    expected_list_size += (expected_data != NULL) ? -1 : 0;
+    expected_pool_size += (expected_data != NULL) ?  1 : 0;
+    if(check_list_size(test_name, list->size, expected_list_size) == FAIL) {
+      printf("\tlist size: %d vs. expected list size: %d\n", list->size, expected_list_size);
+      fail_set = 1;
+    }
+    if(check_pool_size(test_name, list->pool_size, expected_pool_size) == FAIL) {
+      printf("\tpool size: %d vs. expected pool size: %d\n", list->pool_size, expected_pool_size);
+      fail_set = 1;
+    }
 
     // idx > list_size
     if(list_assert(list_remove_at(list, list->size + 1) == NULL) == FAIL) {
       report_test_status(test_name, "Data returned at idx 0 does not match data at idx = list->size + 1", FAIL);
       fail_set = 1;
     }
+    // no change to list or pool size should be observed
+    if(check_list_size(test_name, list->size, expected_list_size) == FAIL) {
+      printf("\tlist size: %d vs. expected list size: %d\n", list->size, expected_list_size);
+      fail_set = 1;
+    }
+    if(check_pool_size(test_name, list->pool_size, expected_pool_size) == FAIL) {
+      printf("\tpool size: %d vs. expected pool size: %d\n", list->pool_size, expected_pool_size);
+      fail_set = 1;
+    }
 
     // idx = list_size
     if(list_assert(list_remove_at(list, list->size) == NULL) == FAIL) {
       report_test_status(test_name, "Data returned at idx 0 does not match data at idx = list->size", FAIL);
+      fail_set = 1;
+    }
+    // no change to list or pool size should be observed
+    if(check_list_size(test_name, list->size, expected_list_size) == FAIL) {
+      printf("\tlist size: %d vs. expected list size: %d\n", list->size, expected_list_size);
+      fail_set = 1;
+    }
+    if(check_pool_size(test_name, list->pool_size, expected_pool_size) == FAIL) {
+      printf("\tpool size: %d vs. expected pool size: %d\n", list->pool_size, expected_pool_size);
       fail_set = 1;
     }
 
@@ -506,11 +585,31 @@ test_list_remove_at(List * list)
       report_test_status(test_name, "Data returned at idx 0 does not match data at idx = list->size + 1", FAIL);
       fail_set = 1;
     }
+    expected_list_size += (expected_data != NULL) ? -1 : 0;
+    expected_pool_size += (expected_data != NULL) ?  1 : 0;
+    if(check_list_size(test_name, list->size, expected_list_size) == FAIL) {
+      printf("\tlist size: %d vs. expected list size: %d\n", list->size, expected_list_size);
+      fail_set = 1;
+    }
+    if(check_pool_size(test_name, list->pool_size, expected_pool_size) == FAIL) {
+      printf("\tpool size: %d vs. expected pool size: %d\n", list->pool_size, expected_pool_size);
+      fail_set = 1;
+    }
 
     // idx = list_size - 2
     expected_data = (list->size >= 2) ? list_get_at(list, list->size - 2) : NULL;
     if(list_assert(list_remove_at(list, list->size - 2) == expected_data) == FAIL) {
       report_test_status(test_name, "Data returned at idx 0 does not match data at idx = list->size + 1", FAIL);
+      fail_set = 1;
+    }
+    expected_list_size += (expected_data != NULL) ? -1 : 0;
+    expected_pool_size += (expected_data != NULL) ?  1 : 0;
+    if(check_list_size(test_name, list->size, expected_list_size) == FAIL) {
+      printf("\tlist size: %d vs. expected list size: %d\n", list->size, expected_list_size);
+      fail_set = 1;
+    }
+    if(check_pool_size(test_name, list->pool_size, expected_pool_size) == FAIL) {
+      printf("\tpool size: %d vs. expected pool size: %d\n", list->pool_size, expected_pool_size);
       fail_set = 1;
     }
 
@@ -519,27 +618,80 @@ test_list_remove_at(List * list)
       mark_test_passed(LIST_REMOVE_AT);
       ret_status = PASS;
     }
-  }
+  } // else
 
   return ret_status;
-}
+} // test_list_remove_at
 
 
 test_status
-test_list_get_at(List * list, void * data, unsigned int data_idx)
+test_list_get_at(List * list, void * data[], unsigned int data_size)
 {
   const char * test_name = "test_list_get_at";
+
+  if((check_test_passed(LIST_PUSH)) == 0) {
+    report_test_status(test_name,
+      "list_insert_at be tested before this test can run", FATAL);
+  }
+
+  if((check_test_passed(LIST_CLEAR)) == 0) {
+    report_test_status(test_name,
+      "list_insert_at be tested before this test can run", FATAL);
+  }
+
   test_status ret_status = FAIL;
   int fail_set = 0;
-  void * expected_data;
 
   if(list == NULL) {
-    report_test_status(test_name, "This test requires a non-NULL 'list' object as an argument.", FAIL);
+    report_test_status(test_name,
+      "This test requires a non-NULL 'list' object as an argument.", FAIL);
   }
   else {
-    if(list_assert(data_idx >= list->size) == FAIL) {
+    list_clear(list);
+   
+    for(int i = 0; i < data_size; ++i) {
+      list_append(list, data[i]);
     }
-
+    // list at -1
+    if(list_assert(list_get_at(list, -1) == NULL) == FAIL) {
+      report_test_status(test_name, "Returned non-NULL value at index = -1", FAIL);
+      fail_set = 1;
+    }
+    // list at 0
+    if(list_assert(list_get_at(list, 0) == data[0]) == FAIL) {
+      report_test_status(test_name, "Incorrect data value retunred for index = 0", FAIL);
+      fail_set = 1;
+    }
+    // list at 1
+    if(list_assert(list_get_at(list, 1) == data[1]) == FAIL) {
+      report_test_status(test_name, "Incorrect data value returned for index = 1", FAIL);
+      fail_set = 1;
+    }
+    // list at list->size - 1
+    if(list_assert(list_get_at(list, (list->size - 1)) == data[data_size - 1]) == FAIL) {
+      report_test_status(test_name, "Incorrect data value returned for index = list->size - 1", FAIL);
+      fail_set = 1;
+    }
+    // list at list->size - 2
+    if(list_assert(list_get_at(list, (list->size - 2)) == data[data_size - 2]) == FAIL) {
+      report_test_status(test_name, "Incorrect data value returned for index = list->size - 2", FAIL);
+      fail_set = 1;
+    }
+    // list at list->size
+    if(list_assert(list_get_at(list, list->size) == NULL) == FAIL) {
+      report_test_status(test_name, "Return non-NULL value at index = list->size", FAIL);
+      fail_set = 1;
+    }
+    // list at list->size + 1
+    if(list_assert(list_get_at(list, (list->size + 1)) == NULL) == FAIL) {
+      report_test_status(test_name, "Return non-NULL value at index = list->size + 1", FAIL);
+      fail_set = 1;
+    }
+    // list at (list->size)/2
+    if(list_assert(list_get_at(list, (list->size/2)) == data[data_size/2]) == FAIL) {
+      report_test_status(test_name, "Incorrect data value returned for index = list->size/2", FAIL);
+      fail_set = 1;
+    }
     if(fail_set == 0) {
       report_test_status(test_name, NULL, PASS);
       mark_test_passed(LIST_GET_AT);
@@ -548,7 +700,7 @@ test_list_get_at(List * list, void * data, unsigned int data_idx)
   }
 
   return ret_status;
-}
+} // test_list_get_at
 
 
 test_status
@@ -557,7 +709,6 @@ test_list_clear(List * list, void * data_list[], unsigned int list_size)
   const char * test_name = "test_list_clear";
   test_status ret_status = FAIL;
   int fail_set = 0;
-  void * expected_data;
 
   if(list == NULL) {
     report_test_status(test_name, "This test requires a non-NULL 'list' object as an argument.", FAIL);
@@ -594,36 +745,55 @@ test_list_clear(List * list, void * data_list[], unsigned int list_size)
 
     if(fail_set == 0) {
       report_test_status(test_name, NULL, PASS);
-      //mark_test_passed(LIST_CLEAR);
+      mark_test_passed(LIST_CLEAR);
       ret_status = PASS;
     }
   }
 
-  if(fail_set == 0)
+  return ret_status;
+} // test_list_clear
+
+
+test_status
+test_list_free(void)
+{
+  const char * test_name = "test_list_free";
+
+  if((check_test_passed(LIST_PUSH)) == 0) {
+    report_test_status(test_name,
+      "list_insert_at be tested before this test can run", FATAL);
+  }
+
+  test_status ret_status = FAIL;
+  int fail_set = 0;
+  List * list = new_list();
+  
+  list_free(&list, NULL);
+  if(list_assert(list == NULL) == FAIL) {
+    report_test_status(test_name, "Failed to free list", FAIL);
+    fail_set = 1;
+  }
+
+  if(fail_set == 0) {
+    report_test_status(test_name, NULL, PASS);
+    mark_test_passed(LIST_CLEAR);
+    ret_status = PASS;
+  }
 
   return ret_status;
-}
+} // test_list_free
 
 
 test_status
-test_list_release_to_pool(List * list)
+test_list_deep_copy(List * list)
 {
-}
+  return PASS;
+} // test_list_deep_copy
 
 
-test_status
-test_list_free(List * list)
-{
-}
-
-
-test_status
-test_list_deep_copy()
-{
-}
-
-
-// DONE LIST UNIT TESTS
+/***********************************************************************************************************/
+/******************************************** MAIN *********************************************************/
+/***********************************************************************************************************/
 
 int
 main(void)
@@ -634,42 +804,9 @@ main(void)
   struct { int a; } d2 = { .a = 20 };
   struct { int a; } d3 = { .a = 20 };
   struct { int a; } d4 = { .a = 50 };
-/*
-  // SHOULD NOT ANYTHING ANYTHING
-  list_assert(list_remove_at(list, 10), NULL);
-
-  // REMOVE THE HEAD
-  list_assert(list_remove_at(list, 0), (void *)&d2);
   
-  // REMOVE MIDDLE ELEMENT
-  // void * rm = list_remove_at(list, 1);
-
-  // REMOVE END ELEMENT
-  // void * rm = list_remove_at(list, 2);
-
-  // REMOVE THE HEAD
-// list_assert(list_shift(list), );
-  list_assert(list_get_at(list, -1), NULL);
-  list_assert(list_get_at(list, -4), NULL);
-// list_assert(list_get_at(list, 0), );
-//  list_assert(list_get_at(list, list->size - 1), );
-  list_assert(list_get_at(list, 20), NULL);
-
-  list_clear(list);
-
-  list_assert(list->head, NULL);
-  list_assert(list->size, 0);
-
-// list_assert(list->pool, );
-
-
-
-  list_free(list, NULL);
-//  list_assert();
-*/
   List * list = NULL;
   list = test_new_list(list);
-
 
 // INSERT AT
   test_list_insert_at(list, (void *)&d1, 0);
@@ -677,8 +814,6 @@ main(void)
   test_list_insert_at(list, (void *)&d2, 10);
   test_list_insert_at(list, (void *)&d2, 0);
   test_list_insert_at(list, (void *)&d3, 2);
-
-  //test_list_free(list);
 
 // APPEND
   void * append_list[4] = {(void *)&d4, (void *)&d3, (void *)&d2, (void *)&d1};
@@ -699,13 +834,14 @@ main(void)
 
 
 // GET_AT
-  test_list_get_at(list, append_list[2], 2);
+  test_list_get_at(list, append_list, 4);
 
 // REMOVE AT
   test_list_remove_at(list);
 
+// TEST FREE LIST
+  test_list_free();
 
-// MAKE SURE LIST IS AS WHEN WE STARTED
-  reset_list(list, append_list, 4);
-
-}
+// ACTUALLY FREE THE LIST... ASSUMING THE ABOVE CASE WORKED
+  list_free(&list, NULL);
+} // main

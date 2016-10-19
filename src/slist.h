@@ -8,13 +8,11 @@ typedef void * COMPARE_PROC(void *, void *);
 typedef COMPARE_PROC * COMPARE_PROC_pt;
 
 typedef struct List {
-  struct ListItem * head;
-  struct ListItem * tail;
   int size;
-// These are temporary, ideally I'd like to have a memmory management
-// system in place, but using these will do for now
   int pool_size;
+  struct ListItem * head;
   struct ListItem * pool;
+  //struct ListItem * tail;
 } List;
 
 typedef struct ListItem {
@@ -37,7 +35,7 @@ void * list_remove_at(List *, int);
 void * list_get_at(List *, int);
 void * list_extend(List *, void *);
 void list_clear(List *);
-void list_free(List *, VISIT_PROC_pt);
+void list_free(List **, VISIT_PROC_pt);
 
 
 #define list_swap(l1, l2)  \

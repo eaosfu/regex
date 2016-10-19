@@ -11,7 +11,7 @@ RUN_SLIST_TEST := ./bin/test_slist
 
 MODULE_DESCRIPTORS:=${TOP_DIR}/build/module_descriptors
 
-test_targets    :=test_slist test_all
+test_targets    := test_slist test_all wrapper_funcs
 product_targets := scanner misc nfa slist token regex_parser recognizer
 
 .PHONY: ${product_targets} ${test_targets}
@@ -91,6 +91,7 @@ $(call make_goal,recognizer)
 endef
 
 define make_test_slist
+$(eval CFLAGS += -g)
 $(call make_deps,test_slist)
 $(call make_goal,test_slist)
 endef
@@ -99,9 +100,9 @@ define make_test_all
 $(call make_recognizer)
 $(call make_test_slist)
 test_all: recognizer test_slist
+	${RUN_SLIST_TEST}
 	${PERL} ${PERL_TEST}
 	${BASH} ${BASH_SCRIPT}
-	${RUN_SLIST_TEST}
 endef
 
 $(foreach goal,$(MAKECMDGOALS),$(eval $(call $(addprefix make_,${goal}))))

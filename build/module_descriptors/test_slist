@@ -1,4 +1,5 @@
-DEPENDS+= slist misc
+DEPENDS+= slist misc wrapper_funcs
+CFLAGS += -Wl,--wrap=xmalloc,--wrap=free -Wall
 TEST_SLIST_CFLAGS:=
 TEST_SLIST_SRC_DIR:= ${TOP_DIR}/tests/test_slist
 TEST_SLIST_SRC:=${TEST_SLIST_SRC_DIR}/test_slist.c

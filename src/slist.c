@@ -177,12 +177,8 @@ list_remove_at(List * list, int idx)
   
   ListItem * removed_item = NULL;
 
-//  if(cur_idx == idx) {
-    removed_item = (*item_pp);
-    (*item_pp) = (*item_pp)->next;
-//  }
-
-  list->size--;
+  removed_item = (*item_pp);
+  (*item_pp) = (*item_pp)->next;
 
   void * removed_data = removed_item->data;
 
@@ -198,7 +194,7 @@ list_remove_at(List * list, int idx)
 void *
 list_get_at(List * list, int idx)
 {
-  if(list == NULL || list->head == NULL || idx < 0) {
+  if(list == NULL || list->head == NULL || idx < 0 || idx >= list->size) {
     return NULL;
   }
 
@@ -261,15 +257,15 @@ list_clear(List * list)
 
 
 void
-list_free(List * list, VISIT_PROC_pt delete_data)
+list_free(List ** list, VISIT_PROC_pt delete_data)
 {
-  if(list == NULL) {
+  if(*list == NULL) {
     return;
   }
 
-  list_clear(list);
+  list_clear(*list);
 
-  ListItem * cur_item = list->pool;
+  ListItem * cur_item = (*list)->pool;
   ListItem * tmp = NULL;
 
   while(cur_item && cur_item->next) {
@@ -279,6 +275,7 @@ list_free(List * list, VISIT_PROC_pt delete_data)
       delete_data(cur_item->data);
     }
 
+    --((*list)->pool_size);
     free(cur_item);
     cur_item = tmp;
   }
@@ -291,8 +288,11 @@ list_free(List * list, VISIT_PROC_pt delete_data)
     free(cur_item);
   }
 
-  free(list);
-  list = NULL;
+  (*list)->head = NULL;
+  (*list)->pool = NULL;
+//  (*list)->tail = NULL;
+  free(*list);
+  *list = NULL;
 
   return;
 }

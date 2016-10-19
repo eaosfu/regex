@@ -299,11 +299,11 @@ free_match_string(m->data);
 void
 free_nfa_sim(NFASim* nfa_sim)
 {
-  list_free(nfa_sim->state_set1, NULL);
-  list_free(nfa_sim->state_set2, NULL);
-  list_free(nfa_sim->tmp, NULL);
+  list_free(&(nfa_sim->state_set1), NULL);
+  list_free(&(nfa_sim->state_set2), NULL);
+  list_free(&(nfa_sim->tmp), NULL);
   //list_free(nfa_sim->matches, free_match_string);
-  list_free(nfa_sim->matches, NULL);
+  list_free(&(nfa_sim->matches), NULL);
   free(nfa_sim);
 }
 

@@ -602,8 +602,9 @@ void
 parser_free(Parser * parser)
 {
   free_scanner(parser->scanner);
-  stack_delete(parser->interval_stack, NULL);
+  stack_delete(&(parser->interval_stack), NULL);
   free_nfa(pop(parser->symbol_stack));
-  stack_delete(parser->symbol_stack, NULL);
+  stack_delete(&(parser->symbol_stack), NULL);
+  free(parser->nfa_ctrl);
   free(parser);
 }

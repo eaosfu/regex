@@ -499,7 +499,7 @@ free_nfa(NFA * nfa)
     free(del_nfa);
   }
 
-  list_free(cur_state_set, NULL);
-  list_free(next_state_set, NULL);
-  list_free(seen_states, NULL);
+  list_free(&cur_state_set, NULL);
+  list_free(&next_state_set, NULL);
+  list_free(&seen_states, NULL);
 }
