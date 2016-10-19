@@ -1,85 +1,110 @@
 TOP_DIR := $(shell pwd)
 OBJ_DIR := ${TOP_DIR}/obj
-BIN_DIR:= ${TOP_DIR}/bin
+BIN_DIR := ${TOP_DIR}/bin
+TEST_DRIVER_DIR := .
+
+PERL := /usr/bin/perl
+PERL_TEST := ./test.pl
+BASH := /bin/bash
+BASH_SCRIPT := ./tests/result_summary
+RUN_SLIST_TEST := ./bin/test_slist
+
 MODULE_DESCRIPTORS:=${TOP_DIR}/build/module_descriptors
 
-.PHONY: all scanner misc nfa slist token regex_parser recognizer
+test_targets    :=test_slist test_all
+product_targets := scanner misc nfa slist token regex_parser recognizer
+
+.PHONY: ${product_targets} ${test_targets}
 
 define check_dirs
-$(eval $(foreach dir,${BIN_DIR} ${OBJ_DIR}, $(shell if ! [ -d ${dir} ]; then mkdir -v ${dir}; fi;)))
+$(foreach dir,${BIN_DIR} ${OBJ_DIR},
+  $(shell if ! [ -d ${dir} ]; then mkdir -v ${dir}; fi;))
 endef
 
-define build_target
+define build_dep_target
 $(eval TARGET_TO_UPPER=$(shell echo $(basename $(notdir ${1}))| tr a-z A-Z))
-$(info ${${TARGET_TO_UPPER}_TARGET}:;\
+${${TARGET_TO_UPPER}_TARGET}:;\
   ${CC} -o ${${TARGET_TO_UPPER}_TARGET}\
-  ${${CFLAGS}} ${${TARGET_TO_UPPER}_CFLAGS} ${${TARGET_TO_UPPER}_SRC} \
-  ${${TARGET_TO_UPPER}_INCLUDE_FLAGS} ${${TARGET_TO_UPPER}_LD_FLAGS} \
-  ${${TARGET_TO_UPPER}_LINK_OBJS}
-)
-$(eval ${${TARGET_TO_UPPER}_TARGET}:;\
-  ${CC} -o ${${TARGET_TO_UPPER}_TARGET}\
-  ${${CFLAGS}} ${${TARGET_TO_UPPER}_CFLAGS} ${${TARGET_TO_UPPER}_SRC}\
+  ${CFLAGS} ${${TARGET_TO_UPPER}_CFLAGS} ${${TARGET_TO_UPPER}_SRC}\
   ${${TARGET_TO_UPPER}_INCLUDE_FLAGS} ${${TARGET_TO_UPPER}_LD_FLAGS}\
-  ${${TARGET_TO_UPPER}_LINK_OBJS})
+  ${${TARGET_TO_UPPER}_LINK_OBJS}
 endef
 
 define build_deps
-$(foreach d,${1},$(eval $(call build_target,$d)))
+$(foreach d,${1},$(eval $(call build_dep_target,$d)))
 endef
 
-define get_deps
+define make_deps
 $(call check_dirs,)
-$(info including ${MODULE_DESCRIPTORS}/${1})
 $(eval include ${MODULE_DESCRIPTORS}/${1})
 $(eval FINAL_TARGET:=$(shell echo ${1} | tr a-z A-Z))
 $(foreach d,${DEPENDS},$(eval include ${MODULE_DESCRIPTORS}/${d}))
-$(foreach obj,${DEPENDS},$(eval FINAL_LINK_OBJ += $(addprefix ${OBJ_DIR}/,$(addsuffix .o,${obj}))))
+$(foreach obj,${DEPENDS},
+  $(eval FINAL_LINK_OBJ += $(addprefix ${OBJ_DIR}/,$(addsuffix .o,${obj}))))
 $(eval $(call build_deps,${FINAL_LINK_OBJ}))
 endef
 
 define make_goal
 $(eval ${1}: ${FINAL_LINK_OBJ};\
 	${CC} -o ${${FINAL_TARGET}_TARGET}\
-  ${${CFLAGS}} ${${FINAL_TARGET}_CFLAGS} ${${FINAL_TARGET}_SRC}\
+  ${CFLAGS} ${${FINAL_TARGET}_CFLAGS} ${${FINAL_TARGET}_SRC}\
   ${${FINAL_TARGET}_INCLUDE_FLAGS} ${${FINAL_TARGET}_LD_FLAGS}\
   ${FINAL_LINK_OBJ})
+$(eval undefine FINAL_LINK_OBJ)
+$(eval undefine DEPENDS)
 endef
 
-ifeq ($(MAKECMDGOALS), scanner)
-$(eval $(call get_deps,scanner))
-$(eval $(call make_goal,scanner))
-endif
+define make_scanner
+$(call make_deps,scanner)
+$(call make_goal,scanner)
+endef
 
-ifeq ($(MAKECMDGOALS), misc)
-$(eval $(call get_deps,misc))
-$(eval $(call make_goal,misc))
-endif
+define make_misc
+$(call make_deps,misc)
+$(call make_goal,misc)
+endef
 
-ifeq ($(MAKECMDGOALS), nfa)
-$(eval $(call get_deps,nfa))
-$(eval $(call make_goal,nfa))
-endif
+define nfa
+$(call make_deps,nfa)
+$(call make_goal,nfa)
+endef
 
-ifeq ($(MAKECMDGOALS), slist)
-$(eval $(call get_deps,slist))
-$(eval $(call make_goal,slist))
-endif
+define make_slist
+$(call make_deps,slist)
+$(call make_goal,slist)
+endef
 
-ifeq ($(MAKECMDGOALS), token)
-$(eval $(call get_deps,token))
-$(eval $(call make_goal,token))
-endif
+define make_token
+$(call make_deps,token)
+$(call make_goal,token)
+endef
 
-ifeq ($(MAKECMDGOALS), regex_parser)
-$(eval $(call get_deps,regex_parser))
-$(eval $(call make_goal,regex_parser))
-endif
+define make_regex_parser
+$(call make_deps,regex_parser)
+$(call make_goal,regex_parser)
+endef
 
-ifeq ($(MAKECMDGOALS),recognizer)
-$(eval $(call get_deps,recognizer))
-$(eval $(call make_goal,recognizer))
-endif
+define make_recognizer
+$(eval CFLAGS += -O3)
+$(call make_deps,recognizer)
+$(call make_goal,recognizer)
+endef
+
+define make_test_slist
+$(call make_deps,test_slist)
+$(call make_goal,test_slist)
+endef
+
+define make_test_all
+$(call make_recognizer)
+$(call make_test_slist)
+test_all: recognizer test_slist
+	${PERL} ${PERL_TEST}
+	${BASH} ${BASH_SCRIPT}
+	${RUN_SLIST_TEST}
+endef
+
+$(foreach goal,$(MAKECMDGOALS),$(eval $(call $(addprefix make_,${goal}))))
 
 clean:
 	rm -f ${BIN_DIR}/* ${OBJ_DIR}/* 
