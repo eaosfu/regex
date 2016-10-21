@@ -105,7 +105,10 @@ test_all: recognizer test_slist
 	${BASH} ${BASH_SCRIPT}
 endef
 
-$(foreach goal,$(MAKECMDGOALS),$(eval $(call $(addprefix make_,${goal}))))
-
+define make_clean
 clean:
 	rm -f ${BIN_DIR}/* ${OBJ_DIR}/* 
+endef
+
+$(foreach goal,$(MAKECMDGOALS),$(eval $(call $(addprefix make_,${goal}))))
+
