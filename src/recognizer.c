@@ -13,32 +13,32 @@
 #define CTRL_FLAGS(s) (*((s)->ctrl_flags))
 
 void
-clear_workingset_ids(NFASim * nfa_sim)
+clear_workingset_ids(NFASim * sim)
 {
-  memset(nfa_sim->working_set_ids, 0, WORKING_SET_ID_BITS);
+  memset(sim->working_set_ids, 0, WORKING_SET_ID_BITS);
 }
 
 int
-id_in_workingset(NFASim * nfa_sim, unsigned int id)
+id_in_workingset(NFASim * sim, unsigned int id)
 {
 #define index(id)  ((id) / UINT_BITS)
-#define offset(id) ((id) % UINT_BITS)
-//printf("CHECK ID: %d vs. WORKING SET: %d -- %d\n", id, 
+#define offset(id) (((id) % UINT_BITS) - 1)
+//printf("CHECK ID: %d vs. WORKING SET: %d -- [index: %d -- offset: %d] %d\n", id, 
 //  UINT_BITS * index(id) + offset(id), 
-//  (((nfa_sim->working_set_ids)[index(id)] & (0x01 << offset(id))) == 0) ? 0 : 1);
-  return ((nfa_sim->working_set_ids)[index(id)] & (0x01 << offset(id)));
+//  index(id), offset(id),
+//  (((sim->working_set_ids)[index(id)] & (0x01 << offset(id))) == 0) ? 0 : 1);
+  return ((sim->working_set_ids)[index(id)] & (0x01 << offset(id)));
 #undef index
 #undef offset
 }
 
 
 void
-add_id_to_workingset(NFASim * nfa_sim, unsigned int id)
+add_id_to_workingset(NFASim * sim, unsigned int id)
 {
 #define index(id)  ((id) / UINT_BITS)
-#define offset(id) ((id) % UINT_BITS)
-  (nfa_sim->working_set_ids)[index(id)] |= (0x01 << offset(id));
-//printf("\tADDED ID: %d\n", id);
+#define offset(id) (((id) % UINT_BITS) - 1)
+  (sim->working_set_ids)[index(id)] |= (0x01 << offset(id));
 #undef index
 #undef offset
   return;
@@ -57,11 +57,13 @@ get_states(NFASim * sim, NFA * nfa, List * lp)
       if(CTRL_FLAGS(sim) & MARK_STATES_FLAG) {
         if(id_in_workingset(sim, nfa->id) == 0) {
           add_id_to_workingset(sim, nfa->id);
-          list_push(lp, nfa);
+          //list_push(lp, nfa);
+          list_append(lp, nfa);
         }
       }
       else {
-        list_push(lp, nfa);
+        //list_push(lp, nfa);
+        list_append(lp, nfa);
       }
     }
   }
@@ -80,8 +82,7 @@ is_literal_in_range(nfa_range range, unsigned int c)
 {
   #define index(c)  ((c) / 32)
   #define offset(c) ((c) % 32)
-  unsigned int mask = 0x01 << (offset(c));
-  if(range[index(c)] & mask) {
+  unsigned int mask = 0x01 << (offset(c)); if(range[index(c)] & mask) {
 //if(c == '.')
 //  printf("LITERAL '%c' IN RANGE\n", c);
     return 1;
@@ -144,7 +145,6 @@ new_nfa_sim(Parser * parser, Scanner * scanner, ctrl_flags * cfl)
   sim->nfa = peek(parser->symbol_stack);
   sim->state_set1 = new_list();
   sim->state_set2 = new_list();
-  sim->tmp        = new_list();
   sim->matches = new_list();
   return sim;
 }
@@ -160,6 +160,7 @@ reset_nfa_sim(NFASim * sim)
   clear_workingset_ids(sim);
   CLEAR_MARK_STATES_FLAG(&CTRL_FLAGS(sim));
   get_states(sim, sim->nfa->parent, sim->state_set1);
+//fatal("DONE HERE\n");
   SET_MARK_STATES_FLAG(&CTRL_FLAGS(sim));
 }
 
@@ -198,6 +199,7 @@ run_nfa(NFASim * sim)
         case NFA_ANY: {
           if(c != sim->parser->scanner->eol_symbol) {
             accept = get_states(sim, NEXT_STATE(current_state), sim->state_set2);
+//printf("\n");
           }
         } break;
         case NFA_RANGE: {
@@ -205,19 +207,14 @@ run_nfa(NFASim * sim)
             if(is_literal_in_range(*(nfa->value.range), c)) {
 //printf("%c IS IN RANGE -- ", c);
               accept = get_states(sim, NEXT_STATE(current_state), sim->state_set2);
+//printf("\n");
 //printf("ACCEPT: %d\n", accept);
             }
           }
         } break;
         case NFA_BOL_ANCHOR: {
           if(CTRL_FLAGS(sim) & AT_BOL_FLAG) {
-          // need to extend state_set1
-          // GET RID OF THE TMP list
-            accept = get_states(sim, NEXT_STATE(current_state), sim->tmp);
-            if(sim->tmp->size > 0) {
-              list_append(sim->state_set1, sim->tmp->head->data);
-              list_clear(sim->tmp);
-            }
+            accept = get_states(sim, NEXT_STATE(current_state), sim->state_set1);
           }
         } break;
         case NFA_EOL_ANCHOR: {
@@ -230,6 +227,7 @@ run_nfa(NFASim * sim)
           if(c == nfa->value.literal) {
 //printf("%c MATCH -- ", c);
             accept = get_states(sim, NEXT_STATE(current_state), sim->state_set2);
+//printf("\n");
 //printf("ACCEPT: %d\n", accept);
           }
         } break;
@@ -261,11 +259,13 @@ run_nfa(NFASim * sim)
         c = next_char(sim->parser->scanner);
       match_end = match_start;
       new_match = 1;
+//printf("\n");
     }
     else {
       list_swap(sim->state_set1, sim->state_set2);
       list_clear(sim->state_set2);
       clear_workingset_ids(sim);
+//printf("\n");
       match_end += 1;
       c = next_char(sim->parser->scanner);
     }
@@ -301,7 +301,6 @@ free_nfa_sim(NFASim* nfa_sim)
 {
   list_free(&(nfa_sim->state_set1), NULL);
   list_free(&(nfa_sim->state_set2), NULL);
-  list_free(&(nfa_sim->tmp), NULL);
   //list_free(nfa_sim->matches, free_match_string);
   list_free(&(nfa_sim->matches), NULL);
   free(nfa_sim);
