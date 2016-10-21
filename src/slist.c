@@ -77,8 +77,6 @@ list_append(List * list, void * data)
     list->tail = list->head;
   }
   else {
-//    while(iter && iter->next && (iter = iter->next) && ++idx);
-//    iter->next = new_list_item(list, data);
     list->tail->next = new_list_item(list, data);
     list->tail = list->tail->next;
     idx = list->size;
@@ -97,7 +95,6 @@ int
 list_push(List * list, void * data)
 {
   if(list == NULL) {
-    // return NULL;
     return -1;
   }
 
@@ -111,7 +108,6 @@ list_push(List * list, void * data)
 
   list->size++;
 
-  //return list->head;
   return list->size;
 }
 
@@ -151,7 +147,6 @@ list_insert_at(List * list, void * data, int idx)
   }
 
   int cur_idx = 0;
-//  int old_size = list->size;
   ListItem ** item_pp = &(list->head);
 
   while((*item_pp) && (*item_pp)->next && (cur_idx < (idx - 1))) {
@@ -411,69 +406,9 @@ list_search(List * list, void * target, COMPARE_PROC_pt compare)
   ListItem * iter = list->head;
   int idx = 0;
   while((ret = compare(iter->data, target)) == NULL && iter->next) {
-//printf("LIST COMPARE: iter: 0x%x vs target: 0x%x\n", iter->data, target);
     iter = iter->next;
     ++idx;
   }
 
   return ret;
 }
-
-
-/*
-int
-main(void)
-{
-#undef list_assert
-#define list_assert(a, b)  (((a) == (b)) ? printf("PASS\n") : printf("FAIL\n"))
-
-  List * list = new_list();
-  
-  struct { int a; } d1 = { .a = 10 };
-  struct { int a; } d2 = { .a = 20 };
-  struct { int a; } d3 = { .a = 20 };
-  struct { int a; } d4 = { .a = 50 };
-
-  list_assert(list_insert_at(list, (void *)&d1, 0),  0);
-  list_assert(list_insert_at(list, (void *)&d1, 10), 1);
-  list_assert(list_insert_at(list, (void *)&d2, 10), 2);
-  list_assert(list_insert_at(list, (void *)&d2, 0),  0);
-  list_assert(list_insert_at(list, (void *)&d3, 2),  2);
-
-  list_assert(list_append(list, (void *)&d4), list->size - 1);
-
-  // SHOULD NOT ANYTHING ANYTHING
-  list_assert(list_remove_at(list, 10), NULL);
-
-  // REMOVE THE HEAD
-  list_assert(list_remove_at(list, 0), (void *)&d2);
-  
-  // REMOVE MIDDLE ELEMENT
-  // void * rm = list_remove_at(list, 1);
-
-  // REMOVE END ELEMENT
-  // void * rm = list_remove_at(list, 2);
-
-  // REMOVE THE HEAD
-// list_assert(list_shift(list), );
-  list_assert(list_get_at(list, -1), NULL);
-  list_assert(list_get_at(list, -4), NULL);
-// list_assert(list_get_at(list, 0), );
-//  list_assert(list_get_at(list, list->size - 1), );
-  list_assert(list_get_at(list, 20), NULL);
-
-  list_clear(list);
-
-  list_assert(list->head, NULL);
-  list_assert(list->size, 0);
-
-// list_assert(list->pool, );
-
-
-
-  list_free(list, NULL);
-//  list_assert();
-
-  printf("Hello world\n");
-}
-*/
