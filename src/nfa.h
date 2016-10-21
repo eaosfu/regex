@@ -15,6 +15,7 @@
 #define NFA_BOL_ANCHOR 0x040
 #define NFA_EOL_ANCHOR 0x080
 #define NFA_NGLITERAL  0x100 // negated literal as in [^abc]
+#define NFA_BACKREFERENCE  0x200 // negated literal as in [^abc]
 
 
 
@@ -54,5 +55,6 @@ NFA * new_range_nfa(NFACtrl *, int);
 void free_nfa(NFA *);
 void update_range_nfa(unsigned int, unsigned int, NFA *, int);
 int  update_range_w_collation(char *, int, NFA *, int);
+//int mark_nfa(NFA *);
 
 #endif

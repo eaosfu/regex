@@ -545,8 +545,7 @@ parse_sub_expression(Parser * parser)
     case ALPHA:      // fallthrough
     case DOLLAR:     // fallthrough
     case CIRCUMFLEX: // fallthrough
-    case ASCIIDIGIT: // fallthrough
-    case CLOSEBRACKET: {
+    case ASCIIDIGIT: {
       parse_literal_expression(parser);
       parse_sub_expression(parser);
       right = pop(parser->symbol_stack);
@@ -554,9 +553,15 @@ parse_sub_expression(Parser * parser)
       push(parser->symbol_stack, concatenate_nfa(left, right));
     } break;
     case OPENPAREN: {
+      ++(parser->paren_count);
       parse_paren_expression(parser);
       parse_sub_expression(parser);
       right = pop(parser->symbol_stack);
+if(right == NULL) {
+  printf("YOU DON'T KNOW WHAT YOU'RE DOING\n");
+}
+// insert right->parent into parser->capture_group[parser->capture_group_count];
+parser->capture_group_list[parser->capture_group_count] = right->parent;
       NFA * left = pop(parser->symbol_stack);
       push(parser->symbol_stack, concatenate_nfa(left, right));
     } break;
@@ -567,12 +572,24 @@ parse_sub_expression(Parser * parser)
       NFA * left = pop(parser->symbol_stack);
       push(parser->symbol_stack, concatenate_nfa(left, right));
     } break;
+    case CLOSEPAREN: {
+      if(--(parser->paren_count) < 0) {
+        fatal("Unmatched ')'\n");
+      }
+      return;
+    } break;
+    case BACKREFERENCE: {
+      if(parser->lookahead.value > parser->capture_group_count) {
+        fatal("Invalid back-reference\n");
+      }
+      // create back reference node
+    } break;
     case __EOF: {
       //printf("__EOF\n");
       return;
     }
     default: {
-//printf("ERROR? %c is this EOF? ==> %s\n", parser->lookahead.value, (parser->lookahead.value == EOF)? "YES": "NO");
+printf("ERROR? %c is this EOF? ==> %s\n", parser->lookahead.value, (parser->lookahead.value == EOF)? "YES": "NO");
     } break;
   }
 }
@@ -583,7 +600,7 @@ parse_regex(Parser * parser)
 {
   if(   parser->lookahead.type == ALPHA
      || parser->lookahead.type == ASCIIDIGIT
-     || parser->lookahead.type == CLOSEBRACKET
+     || parser->lookahead.type == BACKREFERENCE
      || parser->lookahead.type == CIRCUMFLEX
      || parser->lookahead.type == DOLLAR
      || parser->lookahead.type == DOT

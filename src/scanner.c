@@ -2,6 +2,7 @@
 #include <string.h>
 #include <error.h>
 #include <stdlib.h>
+#include <ctype.h>
 #include "scanner.h"
 #include "misc.h"
 
@@ -144,8 +145,9 @@ get_scanner_readhead(Scanner * s)
 Token *
 regex_scan(Scanner * s)
 {
-  int ret = 0;
   int c;
+  int ret = 0;
+  
 
 // FOR TESTING
   static int seen_newline = 0;
@@ -174,7 +176,7 @@ regex_scan(Scanner * s)
       case '.': update_token(s->curtoken, c, DOT);          ret = 1; break;
       case '*': update_token(s->curtoken, c, KLEENE);       ret = 1; break;
       case '+': update_token(s->curtoken, c, PLUS);         ret = 1; break;
-      case ':': update_token(s->curtoken, c, COLON);         ret = 1; break;
+      case ':': update_token(s->curtoken, c, COLON);        ret = 1; break;
       case '|': update_token(s->curtoken, c, PIPE);         ret = 1; break;
       case '?': update_token(s->curtoken, c, QMARK);        ret = 1; break;
       case '(': update_token(s->curtoken, c, OPENPAREN);    ret = 1; break;
@@ -185,10 +187,14 @@ regex_scan(Scanner * s)
       case '{': update_token(s->curtoken, c, OPENBRACE);    ret = 1; break;
       case '}': update_token(s->curtoken, c, CLOSEBRACE);   ret = 1; break;
       case '\\': {
-        //if(s->parse_escp_seq) {
         if(PARSE_ESCP_SEQ(s->ctrl_flags)) {
           if((c = next_char(s)) != s->eol_symbol) {
-            update_token(s->curtoken, c, ALPHA);
+            if(isdigit(c)) {
+              update_token(s->curtoken, (c - '0'), BACKREFERENCE);
+            }
+            else {
+              update_token(s->curtoken, c, ALPHA);
+            }
           }
           else {
             unput(s);

@@ -21,6 +21,9 @@ typedef struct Parser {
   Scanner * scanner;
   NFACtrl * nfa_ctrl;
   ctrl_flags * ctrl_flags;
+  int paren_count;
+  int capture_group_count;
+  NFA * capture_group_list[9];
 } Parser;
 
 

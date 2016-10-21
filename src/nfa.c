@@ -19,7 +19,7 @@ new_nfa_ctrl()
 }
 
 
-static inline void
+static inline int
 mark_nfa(NFA * nfa)
 {
   if(nfa->id == 0) {
@@ -165,46 +165,6 @@ new_range_nfa(NFACtrl * ctrl, int negate)
    return accept;
 }
 
-/*
-NFA *
-new_range_nfa(unsigned int low, unsigned int high, int negate)
-{
-  NFA * start  = new_nfa(NFA_RANGE);
-  NFA * accept = new_nfa(NFA_ACCEPTING);
-  
-  start->value.range = xmalloc(sizeof *(start->value.range));
-
-  if(negate) {
-    for(int i = 0; i < SIZE_OF_RANGE; ++i) {
-      (*(start->value.range))[i] = 0xffffffff;
-    }
-  }
-
-//printf("NEW RANGE NFA FROM %d TO %d\n", low, high);
-  //update_range_nfa(low, high, start->value.range, negate);
-  update_range_nfa(low, high, start, negate);
-
-  accept->parent = start;
-
-  start->out1 = start->out2 = accept;
-
-   return accept;
-}
-*/
-
-/*
-NFA *
-new_anchor_nfa(NFACtrl * ctrl, unsigned int anchor)
-{
-  NFA * start = new_nfa(anchor);
-  NFA * accept = new_nfa(NFA_ACCEPTING);
-
-  start->out1 = start->out2 = accept;
-  accept->parent = start;
-
-  return accept;
-}
-*/
 
 NFA *
 new_literal_nfa(NFACtrl * ctrl, unsigned int literal, unsigned int special_meaning)
@@ -230,6 +190,12 @@ new_literal_nfa(NFACtrl * ctrl, unsigned int literal, unsigned int special_meani
 
 //printf("NEW_LITERAL(%c:%d): start: 0x%x, end: 0x%x\n", literal, literal, start, accept);
   return accept;
+}
+
+
+NFA *
+new_backreference_nfa(NFACtrl * ctrl, NFA * capture_group_start, unsigned int back_ref_num)
+{
 }
 
 
@@ -287,6 +253,7 @@ new_qmark_nfa(NFA * body)
   return accept;
 }
 
+
 //
 // FUNCTION: new_posclosure_nfa:
 // INPUT:
@@ -312,7 +279,6 @@ new_posclosure_nfa(NFA * body)
 
   return accept;
 }
-
 
 
 //
@@ -371,29 +337,11 @@ concatenate_nfa(NFA * prev, NFA * next)
   }
 
   if(prev != NULL) {
-    // If prev is not null then it's an Accepting state
-    //prev->type = next->parent->type;
-
-/*
-    prev->value = next->parent->value;
-    prev->out1 = next->parent->out1;
-    prev->out2 = next->parent->out2;
-    prev->id   = next->parent->id;
-*/
     discard_node = next->parent;
     tmp = prev->parent;
     *prev = *(next->parent);
     next->parent = tmp;
-    //next->parent = prev->parent;
-
-
-
-//printf("CONCAT FREEING NODE\n");
-//printf("FREEING NFA: 0x%x\n", discard_node);
-//printf("CONCAT: 0x%x -> 0x%x -> 0x%x\n", prev->parent, prev->out2, next);
     discard_node->parent = discard_node->out1 = discard_node->out2 = NULL;
-    //free_nfa(discard_node);
-//printf("discarding node: 0x%x\n", discard_node);
     free(discard_node);
   }
 
