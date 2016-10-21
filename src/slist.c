@@ -74,10 +74,14 @@ list_append(List * list, void * data)
 
   if(iter == NULL) {
     list->head = new_list_item(list, data);
+    list->tail = list->head;
   }
   else {
-    while(iter && iter->next && (iter = iter->next) && ++idx);
-    iter->next = new_list_item(list, data);
+//    while(iter && iter->next && (iter = iter->next) && ++idx);
+//    iter->next = new_list_item(list, data);
+    list->tail->next = new_list_item(list, data);
+    list->tail = list->tail->next;
+    idx = list->size;
   }
 
   ++list->size;
@@ -100,6 +104,11 @@ list_push(List * list, void * data)
   ListItem * new_node = new_list_item(list, data);
   new_node->next = list->head;
   list->head = new_node;
+
+  if(list->size == 0) {
+    list->tail = list->head;
+  }
+
   list->size++;
 
   //return list->head;
@@ -120,6 +129,10 @@ list_shift(List * list)
 
   void * removed_data = old_head->data;
 
+  if(old_head == list->tail) {
+    list->tail = NULL;
+  }
+
   release_to_pool(list, old_head);
 
   return removed_data;
@@ -134,24 +147,39 @@ int
 list_insert_at(List * list, void * data, int idx)
 {
   if(list == NULL || idx < 0) {
-    //return NULL;
     return -1;
   }
 
-  ListItem ** item_pp = &(list->head);
   int cur_idx = 0;
+//  int old_size = list->size;
+  ListItem ** item_pp = &(list->head);
 
-  while((*item_pp) && (*item_pp)->next && (cur_idx < idx)) {
+  while((*item_pp) && (*item_pp)->next && (cur_idx < (idx - 1))) {
     item_pp = &((*item_pp)->next);
     cur_idx++;
   }
-  
-  ListItem * new_item = new_list_item(list, data);
-  new_item->next = (*item_pp);
-  *item_pp = new_item;
-  cur_idx = (idx <= list->size++) ? cur_idx : list->size - 1;
 
-  // return list->head;
+  ListItem * new_item = new_list_item(list, data);
+
+  if(idx >= list->size) {
+    list->tail = new_item;
+  }
+
+  if(idx == 0) { // insert new head
+    new_item->next = list->head;
+    list->head = new_item;
+  }
+  else if((*item_pp)) { // list was not empty, insert new element
+    new_item->next = (*item_pp)->next;
+    (*item_pp)->next = new_item;
+    ++cur_idx;
+  }
+  else { // list was empty, new item is now the head
+    (*item_pp) = new_item;
+  }
+
+  ++(list->size);
+
   return cur_idx;
 }
 
@@ -167,18 +195,29 @@ list_remove_at(List * list, int idx)
     return NULL;
   }
 
+  ListItem * tmp_tail = list->head;
   ListItem ** item_pp = &(list->head);
+
   int cur_idx = 0;
 
-  while((*item_pp) && (*item_pp)->next && (cur_idx < idx)) {
+  while((*item_pp) && (*item_pp)->next && (cur_idx < idx - 1)) {
+    tmp_tail = (*item_pp);
     item_pp = &((*item_pp)->next);
     cur_idx++;
+  }
+
+  if(idx > 0) {
+    item_pp = &((*item_pp)->next);
   }
   
   ListItem * removed_item = NULL;
 
   removed_item = (*item_pp);
   (*item_pp) = (*item_pp)->next;
+
+  if(removed_item == list->tail) {
+    list->tail = tmp_tail;
+  }
 
   void * removed_data = removed_item->data;
 
@@ -196,6 +235,14 @@ list_get_at(List * list, int idx)
 {
   if(list == NULL || list->head == NULL || idx < 0 || idx >= list->size) {
     return NULL;
+  }
+  
+  if(idx == 0) {
+    return list->head->data;
+  }
+
+  if(idx == (list->size - 1)) {
+    return list->tail->data;
   }
 
   ListItem * iter = list->head;
@@ -248,6 +295,7 @@ list_clear(List * list)
   }
 
   list->head = NULL;
+  list->tail = NULL;
 
   list->pool_size += list->size;
   list->size = 0;
@@ -290,7 +338,7 @@ list_free(List ** list, VISIT_PROC_pt delete_data)
 
   (*list)->head = NULL;
   (*list)->pool = NULL;
-//  (*list)->tail = NULL;
+  (*list)->tail = NULL;
   free(*list);
   *list = NULL;
 

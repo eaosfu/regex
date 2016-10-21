@@ -148,7 +148,7 @@ reset_list(List * list, void * data_list[], unsigned int data_size)
 List *
 test_new_list(List * list)
 {
-  const char * test_name = "test_new_list";
+  const char * test_name = "test: new_list";
   list = new_list();
   if(list == NULL) {
     report_test_status(test_name, "Failed to create list", FATAL);
@@ -162,24 +162,24 @@ test_new_list(List * list)
 test_status
 test_list_push(List * list, void * d)
 {
-  const char * test_name = "test_list_push";
+  const char * test_name = "test: list_push";
   int fail_set = 0;
-  int list_size = list->size;
-  int pool_size = list->pool_size;
+  int expected_list_size = list->size;
+  int expected_pool_size = (list->pool_size > 0) ? list->pool_size - 1 : 0;
   test_status ret_status = FAIL;
   ListItem * old_list_head = list->head;
-  ListItem * pool_p = list->pool;
+  ListItem * expected_pool_p = (list->pool == NULL) ? NULL : list->pool->next;
 
   if(list == NULL) {
     report_test_status(test_name, "This test requires a non-NULL 'list' object as an argument.", FAIL);
   }
   else {
-    if(!list_assert(list_push(list, d) == ++list_size)) {
+    if(list_assert(list_push(list, d) == ++expected_list_size) == FAIL) {
       report_test_status(test_name, "Value returned by list_push does not match expected new list size", FAIL);
       fail_set = 1;
     }
     
-    if(check_list_size(test_name, list_size, list->size) == FAIL) {
+    if(check_list_size(test_name, expected_list_size, list->size) == FAIL) {
       fail_set = 1;
     }
 
@@ -188,22 +188,22 @@ test_list_push(List * list, void * d)
       fail_set = 1;
     }
     else {
-      if(!list_assert(list->head->data ==  d)) {
+      if(list_assert(list->head->data ==  d) == FAIL) {
         report_test_status(test_name, "list->head->data does not match data pushed", FAIL);
         fail_set = 1;
       }
-      if(!list_assert(list->head->next == old_list_head)) {
+      if(list_assert(list->head->next == old_list_head) == FAIL) {
         report_test_status(test_name, "list->head->next does not point to the previous head", FAIL);
         fail_set = 1;
       }
     }
 
-    if(!list_assert(list->pool == pool_p)) {
+    if(list_assert(list->pool == expected_pool_p) == FAIL) {
       report_test_status(test_name, "Unexpected change of list->pool", FAIL);
       fail_set = 1;
     }
 
-    if(check_pool_size(test_name, list->pool_size, pool_size) == FAIL) {
+    if(check_pool_size(test_name, list->pool_size, expected_pool_size) == FAIL) {
       fail_set = 1;
     }
 
@@ -219,118 +219,132 @@ test_list_push(List * list, void * d)
 
 
 test_status
-test_list_insert_at(List * list, void * d, int idx)
+test_list_insert_at(List * list, void * test_data[], int data_list_size, int insert_index_list[], int idx_list_size)
 {
-  const char * test_name = "test_list_insert_at";
+  const char * test_name = "test: list_insert_at";
   int fail_set = 0;
-  int list_size = list->size;
-  int pool_size = list->pool_size;
+  int expected_list_size = list->size;
+  int expected_pool_size = list->pool_size;
   test_status ret_status = FAIL;
-  ListItem * old_head_p = list->head;
-  ListItem * pool_p = list->pool;
+  ListItem * old_head_p  = list->head;
+  void * old_head_data   = (list->head == NULL)? NULL : list->head->data;
+  
+  int idx;
+  int actual_idx;
+  int expected_idx;
+  void * d = NULL;
 
-  void * old_head_data = (list->head == NULL)? NULL : list->head->data;
+  for(int i = 0; i < idx_list_size; ++i) {
+    idx = insert_index_list[i];
+    d = test_data[i % data_list_size];
 
-  int expected_idx = idx;
-
-  if(idx < 0) {
-    expected_idx = -1;
-  }
-  else if(idx > list->size) {
-    expected_idx = list->size;
-  }
-
-  if(list == NULL) {
-    report_test_status(test_name, "This test requires a non-NULL 'list' object as an argument.", FAIL);
-  }
-  else {
-    if(!list_assert(list_insert_at(list, d, idx) == expected_idx)) {
-      report_test_status(test_name, "Expected insert index does not match actual insert index", FAIL);
-    }
+    expected_idx = idx;
 
     if(idx < 0) {
-      if(!list_assert(list->head == old_head_p)) {
-        report_test_status(test_name, "Invalid modification of list->head while"
-                                      " attempting to insert at idx < 0", FAIL);
+      expected_idx = -1;
+    }
+    else if(idx > list->size) {
+      expected_idx = list->size;
+    }
+
+    if(list == NULL) {
+      report_test_status(test_name, "This test requires a non-NULL 'list' object as an argument.", FAIL);
+    }
+    else {
+      if(list_assert((actual_idx = list_insert_at(list, d, idx)) == expected_idx) == FAIL) {
+        report_test_status(test_name, "Expected insert index does not match actual insert index", FAIL);
+      }
+
+      if(idx < 0) {
+        if(list_assert(list->head == old_head_p) == FAIL) {
+          report_test_status(test_name, "Invalid modification of list->head while"
+                                        " attempting to insert at idx < 0", FAIL);
+          fail_set = 1;
+        }
+      }
+      else if(idx == 0) {
+        if(old_head_p == NULL) {
+          if(list_assert(list->head == NULL)) {
+            report_test_status(test_name, "Failed to update list->head while attempting to "
+                                          "insert at idx == 0", FATAL);
+            fail_set = 1;
+          }
+          else if(list_assert(list->head->data == d) == FAIL) {
+            report_test_status(test_name, "Value pointed to by list->head->data doesn't match "
+                                          "argument data pointer", FAIL);
+            fail_set = 1;
+          }
+        }
+        // Keep track of current list->head
+        if(list->head) {
+          old_head_p = list->head;
+          old_head_data= list->head->data;
+        }
+        else {
+          if(list_assert(list->head == NULL)) {
+            report_test_status(test_name, "Failed to update list->head:non-null while attempting to "
+                                          "insert at idx == 0", FAIL);
+            fail_set = 1;
+          }
+          else if(!list_assert(list->head->data == d)) {
+            report_test_status(test_name, "Value pointed to by list->head->data doesn't match "
+                                          "argument data pointer", FAIL);
+            fail_set = 1;
+          }
+        }
+      }
+      else { // Insert was at a idx != 0
+        if(old_head_p == NULL) { // Insert into empty list
+          if(list_assert(list->head == NULL)) { // New item should have become list->head but didn't
+            report_test_status(test_name, "Failed to update list->head:null while attempting to "
+                                          "insert at idx > 0", FAIL);
+            fail_set = 1;
+          }
+          else { // check data at actual_idx really matches inserted data
+            ListItem * tmp = list->head;
+            int tmp_counter = 0;
+            // We don't want to rely on list_get_at so as to avoid circular dependency
+            // between list_get_at and list_insert_at... so manually search for inserted node
+            while(tmp && tmp->next && tmp_counter < actual_idx && (tmp = tmp->next) && ++tmp_counter);
+            // Data at new list->head doesn't match expected
+            if(list_assert(tmp->data == d) == FAIL) {
+              report_test_status(test_name, "Data at actual index doesn't match "
+                                            "argument data pointer", FAIL);
+              fail_set = 1;
+            }
+          }
+        }
+        else { // Insert into non-empty list
+          if(list_assert(list->head == NULL)) { // failed to insert... list->head should be non-NULL
+            report_test_status(test_name, "Failed to update list->head:non-null while attempting to "
+                                          "insert at idx > 0", FAIL);
+            fail_set = 1;
+          }
+          else if(list_assert(list->head->data == old_head_data) == FAIL) { // list->head should not have changed
+            report_test_status(test_name, "Value pointed to by list->head->data differs from its "
+                                          "original value", FAIL);
+            fail_set = 1;
+          }
+        }
+      }
+
+      expected_list_size += (idx >= 0) ? 1 : 0;
+      expected_pool_size -= (expected_pool_size > 0) ? 1 : 0;
+
+      if(check_list_size(test_name, list->size, expected_list_size) == FAIL) {
+        fail_set = 1;
+      }
+
+      if(check_pool_size(test_name, list->pool_size, expected_pool_size) == FAIL) {
         fail_set = 1;
       }
     }
-    else if(idx == 0) {
-      if(old_head_p == NULL) {
-        if(list_assert(list->head == NULL)) {
-          report_test_status(test_name, "Failed to update list->head:null while attempting to "
-                                        "insert at idx == 0", FAIL);
-          fail_set = 1;
-        }
-        else if(!list_assert(list->head->data == d)) {
-          report_test_status(test_name, "Value pointed to by list->head->data doesn't match "
-                                        "argument data pointer", FAIL);
-          fail_set = 1;
-        }
-      }
-      else {
-        if(list_assert(list->head == NULL)) {
-          report_test_status(test_name, "Failed to update list->head:non-null while attempting to "
-                                        "insert at idx == 0", FAIL);
-          fail_set = 1;
-        }
-        else if(!list_assert(list->head->data == d)) {
-          report_test_status(test_name, "Value pointed to by list->head->data doesn't match "
-                                        "argument data pointer", FAIL);
-          fail_set = 1;
-        }
-      }
-    }
-    else {
-      if(old_head_p == NULL) {
-        if(list_assert(list->head == NULL)) {
-          report_test_status(test_name, "Failed to update list->head:null while attempting to "
-                                        "insert at idx > 0", FAIL);
-          fail_set = 1;
-        }
-        else if(!list_assert(list->head->data == d)) {
-          report_test_status(test_name, "", FAIL);
-          fail_set = 1;
-        }
-      }
-      else {
-        if(list_assert(list->head == NULL)) {
-          report_test_status(test_name, "Failed to update list->head:non-null while attempting to "
-                                        "insert at idx > 0", FAIL);
-          fail_set = 1;
-        }
-        else if(!list_assert(list->head->data == old_head_data)) {
-          report_test_status(test_name, "Value pointed to by list->head->data differs from its "
-                                        "original value", FAIL);
-          fail_set = 1;
-        }
-      }
-    }
+  }
 
-    if(idx >= 0) {
-      list_size++;
-    }
-
-    if(check_list_size(test_name, list->size, list_size) == FAIL) {
-      fail_set = 1;
-    }
-
-    // pool and pool_size should remain unaffected by an insert operation
-    if(!list_assert(list->pool == pool_p)) {
-      report_test_status(test_name, "", FAIL);
-      fail_set = 1;
-    }
-
-    if(check_pool_size(test_name, list->pool_size, pool_size) == FAIL) {
-      fail_set = 1;
-    }
-
-    if(!fail_set) {
-      report_test_status(test_name, NULL, PASS);
-      mark_test_passed(LIST_INSERT_AT);
-      ret_status = PASS;
-    }
-
+  if(!fail_set) {
+    report_test_status(test_name, NULL, PASS);
+    mark_test_passed(LIST_INSERT_AT);
+    ret_status = PASS;
   }
 
   return ret_status;
@@ -340,9 +354,9 @@ test_list_insert_at(List * list, void * d, int idx)
 test_status
 test_list_append(List * list, void * data_list[], int data_list_size)
 {
-  const char * test_name = "test_list_append";
+  const char * test_name = "test: list_append";
   test_status ret_status = FAIL;
-  ListItem * list_end = NULL;
+  ListItem ** old_list_end = NULL;
   int expected_list_size, expected_pool_size;
   int expected_idx;
   int fail_set = 0;
@@ -364,33 +378,38 @@ test_list_append(List * list, void * data_list[], int data_list_size)
   else {
     expected_list_size = list->size;
     expected_pool_size = list->pool_size;
-    list_end = list->head;
+    old_list_end = &(list->head);
 
-    while(list_end && list_end->next && (list_end = list_end->next));
+    while((*old_list_end) && (*old_list_end)->next && (old_list_end = &((*old_list_end)->next)));
+
+    if(*old_list_end) {
+      (old_list_end = &((*old_list_end)->next));
+    }
 
     expected_idx = list->size - 1;
 
     int ret_val = 0;
 
     for(int i = 0; i < data_list_size; ++i) {
-      if(!list_assert((ret_val = list_append(list, data_list[i])) == expected_idx++)) {
+      if(!list_assert((ret_val = list_append(list, data_list[i])) == ++expected_idx)) {
         report_test_status(test_name, "Value returned by 'list_append' doesn't match expected index", FAIL);
         fail_set = 1;
         break;
       }
 
-      if(list_assert(list_end->next == NULL)) {
+      if(list_assert((*old_list_end) == NULL)) {
         report_test_status(test_name, "Failed to append new item to end of the list", FAIL);
         fail_set = 1;
         break;
       }
       else {
-        if(!list_assert(list_end->next->data == data_list[i])) {
+        if(list_assert((*old_list_end)->data == data_list[i]) == FAIL) {
           report_test_status(test_name, "Address of data appended is incorrect", FAIL);
           fail_set = 1;
           break;
         }
       }
+
 
       if(check_list_size(test_name, list->size, ++expected_list_size) == FAIL) {
         fail_set = 1;
@@ -403,21 +422,20 @@ test_list_append(List * list, void * data_list[], int data_list_size)
         break;
       }
 
-      if(!list_assert(list->pool == NULL)) {
+      if(list_assert(list->pool == NULL) == FAIL) {
         report_test_status(test_name, "Unexpected change in value pointed to by list->pool", FAIL);
       }
 
-      list_end = list_end->next;
-
+      (old_list_end) = &((*old_list_end)->next);
     } // for
 
-    if(!list_assert(list_end->next == NULL)) {
+    if(list_assert((*old_list_end) == NULL) == FAIL) {
       report_test_status(test_name, "The 'next' pointer at end of list does not point to 'NULL'", FAIL);
       fail_set = 1;
     }
   } // else
 
-  if(!fail_set) {
+  if(fail_set == 0) {
     report_test_status(test_name, NULL, PASS);
     mark_test_passed(LIST_APPEND);
     ret_status = PASS;
@@ -430,7 +448,7 @@ test_list_append(List * list, void * data_list[], int data_list_size)
 test_status
 test_list_shift(List * list)
 {
-  const char * test_name = "test_list_shift";
+  const char * test_name = "test: list_shift";
   int fail_set = 0;
   test_status ret_status = FAIL;
 
@@ -476,7 +494,7 @@ test_list_shift(List * list)
 test_status
 test_list_remove_at(List * list)
 {
-  const char * test_name = "test_list_remove_at";
+  const char * test_name = "test: list_remove_at";
 
   if((check_test_passed(LIST_INSERT_AT)) == 0) {
     report_test_status(test_name,
@@ -627,7 +645,7 @@ test_list_remove_at(List * list)
 test_status
 test_list_get_at(List * list, void * data[], unsigned int data_size)
 {
-  const char * test_name = "test_list_get_at";
+  const char * test_name = "test: list_get_at";
 
   if((check_test_passed(LIST_PUSH)) == 0) {
     report_test_status(test_name,
@@ -706,7 +724,7 @@ test_list_get_at(List * list, void * data[], unsigned int data_size)
 test_status
 test_list_clear(List * list, void * data_list[], unsigned int list_size)
 {
-  const char * test_name = "test_list_clear";
+  const char * test_name = "test: list_clear";
   test_status ret_status = FAIL;
   int fail_set = 0;
 
@@ -757,7 +775,7 @@ test_list_clear(List * list, void * data_list[], unsigned int list_size)
 test_status
 test_list_free(void)
 {
-  const char * test_name = "test_list_free";
+  const char * test_name = "test: list_free";
 
   if((check_test_passed(LIST_PUSH)) == 0) {
     report_test_status(test_name,
@@ -800,24 +818,35 @@ main(void)
 {
 
   //List * list = new_list();
-  struct { int a; } d1 = { .a = 10 };
-  struct { int a; } d2 = { .a = 20 };
-  struct { int a; } d3 = { .a = 20 };
-  struct { int a; } d4 = { .a = 50 };
+  struct { int a; } d1  = { .a =  10 };
+  struct { int a; } d2  = { .a =  20 };
+  struct { int a; } d3  = { .a =  30 };
+  struct { int a; } d4  = { .a =  40 };
+  struct { int a; } d5  = { .a =  50 };
+  struct { int a; } d6  = { .a =  60 };
+  struct { int a; } d7  = { .a =  70 };
+  struct { int a; } d8  = { .a =  80 };
+  struct { int a; } d9  = { .a =  90 };
+  struct { int a; } d10 = { .a = 100 };
+
+  void * test_data_list[] = {
+    (void *)&d4, (void *)&d3, (void *)&d2, (void *)&d1, (void *)&d5,
+    (void *)&d6, (void *)&d7, (void *)&d8, (void *)&d9, (void *)&d10
+  };
+  
+  int insert_index_list[] = {0, 10, 10, 0, 2, 0, 8, 12, 200, -1 , -20, 4};
   
   List * list = NULL;
   list = test_new_list(list);
 
 // INSERT AT
-  test_list_insert_at(list, (void *)&d1, 0);
-  test_list_insert_at(list, (void *)&d1, 10);
-  test_list_insert_at(list, (void *)&d2, 10);
-  test_list_insert_at(list, (void *)&d2, 0);
-  test_list_insert_at(list, (void *)&d3, 2);
+  test_list_insert_at(list, test_data_list, 10, insert_index_list, 12);
 
 // APPEND
-  void * append_list[4] = {(void *)&d4, (void *)&d3, (void *)&d2, (void *)&d1};
-  test_list_append(list, append_list, 4);
+  test_list_append(list, test_data_list, 4);
+
+// CLEAR
+  test_list_clear(list, test_data_list, 4);
 
 // PUSH
   test_list_push(list, (void *)22);
@@ -826,15 +855,15 @@ main(void)
   test_list_shift(list);
 
 // CLEAR
-  test_list_clear(list, append_list, 4);
+  test_list_clear(list, test_data_list, 4);
 
 
 // MAKE SURE LIST IS AS WHEN WE STARTED
-  reset_list(list, append_list, 4);
+  reset_list(list, test_data_list, 4);
 
 
 // GET_AT
-  test_list_get_at(list, append_list, 4);
+  test_list_get_at(list, test_data_list, 4);
 
 // REMOVE AT
   test_list_remove_at(list);

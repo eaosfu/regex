@@ -12,7 +12,7 @@ typedef struct List {
   int pool_size;
   struct ListItem * head;
   struct ListItem * pool;
-  //struct ListItem * tail;
+  struct ListItem * tail;
 } List;
 
 typedef struct ListItem {
