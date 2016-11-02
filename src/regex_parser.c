@@ -597,8 +597,7 @@ parser_purge_branch(Parser * parser)
 {
 //printf("Purging branch with backref: %d\n", parser->lookahead.value);
   NFA * popped = NULL;
-  while((popped = pop(parser->symbol_stack)) != NULL) free_nfa(popped);
-  //while((popped = pop(parser->symbol_stack)) != NULL) release_nfa(popped);
+  while((popped = pop(parser->symbol_stack)) != NULL) release_nfa(popped);
   int stop = 0;
   while(stop == 0) {
     parser_consume_token(parser);

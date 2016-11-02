@@ -6,17 +6,19 @@
 #define SIZE_OF_LOCALE 128
 #define SIZE_OF_RANGE SIZE_OF_LOCALE/(sizeof(unsigned int) * CHAR_BIT)
 
-#define NFA_ANY        0x001
-#define NFA_LITERAL    0x002
-#define NFA_RANGE      0x004
-#define NFA_SPLIT      0x008
-#define NFA_EPSILON    0x010
-#define NFA_ACCEPTING  0x020
-#define NFA_BOL_ANCHOR 0x040
-#define NFA_EOL_ANCHOR 0x080
-#define NFA_NGLITERAL  0x100 // negated literal as in [^abc]
-#define NFA_BACKREFERENCE  0x200 // negated literal as in [^abc]
-
+#define NFA_ANY              0x0001
+#define NFA_LITERAL          0x0002
+#define NFA_RANGE            0x0004
+#define NFA_SPLIT            0x0008
+#define NFA_EPSILON          0x0010
+#define NFA_ACCEPTING        0x0020
+#define NFA_BOL_ANCHOR       0x0040
+#define NFA_EOL_ANCHOR       0x0080
+#define NFA_NGLITERAL        0x0100 // negated literal as in [^abc]
+#define NFA_INTERVAL         0x0200 // negated literal as in [^abc]
+#define NFA_BACKREFERENCE    0x0400 
+#define NFA_CAPTUREGRP_END   0x0800 
+#define NFA_CAPTUREGRP_BEGIN 0x1000 
 
 
 typedef unsigned int nfa_range[SIZE_OF_RANGE];
@@ -24,11 +26,15 @@ typedef unsigned int nfa_range[SIZE_OF_RANGE];
 typedef struct NFACtrl {
   struct NFACtrl * ctrl_id;
   unsigned int next_seq_id;
+  unsigned int current_stream_id;
+  struct NFA * free_nfa;
+  struct NFA * last_free_nfa;
 } NFACtrl;
 
 typedef struct NFA {
   struct NFACtrl * ctrl;
   unsigned int id;
+  unsigned int stream_id;
   struct {
     unsigned int type;
     union {
@@ -45,16 +51,18 @@ NFACtrl * new_nfa_ctrl(void);
 NFA * concatenate_nfa(NFA *, NFA *);
 NFA * new_nfa(NFACtrl *, unsigned int);
 NFA * new_alternation_nfa(NFA *, NFA *);
-//NFA * new_anchor_nfa(NFACtrl *, unsigned int);
 NFA * new_kleene_nfa(NFA *);
 NFA * new_literal_nfa(NFACtrl *, unsigned int, unsigned int);
 NFA * new_posclosure_nfa(NFA *);
 NFA * new_qmark_nfa(NFA *);
 NFA * new_range_nfa(NFACtrl *, int);
+NFA * new_backreference_nfa(NFACtrl *, unsigned int);
+
 
 void free_nfa(NFA *);
+void release_nfa(NFA *);
 void update_range_nfa(unsigned int, unsigned int, NFA *, int);
+void inject_capturegroup_markers(NFA *, NFA *, unsigned int);
 int  update_range_w_collation(char *, int, NFA *, int);
-//int mark_nfa(NFA *);
 
 #endif

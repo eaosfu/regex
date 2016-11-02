@@ -39,7 +39,27 @@ new_nfa(NFACtrl * ctrl, unsigned int type)
   // TOOD: check nfa_pool, if not empty pop an nfa from the pool
   //       set its type to 't' and it's parent, out1, out2 pointers to NULL and
   //       return that as the new nfa
-  NFA * nfa = xmalloc(sizeof * nfa);
+
+// Add check for free nodes, if no free nodes use malloc
+  NFA * nfa = NULL;
+
+  if(ctrl->free_nfa) {
+    nfa = ctrl->free_nfa;
+    if(ctrl->free_nfa == ctrl->last_free_nfa) {
+      ctrl->free_nfa = ctrl->last_free_nfa = NULL;
+    }
+    else {
+      if(nfa->value.literal == '|') {
+        ctrl->last_free_nfa->out2 = nfa->out1;
+        ctrl->last_free_nfa = nfa->out1;
+        ctrl->free_nfa = nfa->out2;
+      }
+    }
+  }
+  else {
+    nfa = xmalloc(sizeof * nfa);
+  }
+
   nfa->id = 0;
   nfa->ctrl = ctrl;
   nfa->value.type = type;
@@ -156,8 +176,6 @@ new_range_nfa(NFACtrl * ctrl, int negate)
     }
   }
 
-//printf("NEW EMPTY RANGE NFA\n");
-//printf("NEW_RANGE: start: 0x%x, end: 0x%x\n", start, accept);
   accept->parent = start;
 
   start->out1 = start->out2 = accept;
@@ -194,8 +212,17 @@ new_literal_nfa(NFACtrl * ctrl, unsigned int literal, unsigned int special_meani
 
 
 NFA *
-new_backreference_nfa(NFACtrl * ctrl, NFA * capture_group_start, unsigned int back_ref_num)
+new_backreference_nfa(NFACtrl * ctrl, unsigned int capture_group_id)
 {
+  NFA * start  = new_nfa(ctrl, NFA_BACKREFERENCE);
+  NFA * accept = new_nfa(ctrl, NFA_ACCEPTING);
+
+  start->id = capture_group_id;
+  start->out1 = start->out2 = accept;
+
+  accept->parent = start;
+
+  return accept;
 }
 
 
@@ -226,6 +253,7 @@ new_kleene_nfa(NFA * body)
   start->out2 = accept;
 
   body->value.type = NFA_SPLIT;
+  body->value.literal = '*';
   body->out1 = body->parent;
   body->out2 = accept;
 
@@ -272,6 +300,7 @@ new_posclosure_nfa(NFA * body)
   start->out1 = start->out2 = body->parent;
 
   body->value.type = NFA_SPLIT;
+  body->value.literal = '+';
   body->out1 = body->parent;
   body->out2 = accept;
 
@@ -292,6 +321,14 @@ new_posclosure_nfa(NFA * body)
 NFA *
 new_alternation_nfa(NFA * nfa1, NFA * nfa2)
 {
+
+  if(nfa1 == NULL) {
+    return nfa2;
+  }
+  if(nfa2 == NULL) {
+    return nfa1;
+  }
+
   if(nfa1->ctrl != nfa2->ctrl) {
     fatal("Alternation between different nfa families not allowed\n");
   }
@@ -306,6 +343,7 @@ new_alternation_nfa(NFA * nfa1, NFA * nfa2)
   accept->parent = start;
 
   // nfa1->parent is the start state for nfa1; likewise for nfa2
+  start->value.literal = '|';
   start->out1 = nfa1->parent;
   start->out2 = nfa2->parent;
 
@@ -367,6 +405,7 @@ nfa_compare_equal(void * nfa1, void *nfa2)
 
   return ret;
 }
+
 
 void
 free_nfa_helper(NFA * n, List * l, List * seen_states)
@@ -450,4 +489,22 @@ free_nfa(NFA * nfa)
   list_free(&cur_state_set, NULL);
   list_free(&next_state_set, NULL);
   list_free(&seen_states, NULL);
+}
+
+
+void
+release_nfa(NFA * nfa)
+{
+  if(nfa) {
+    ((NFACtrl *)nfa)->free_nfa = nfa->parent;
+    if(((NFACtrl *)nfa)->free_nfa) {
+      nfa->out2 = ((NFACtrl *)nfa)->free_nfa;
+    }
+    else {
+      // first nfa to be released
+      nfa->out1 = nfa->out2 = NULL;
+    }
+    ((NFACtrl *)nfa)->last_free_nfa = nfa;
+  }
+  return;
 }
