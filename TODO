@@ -83,8 +83,20 @@ TODO ITEMS LISTED IN ORDER:
              Similarly, when the scanner is reading from the start of a string it sets a BOL flag which
              the nfa_sim checks for when it encounters a NFA node marked BOL.
 
+(I) - UPDATE scanner so we can maintain different states
+
+      NOTE: One of the changes we need is to allocate our own buffers internally... this way the
+            caller only needs to provide us with the input. For example the caller should be able
+            to simply specify the File that needs to be scanned and all state associated with 
+            scanning that files is internal to the scanner.
+
+            We can then maintain a stack of states that allow the user to move around the file
+            do some scanning and then revert to a previous scan state after they're done.
+
 (I) - CREATE a global memory management system so we can allocate from a memory pool instead of
              always having to call malloc()
+
+(D) - UPDATE parser/simulator to handle backreferences
 
 (I) - UPDATE simulartor to handle interval expressions (i.e. <expression>{<RE_DUP_MIN>, <RE_DUP_MAX>}
              Actually I think redesigning the simulator would clean things up quite a bit.
@@ -93,10 +105,6 @@ TODO ITEMS LISTED IN ORDER:
              that nodes parent as many times as need to be counted before declaring a match.
 
        (D) - UPDATE source and headesr so we can separate nfa_sim from regex_parser
-
-       (I) - UPDATE scan():scanner.c so that it inserts a special token that identifies the BOL/EOL
-                    This way the simulator will be able to process anchored expressions without having to
-                    constantly check flags, etc.
 
        (I) - UPDATE nfa.c so that individual 'interval expression' nodes have a sequentially assinged
                     ID and a pointer back to the beginning of the expression they affect. Since the ID is
@@ -127,8 +135,6 @@ TODO ITEMS LISTED IN ORDER:
 
                     To achieve thise we will probably have to add a 'global configuraiton' item accessible to
                     all components in the regex engine 
-       (I) - 
-       (I) - 
 
 (D) - UPDATE nfa_sim.c so that it reads its input from a file rather than stdin.
 
@@ -151,3 +157,4 @@ TODO ITEMS LISTED IN ORDER:
 (I) - UPDATE -- find a way to pack the final nfa into an array rather than following pointers
 
 (I) - UDPATE uses of 'symbol_type' to 'token_type'
+

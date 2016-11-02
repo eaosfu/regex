@@ -88,7 +88,6 @@ define make_regex_parser
 endef
 
 define make_recognizer
-  $(eval CFLAGS += -O3)
   $(call make_deps,recognizer)
   $(call make_goal,recognizer)
 endef
@@ -100,6 +99,7 @@ define make_test_slist
 endef
 
 define make_test_all
+  $(eval CFLAGS += -g)
   $(call make_recognizer)
   $(call make_test_slist)
   test_all: recognizer test_slist

@@ -8,7 +8,7 @@
 Token *
 new_token()
 {
-  Token * t = xmalloc(sizeof(Token));
+  Token * t = xmalloc(sizeof(*t));
   return t;
 }
 
@@ -24,7 +24,9 @@ update_token(Token * t, unsigned int c, symbol_type type)
 void
 free_token(Token * t)
 {
-  free(t);
+  if(t != NULL) {
+    free(t);
+  }
   t = NULL;
 }
 

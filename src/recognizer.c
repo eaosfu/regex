@@ -10,35 +10,94 @@
 #include <string.h>
 #include <stdio.h>
 
-#define CTRL_FLAGS(s) (*((s)->ctrl_flags))
+//#define CTRL_FLAGS(s) (*((s)->ctrl_flags))
+
+// TESTING
+void
+print_backref_match(NFASim * sim, int id, int shorten) {
+//printf("BACK REFERENCE[%d] MATCHES: ", id + 1);
+  char * capture_group_match = (sim->backref_matches)[id].start;
+  char * end = (sim->backref_matches)[id].end;
+/*
+if(shorten) {
+  --end;
+}
+*/
+  while(capture_group_match <= end) {
+    printf("%c", capture_group_match[0]);
+    ++capture_group_match;
+  }
+printf("\n");
+}
+// END TESTING
+
 
 void
-clear_workingset_ids(NFASim * sim)
+record_capturegroup_match(NFASim * sim, unsigned int capturegroup_idx, unsigned int stream_id, unsigned int flag, int iteration)
 {
-  memset(sim->working_set_ids, 0, WORKING_SET_ID_BITS);
+  if(flag == NFA_CAPTUREGRP_BEGIN) {
+    sim->backref_matches[capturegroup_idx].buffer = sim->scanner->buffer;
+    if(iteration == 0) {
+      sim->backref_matches[capturegroup_idx].start = get_cur_pos(sim->scanner);
+    }
+    else {
+      sim->backref_matches[capturegroup_idx].start = get_scanner_readhead(sim->scanner);
+    }
+//printf("BACKREF[%d] STARTS: %s\n", capturegroup_idx, sim->backref_matches[capturegroup_idx].start);
+    // set end to NULL so when we process a backreference we can tell whether or
+    // not the associated capture group matched.
+    sim->backref_matches[capturegroup_idx].end = NULL;
+  }
+  else {
+    // if we reach this point all that remains is to mark where the match ends.
+    sim->backref_matches[capturegroup_idx].end = get_cur_pos(sim->scanner);
+    sim->backref_matches[capturegroup_idx].stream_id = stream_id;
+    //sim->backref_matches[capturegroup_idx].iteration = iteration;
+/*
+char * tmp = sim->backref_matches[capturegroup_idx].start;
+printf("BACKREF[%d] EXPANDED TO MATCH: ", capturegroup_idx + 1);
+while(tmp <= sim->backref_matches[capturegroup_idx].end)
+{
+  printf("%c", tmp[0]);
+  ++tmp;
+}
+printf("\n");
+*/
+  }
+
+  return;
 }
 
+
+void
+clear_stateset2_ids(NFASim * sim)
+{
+  memset(sim->stateset2_ids, 0, WORKING_SET_ID_BITS);
+  return;
+}
+
+
 int
-id_in_workingset(NFASim * sim, unsigned int id)
+id_in_stateset2(NFASim * sim, unsigned int id)
 {
 #define index(id)  ((id) / UINT_BITS)
 #define offset(id) (((id) % UINT_BITS) - 1)
 //printf("CHECK ID: %d vs. WORKING SET: %d -- [index: %d -- offset: %d] %d\n", id, 
 //  UINT_BITS * index(id) + offset(id), 
 //  index(id), offset(id),
-//  (((sim->working_set_ids)[index(id)] & (0x01 << offset(id))) == 0) ? 0 : 1);
-  return ((sim->working_set_ids)[index(id)] & (0x01 << offset(id)));
+//  (((sim->stateset2_ids)[index(id)] & (0x01 << offset(id))) == 0) ? 0 : 1);
+  return ((sim->stateset2_ids)[index(id)] & (0x01 << offset(id)));
 #undef index
 #undef offset
 }
 
 
 void
-add_id_to_workingset(NFASim * sim, unsigned int id)
+add_id_to_stateset2(NFASim * sim, unsigned int id)
 {
 #define index(id)  ((id) / UINT_BITS)
 #define offset(id) (((id) % UINT_BITS) - 1)
-  (sim->working_set_ids)[index(id)] |= (0x01 << offset(id));
+  (sim->stateset2_ids)[index(id)] |= (0x01 << (id) ? offset(id) : 0);
 #undef index
 #undef offset
   return;
@@ -46,32 +105,36 @@ add_id_to_workingset(NFASim * sim, unsigned int id)
 
 
 int
-get_states(NFASim * sim, NFA * nfa, List * lp)
+get_states(NFASim * sim, NFA * nfa, List * lp, int iteration)
 {
   int found_accepting_state = 0;
-  if(nfa->value.type & ~(NFA_SPLIT|NFA_EPSILON)) {
+  if(nfa->value.type & ~(NFA_SPLIT|NFA_EPSILON|NFA_CAPTUREGRP_BEGIN|NFA_CAPTUREGRP_END)) {
     if(nfa->value.type == NFA_ACCEPTING) {
       found_accepting_state = 1;
     }
+    else if(nfa->value.type & NFA_BACKREFERENCE) {
+        list_append(lp, nfa);
+    }
     else {
       if(CTRL_FLAGS(sim) & MARK_STATES_FLAG) {
-        if(id_in_workingset(sim, nfa->id) == 0) {
-          add_id_to_workingset(sim, nfa->id);
-          //list_push(lp, nfa);
+        if(id_in_stateset2(sim, nfa->id) == 0) {
+          add_id_to_stateset2(sim, nfa->id);
           list_append(lp, nfa);
         }
       }
       else {
-        //list_push(lp, nfa);
         list_append(lp, nfa);
       }
     }
   }
   else {
     if(nfa->value.type & NFA_SPLIT) {
-      found_accepting_state += get_states(sim, nfa->out1, lp);
+      found_accepting_state += get_states(sim, nfa->out1, lp, iteration);
     }
-    found_accepting_state += get_states(sim, nfa->out2, lp);
+    else if(nfa->value.type & (NFA_CAPTUREGRP_BEGIN|NFA_CAPTUREGRP_END)) {
+      record_capturegroup_match(sim, nfa->id, nfa->stream_id, nfa->value.type, iteration);
+    }
+    found_accepting_state += get_states(sim, nfa->out2, lp, iteration);
   }
   return found_accepting_state;
 }
@@ -120,7 +183,6 @@ record_match(char * buffer, List * matches, char * start, char * end, int new_ma
       goto RETURN;
     }
   }
-static unsigned int new_match_count = 0;
   match = xmalloc(sizeof * match);
   match->buffer = buffer;
   match->start  = start;
@@ -151,15 +213,15 @@ new_nfa_sim(Parser * parser, Scanner * scanner, ctrl_flags * cfl)
 
 
 void
-reset_nfa_sim(NFASim * sim)
+reset_nfa_sim(NFASim * sim, int iteration)
 {
 //printf("\treset nfa sim\n");
   list_clear(sim->state_set1);
   list_clear(sim->state_set2);
 //printf("WORKING SET ID BITS: %d\n", WORKING_SET_ID_BITS);
-  clear_workingset_ids(sim);
+  clear_stateset2_ids(sim);
   CLEAR_MARK_STATES_FLAG(&CTRL_FLAGS(sim));
-  get_states(sim, sim->nfa->parent, sim->state_set1);
+  get_states(sim, sim->nfa->parent, sim->state_set1, iteration);
 //fatal("DONE HERE\n");
   SET_MARK_STATES_FLAG(&CTRL_FLAGS(sim));
 }
@@ -177,28 +239,84 @@ run_nfa(NFASim * sim)
 #define MATCH_FAILED(s) (((s)->state_set2->size == 0) ? 1 : 0)
 #define MATCH_LINE(s) 0 // replace this with the above line when MATCH_LINE_FLAG has been added
 
-  reset_nfa_sim(sim);
+
+#define BACKREF_MATCH_LEN(sim, idx) \
+  (((sim)->backref_matches)[(idx)].end - ((sim)->backref_matches)[(idx)].start)
+
+
   ListItem * current_state;
   Match * m;
+  int iteration = 0;
   int match_start = 0;
   int match_end   = 0;
-  int c = next_char(sim->parser->scanner);
+  int c = next_char(sim->scanner);
   int accept = 0;
   int eol_adjust = 0;
   int new_match = 1;
   NFA * nfa;
 
+  reset_nfa_sim(sim, iteration);
+
   while(c != '\0') {
-//printf("c: %c\n", c);
+    ++iteration;
     current_state = sim->state_set1->head;
     for(int i = 0; i < sim->state_set1->size; ++i) {
       nfa = current_state->data;
       accept = 0;
       eol_adjust = 0;
       switch(nfa->value.type) {
+        case NFA_BACKREFERENCE: {
+          int br_mlen = 0;
+          int br_match_status = 0;
+          // check if capture group has matched anything
+          if(((sim->backref_matches)[nfa->id - 1].end) == 0) {
+//printf("BREAKING!\n");
+            break;
+          }
+
+          if(nfa->stream_id != 0
+          && nfa->stream_id <= ((sim->backref_matches)[nfa->id - 1].stream_id)) {
+            break;
+          }
+
+          char * capture_group_match = (sim->backref_matches)[nfa->id - 1].start;
+          char * capture_group_match_end = (sim->backref_matches)[nfa->id - 1].end;
+/*
+          if((sim->backref_matches)[nfa->id - 1].iteration == iteration) {
+//printf("END CAPTURE GROUP AT: %s\n", capture_group_match_end);
+            --capture_group_match_end;
+//printf("END CAPTURE GROUP AT: %s\n", capture_group_match_end);
+          }
+*/
+          char * tmp_input = get_cur_pos(sim->scanner);
+          int br_idx = 0;
+//printf("-- remaining input: %s vs tmp_input: %s\n", get_cur_pos(sim->scanner), tmp_input);
+//print_backref_match(sim, nfa->id - 1, 1);
+          while(capture_group_match <= capture_group_match_end) {
+            if(tmp_input[0] == sim->scanner->eol_symbol || tmp_input[0] != capture_group_match[0]) {
+//printf("BREAK ON: %c -- %c\n",capture_group_match[0], tmp_input[0]);
+              br_match_status = 0;
+              break;
+            }
+//printf("%c -- %c\n", capture_group_match[0], tmp_input[0]);
+            ++br_idx;
+            ++capture_group_match;
+            ++tmp_input;
+            br_match_status = 1;
+//printf("next: %c -- %c\n", capture_group_match[0], tmp_input[0]);
+          }
+          if(br_match_status > 0) {
+//printf("tmp_input: '%c' -- capture group: '%c'\n", tmp_input[0], capture_group_match);
+            accept = get_states(sim, NEXT_STATE(current_state), sim->state_set2, iteration);
+            sim->scanner->readhead = tmp_input;
+            match_end += br_idx - 1;
+//printf("\tremaining input: %s\n", get_scanner_readhead(sim->scanner));
+//printf("did we accept?: %d\n\n", accept);
+          }
+        } break;
         case NFA_ANY: {
           if(c != sim->parser->scanner->eol_symbol) {
-            accept = get_states(sim, NEXT_STATE(current_state), sim->state_set2);
+            accept = get_states(sim, NEXT_STATE(current_state), sim->state_set2, iteration);
 //printf("\n");
           }
         } break;
@@ -206,15 +324,15 @@ run_nfa(NFASim * sim)
           if(c != sim->parser->scanner->eol_symbol) {
             if(is_literal_in_range(*(nfa->value.range), c)) {
 //printf("%c IS IN RANGE -- ", c);
-              accept = get_states(sim, NEXT_STATE(current_state), sim->state_set2);
+              accept = get_states(sim, NEXT_STATE(current_state), sim->state_set2, iteration);
 //printf("\n");
-//printf("ACCEPT: %d\n", accept);
+//printf("ACCEPT: %d, SIZE OF STATE_SET2: %d\n", accept, sim->state_set2->size);
             }
           }
         } break;
         case NFA_BOL_ANCHOR: {
           if(CTRL_FLAGS(sim) & AT_BOL_FLAG) {
-            accept = get_states(sim, NEXT_STATE(current_state), sim->state_set1);
+            accept = get_states(sim, NEXT_STATE(current_state), sim->state_set1, iteration);
           }
         } break;
         case NFA_EOL_ANCHOR: {
@@ -225,20 +343,22 @@ run_nfa(NFASim * sim)
         } break;
         default: {
           if(c == nfa->value.literal) {
-//printf("%c MATCH -- ", c);
-            accept = get_states(sim, NEXT_STATE(current_state), sim->state_set2);
+//printf("%c MATCH -- %c", c, nfa->value.literal);
+            accept = get_states(sim, NEXT_STATE(current_state), sim->state_set2, iteration);
 //printf("\n");
 //printf("ACCEPT: %d\n", accept);
           }
         } break;
       }
 
+//print_backref_match(sim, 2);
       if(accept) {
 //printf("NEW MATCH\n");
-        record_match(sim->parser->scanner->buffer,
+        record_match(sim->scanner->buffer,
                      sim->matches, 
-                     sim->parser->scanner->str_begin,
-                     sim->parser->scanner->readhead - 1 - eol_adjust,
+                     sim->scanner->str_begin,
+                     //get_scanner_readhead(sim->scanner) - 1 - eol_adjust,
+                     get_cur_pos(sim->scanner) - eol_adjust,
                      new_match);
         match_start = match_end;
         new_match = 0;
@@ -253,10 +373,11 @@ run_nfa(NFASim * sim)
         break;
       }
 //printf("\tRESET ON: %c\n", c);
-      reset_nfa_sim(sim);
+      reset_nfa_sim(sim, iteration);
       ++match_start;
       restart_from(sim->parser->scanner, (sim->parser->scanner->buffer + match_start));
-        c = next_char(sim->parser->scanner);
+      c = next_char(sim->parser->scanner);
+//printf("NEXT CHAR AFTER RESET: %c\n", c);
       match_end = match_start;
       new_match = 1;
 //printf("\n");
@@ -264,13 +385,12 @@ run_nfa(NFASim * sim)
     else {
       list_swap(sim->state_set1, sim->state_set2);
       list_clear(sim->state_set2);
-      clear_workingset_ids(sim);
+      clear_stateset2_ids(sim);
 //printf("\n");
       match_end += 1;
       c = next_char(sim->parser->scanner);
     }
   }
-
 #undef NEXT_STATE
 #undef GLOBAL_MATCH
 #undef CONTINUE_MATCHING
@@ -316,15 +436,17 @@ main(int argc, char ** argv)
   NFASim  * nfa_sim = NULL;
   FILE    * file    = NULL;
 
+  char * buffer = NULL;
+  size_t buf_len = 0;
+  unsigned int line_len = 0;
+
   if(argc >= 2) {
     /*printf("Parsing file: %s\n", argv[1])*/
     file = fopen(argv[1], "r");
     if(file == NULL) {
       fatal("UNABLE OPEN REGEX FILE\n");
     }
-    char * buffer = NULL;
-    unsigned long int buf_len = 0;
-    unsigned int line_len = getline(&buffer, &buf_len, file);
+    line_len = getline(&buffer, &buf_len, file);
     scanner = init_scanner(buffer, buf_len, line_len, &cfl);
 /*printf("REGEX: '%s'\n", scanner->buffer)*/
 
@@ -369,7 +491,7 @@ SET_MGLOBAL_FLAG(&CTRL_FLAGS(scanner));
         list_clear(nfa_sim->matches);
 //return;
       }
-      reset_nfa_sim(nfa_sim);
+      reset_nfa_sim(nfa_sim, 0);
 //printf("LOAD NEXT LINE\n");
     }
     fclose(search_input);
@@ -377,6 +499,8 @@ SET_MGLOBAL_FLAG(&CTRL_FLAGS(scanner));
 //printf("AT_BOL IS %s SET\n", (nfa_sim->parser->scanner->ctrl_flags & AT_BOL_FLAG) ? "" : "NOT");
 //printf("AT_EOL IS %s SET\n", (nfa_sim->parser->scanner->ctrl_flags & AT_EOL_FLAG) ? "" : "NOT");
   parser_free(parser);
+  free_scanner(scanner);
+
   if(nfa_sim) {
     free_nfa_sim(nfa_sim);
   }

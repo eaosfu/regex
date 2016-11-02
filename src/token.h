@@ -30,7 +30,7 @@ typedef enum {
 
 typedef struct Token {
   symbol_type type;
-  unsigned length;
+  unsigned int length;
   unsigned int value;
 } Token;
 

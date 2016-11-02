@@ -6,6 +6,11 @@
 #include "scanner.h"
 #include "misc.h"
 
+// Need to modify how we declare this if we want to
+// be able to use this in a parallel environment
+static List G_STATE_STACK = {.head = NULL, .size = 0, .pool = NULL, .pool_size = 0};
+static Stack * g_state_stack = &G_STATE_STACK;
+
 static inline void
 update_flags(Scanner * s)
 {
@@ -43,15 +48,55 @@ free_scanner(Scanner * s)
     free_token(s->curtoken);
     s->curtoken = NULL;
   }
+  
   free(s);
+
+  s = NULL;
+
+  return;
+}
+
+
+// Returns the current scanner state to the caller, and sets the
+// current scanner state to the top of the G_STATE_STACK. The top
+// of said stack is popped.
+Scanner *
+scanner_pop_state(Scanner ** s)
+{
+  Scanner * ret = *s;
+  if(*s) {
+    Scanner * prev_state = pop(g_state_stack);
+    if(prev_state) {
+      *s = prev_state;
+    }
+    else {
+      *s = NULL;
+    }
+  }
+  return ret;
+}
+
+
+// Stores the current scanner in the G_STATE_STACK
+// and sets the current scanner to 'new_scanner'
+// returns the new size of the G_STATE_STACK
+int
+scanner_push_state(Scanner ** old_state, Scanner * new_state)
+{
+  int ret = 0;
+  if(*old_state) {
+    ret = push(g_state_stack, (*old_state));
+  }
+  (*old_state) = new_state;
+  return ret;
 }
 
 
 Scanner *
-init_scanner(char * buffer, unsigned int buffer_len, unsigned line_len, ctrl_flags * cfl)
+init_scanner(char * buffer, unsigned int buffer_len, unsigned int line_len, ctrl_flags * cfl)
 {
   struct Scanner * s = xmalloc(sizeof * s);
-  s->curtoken = new_token();
+  s->curtoken    = new_token();
   buffer[buffer_len - 1] = '\0';
   s->buf_len    = buffer_len;
   s->buffer     = buffer;
@@ -88,6 +133,19 @@ reset_scanner(Scanner * s)
   update_flags(s);
 }
 
+char *
+get_cur_pos(Scanner * s)
+{
+  char * ret = NULL;
+  if(s) {
+    ret = s->buffer;
+    if(s->readhead > s->buffer) {
+      ret = s->readhead - 1;
+    }
+  }
+  return ret;
+}
+
 
 void
 unput(Scanner * s)
@@ -114,6 +172,7 @@ restart_from(Scanner * s, char * pos)
     SET_AT_EOL_FLAG(s->ctrl_flags);
   }
 }
+
 
 int
 next_char(Scanner * s)
