@@ -26,7 +26,6 @@ typedef unsigned int nfa_range[SIZE_OF_RANGE];
 typedef struct NFACtrl {
   struct NFACtrl * ctrl_id;
   unsigned int next_seq_id;
-  unsigned int current_stream_id;
   struct NFA * free_nfa;
   struct NFA * last_free_nfa;
 } NFACtrl;
@@ -34,7 +33,6 @@ typedef struct NFACtrl {
 typedef struct NFA {
   struct NFACtrl * ctrl;
   unsigned int id;
-  unsigned int stream_id;
   struct {
     unsigned int type;
     union {

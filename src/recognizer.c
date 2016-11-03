@@ -14,15 +14,10 @@
 
 // TESTING
 void
-print_backref_match(NFASim * sim, int id, int shorten) {
-//printf("BACK REFERENCE[%d] MATCHES: ", id + 1);
+print_backref_match(NFASim * sim, int id, int shorten)
+{
   char * capture_group_match = (sim->backref_matches)[id].start;
   char * end = (sim->backref_matches)[id].end;
-/*
-if(shorten) {
-  --end;
-}
-*/
   while(capture_group_match <= end) {
     printf("%c", capture_group_match[0]);
     ++capture_group_match;
@@ -33,7 +28,7 @@ printf("\n");
 
 
 void
-record_capturegroup_match(NFASim * sim, unsigned int capturegroup_idx, unsigned int stream_id, unsigned int flag, int iteration)
+record_capturegroup_match(NFASim * sim, unsigned int capturegroup_idx, unsigned int flag, int iteration)
 {
   if(flag == NFA_CAPTUREGRP_BEGIN) {
     sim->backref_matches[capturegroup_idx].buffer = sim->scanner->buffer;
@@ -43,7 +38,6 @@ record_capturegroup_match(NFASim * sim, unsigned int capturegroup_idx, unsigned 
     else {
       sim->backref_matches[capturegroup_idx].start = get_scanner_readhead(sim->scanner);
     }
-//printf("BACKREF[%d] STARTS: %s\n", capturegroup_idx, sim->backref_matches[capturegroup_idx].start);
     // set end to NULL so when we process a backreference we can tell whether or
     // not the associated capture group matched.
     sim->backref_matches[capturegroup_idx].end = NULL;
@@ -51,7 +45,7 @@ record_capturegroup_match(NFASim * sim, unsigned int capturegroup_idx, unsigned 
   else {
     // if we reach this point all that remains is to mark where the match ends.
     sim->backref_matches[capturegroup_idx].end = get_cur_pos(sim->scanner);
-    sim->backref_matches[capturegroup_idx].stream_id = stream_id;
+
     //sim->backref_matches[capturegroup_idx].iteration = iteration;
 /*
 char * tmp = sim->backref_matches[capturegroup_idx].start;
@@ -132,7 +126,7 @@ get_states(NFASim * sim, NFA * nfa, List * lp, int iteration)
       found_accepting_state += get_states(sim, nfa->out1, lp, iteration);
     }
     else if(nfa->value.type & (NFA_CAPTUREGRP_BEGIN|NFA_CAPTUREGRP_END)) {
-      record_capturegroup_match(sim, nfa->id, nfa->stream_id, nfa->value.type, iteration);
+      record_capturegroup_match(sim, nfa->id, nfa->value.type, iteration);
     }
     found_accepting_state += get_states(sim, nfa->out2, lp, iteration);
   }
@@ -245,7 +239,6 @@ run_nfa(NFASim * sim)
 
 
   ListItem * current_state;
-  Match * m;
   int iteration = 0;
   int match_start = 0;
   int match_end   = 0;
@@ -266,16 +259,11 @@ run_nfa(NFASim * sim)
       eol_adjust = 0;
       switch(nfa->value.type) {
         case NFA_BACKREFERENCE: {
-          int br_mlen = 0;
+//          int br_mlen = 0;
           int br_match_status = 0;
           // check if capture group has matched anything
           if(((sim->backref_matches)[nfa->id - 1].end) == 0) {
 //printf("BREAKING!\n");
-            break;
-          }
-
-          if(nfa->stream_id != 0
-          && nfa->stream_id <= ((sim->backref_matches)[nfa->id - 1].stream_id)) {
             break;
           }
 

@@ -5,7 +5,6 @@
 #include "misc.h"
 #include "errmsg.h"
 #include "regex_parser.h"
-//#include "regex_parser_private.h"
 
 #include <stdio.h>
 
@@ -130,10 +129,8 @@ parse_quantifier_expression(Parser * parser)
 
   switch(parser->lookahead.type) {
     case PLUS: { 
-//printf("POS CLOSURE\n");
       CHECK_MULTI_QUANTIFIER_ERROR;
       parser_consume_token(parser);
-//printf("HERE3: LOOKAHEAD NOW %c\n", parser->lookahead.value);
       nfa = pop(parser->symbol_stack);
       push(parser->symbol_stack, new_posclosure_nfa(nfa));
       quantifier_count++;
@@ -278,19 +275,19 @@ int
 token_in_charclass(unsigned int element, int reset)
 {
   int found = 0;
+  int i = 0;
   static int used_charclass_slots = 0;
   static unsigned int charclass[128] = {0};
 
   if(reset) {
-    //memset((void*)&charclass, 0, 128);
-    for(int i = 0; i < 128; ++i) {
+    for(; i < 128; ++i) {
       charclass[i] = 0;
     }
     used_charclass_slots = 0;
     return 0;
   }
 
-  int i = 0;
+  i = 0;
   for(; i < used_charclass_slots; ++i) {
     if(element == charclass[i]) {
       found = 1;
@@ -299,10 +296,8 @@ token_in_charclass(unsigned int element, int reset)
     }
   }
 
-  if(!found) {
+  if(found == 0) {
 //printf("\t\t%c(0x%x) INSERTED INTO CHARCLASS AT idx: %d = 0x%x\n", element, element, i, charclass[i]);
-//#include <unistd.h>
-//sleep(2);
     charclass[i] = element;
     used_charclass_slots++;
   }
@@ -314,38 +309,27 @@ token_in_charclass(unsigned int element, int reset)
 void
 parse_matching_list(Parser * parser, NFA * range_nfa, int negate)
 {
-//printf("PARSE MATCHING LIST: parser->lookahead: %c\n", parser->lookahead.value);
-  
-  NFA * open_delim_p;
-  char found = 0;
-  unsigned int prev_token_val;
+#define DOT_COLON_OR_EQUAL(l) \
+  ((l).type == DOT  || (l).type == COLON || (l).type == EQUAL)
+
   static int matching_list_len = 0;
- 
   Token prev_token = parser->lookahead;
-//printf("\t0 TESTING: %s\n", parser->scanner->readhead);
   parser_consume_token(parser);
-//printf("\t1 TESTING: %s\n", parser->scanner->readhead);
   Token lookahead = parser->lookahead;
 
-  
   if(prev_token.type == __EOF) {
     return;
   }
 
-//printf("0 - HERE: prev_token: %c, lookahead: %c\n", prev_token.value, lookahead.value);
-  if(prev_token.type == OPENBRACKET  && (lookahead.type == DOT 
-                                          ||  lookahead.type == COLON 
-                                          ||  lookahead.type == EQUAL)) {
+  if(prev_token.type == OPENBRACKET && DOT_COLON_OR_EQUAL(lookahead)) {
     symbol_type delim = lookahead.type;
     prev_token = parser->lookahead;
 
-    //char * str_start = parser->scanner->readhead;
     char * str_start = get_scanner_readhead(parser->scanner);
     parser_consume_token(parser);
 
     // handle case where ']' immediately follows '['<delim> ... (e.x. '[.].]')
     if(parser->lookahead.type == CLOSEBRACKET) {
-      //str_start = parser->scanner->readhead;
       str_start = get_scanner_readhead(parser->scanner);
       prev_token = parser->lookahead;
       push(parser->symbol_stack, new_literal_nfa(parser->nfa_ctrl, parser->lookahead.value, 0));
@@ -443,11 +427,9 @@ parse_matching_list(Parser * parser, NFA * range_nfa, int negate)
 					range_invalid = 0;
 				}
       }
-
       if(range_invalid) {
         fatal(INVALID_RANGE_EXPRESSION_ERROR);
       }
-
       parser_consume_token(parser); // consume end bound
     }
     else {
@@ -457,21 +439,18 @@ parse_matching_list(Parser * parser, NFA * range_nfa, int negate)
   ++matching_list_len;
   parse_matching_list(parser, range_nfa, negate);
   --matching_list_len;
+
+#undef DOT_COLON_OR_EQUAL
+  return;
 }
 
 
-//FIXME: NEED TO PROPERLY HANDLE EXPRESSIONS LIKE [a] or [ab] i.e non range expressions ... 
-//       I think this is fixed know
-//
-//       NEED TO PROPERLY HANDLE NEGATION OF INDIVIUAL ELEMENTS LIKE IN THE CASE [^abc]
 void
 parse_bracket_expression(Parser * parser)
 {
   // use this as the new bottom of the stack
   NFA * open_delim_p = new_literal_nfa(parser->nfa_ctrl, parser->lookahead.value, 0);
   push(parser->symbol_stack, open_delim_p);
-  //parser->scanner->parse_escp_seq = 0;
-  //CLEAR_ESCP_FLAG(parser->ctrl_flags);
   CLEAR_ESCP_FLAG(&CTRL_FLAGS(parser));
   parser_consume_token(parser);
 //printf("PARSE BRACKET EXPRESSION\n");
@@ -514,9 +493,8 @@ parse_bracket_expression(Parser * parser)
     if(left != open_delim_p) {
       fatal("Error parsing bracket expression\n");
     }
-
-// release open_delim_p
-free_nfa(open_delim_p);
+    
+    release_nfa(open_delim_p);
 
     push(parser->symbol_stack, right);
 //printf("PUSHED NFA BACK ONTO STACK: symbol stack top: 0x%x\n", peek(parser->symbol_stack));
@@ -595,7 +573,6 @@ parse_paren_expression(Parser * parser)
 static inline void
 parser_purge_branch(Parser * parser)
 {
-//printf("Purging branch with backref: %d\n", parser->lookahead.value);
   NFA * popped = NULL;
   while((popped = pop(parser->symbol_stack)) != NULL) release_nfa(popped);
   int stop = 0;
@@ -743,29 +720,28 @@ parse_sub_expression(Parser * parser)
       }
     } break;
     case CLOSEPAREN: // fallthrough
-    case __EOF: {
-      return;
-    }
+    case __EOF: return;
     default: {
       printf("ERROR? %c is this EOF? ==> %s\n",
              parser->lookahead.value,
              (parser->lookahead.value == EOF)? "YES": "NO");
     } break;
   }
+  return;
 }
 
 
 void
 regex_parser_start(Parser * parser)
 {
-  if(   parser->lookahead.type == ALPHA
-     || parser->lookahead.type == ASCIIDIGIT
-     || parser->lookahead.type == BACKREFERENCE
-     || parser->lookahead.type == CIRCUMFLEX
-     || parser->lookahead.type == DOLLAR
-     || parser->lookahead.type == DOT
-     || parser->lookahead.type == OPENBRACKET
-     || parser->lookahead.type == OPENPAREN) {
+  if(parser->lookahead.type == ALPHA
+  || parser->lookahead.type == ASCIIDIGIT
+  || parser->lookahead.type == BACKREFERENCE
+  || parser->lookahead.type == CIRCUMFLEX
+  || parser->lookahead.type == DOLLAR
+  || parser->lookahead.type == DOT
+  || parser->lookahead.type == OPENBRACKET
+  || parser->lookahead.type == OPENPAREN) {
     parse_sub_expression(parser);
   }
   else {
@@ -803,6 +779,7 @@ prescan_input(Parser * parser)
 
   new_scanner_state->buffer = 0;
   new_scanner_state = scanner_pop_state(&(parser->scanner));
+// should be released to a pool
   free_scanner(new_scanner_state);
 
   return;
@@ -817,8 +794,8 @@ parse_regex(Parser * parser)
 
   prescan_input(parser);
   regex_parser_start(parser);
-//printf("ALMOST OUT\n");
 
+// FIXME: This is a bit of a cluge...
   if(parser->symbol_stack->size > 1) {
     NFA * right = pop(parser->symbol_stack);
     NFA * left  = pop(parser->symbol_stack);

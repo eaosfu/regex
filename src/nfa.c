@@ -5,8 +5,6 @@
 #include "nfa.h"
 #include "misc.h"
 
-static unsigned int next_nfa_id = 0;
-
 #include <stdio.h>
 
 
@@ -42,7 +40,6 @@ new_nfa(NFACtrl * ctrl, unsigned int type)
 
 // Add check for free nodes, if no free nodes use malloc
   NFA * nfa = NULL;
-
   if(ctrl->free_nfa) {
     nfa = ctrl->free_nfa;
     if(ctrl->free_nfa == ctrl->last_free_nfa) {
@@ -52,19 +49,17 @@ new_nfa(NFACtrl * ctrl, unsigned int type)
       if(nfa->value.literal == '|') {
         ctrl->last_free_nfa->out2 = nfa->out1;
         ctrl->last_free_nfa = nfa->out1;
-        ctrl->free_nfa = nfa->out2;
       }
+      ctrl->free_nfa = nfa->out2;
     }
   }
   else {
     nfa = xmalloc(sizeof * nfa);
   }
-
   nfa->id = 0;
   nfa->ctrl = ctrl;
   nfa->value.type = type;
   nfa->parent = nfa->out1 = nfa->out2 = NULL;
-//printf("ALLOCATED NEW NFA: 0x%x\n", nfa);
   return nfa;
 }
 
@@ -110,13 +105,10 @@ update_range_w_collation(char * collation_string, int coll_name_len, NFA * range
     lower, upper
   };
 
-//printf("COLLATION STRING: '%s'\n", collation_string);
-
 #define low_bound(i, j)  collations[(i)].ranges[(j)].low
 #define high_bound(i, j) collations[(i)].ranges[(j)].high
 #define NAMEQ(i) \
   (strncmp(collation_string, collations[(i)].name, coll_name_len))
-//(strncmp(collation_string, collations[(i)].name, collations[(i)].name_len))
 
   for(int i = 0; i < ncoll; ++i) {
     if(NAMEQ(i) == 0) {
@@ -142,9 +134,6 @@ update_range_nfa(unsigned int low, unsigned int high, NFA * range_nfa, int negat
 #define offset(i) ((i) % 32)
 #define set_bit(r, i)   (*(r))[index(i)] |= 0x01 << offset(i)
 #define unset_bit(r, i) (*(r))[index(i)] &= (0xFFFFFFFF ^ (0x01 << offset(i)))
-if(low == high && low == '.') {
-//  printf("UPDATED RANGE NFA: low %d high %d\n", low, high);
-}
   if(negate) {
     for(int i = low; i <= high; ++i) {
       unset_bit(range_nfa->value.range, i);
@@ -191,11 +180,9 @@ new_literal_nfa(NFACtrl * ctrl, unsigned int literal, unsigned int special_meani
   NFA * accept = new_nfa(ctrl, NFA_ACCEPTING);
 
   if(special_meaning) {
-//printf("SPECIAL MEANING: %d for char: %c\n", special_meaning, literal);
     start = new_nfa(ctrl, special_meaning);
   }
   else {
-//printf("NEW LITERAL NFA: %c\n", literal);
     start = new_nfa(ctrl, NFA_LITERAL);
   }
 
@@ -206,7 +193,6 @@ new_literal_nfa(NFACtrl * ctrl, unsigned int literal, unsigned int special_meani
 
   accept->parent = start;
 
-//printf("NEW_LITERAL(%c:%d): start: 0x%x, end: 0x%x\n", literal, literal, start, accept);
   return accept;
 }
 
@@ -249,11 +235,11 @@ new_kleene_nfa(NFA * body)
   NFA * start  = new_nfa(body->ctrl, NFA_SPLIT);
   NFA * accept = new_nfa(body->ctrl, NFA_ACCEPTING);
 
+  start->value.literal = '*';
   start->out1 = body->parent;
   start->out2 = accept;
 
   body->value.type = NFA_SPLIT;
-  body->value.literal = '*';
   body->out1 = body->parent;
   body->out2 = accept;
 
@@ -271,6 +257,7 @@ new_qmark_nfa(NFA * body)
 
   start->out1 = body->parent;
   start->out2 = accept;
+  start->value.literal = '?';
 
   body->value.type = NFA_EPSILON;
   body->out1 = accept;
@@ -296,11 +283,10 @@ new_posclosure_nfa(NFA * body)
   NFA * start  = new_nfa(body->ctrl, NFA_EPSILON);
   NFA * accept = new_nfa(body->ctrl, NFA_ACCEPTING);
 
-  // there is no direct transition to the accepting state
+  start->value.literal = '+';
   start->out1 = start->out2 = body->parent;
 
   body->value.type = NFA_SPLIT;
-  body->value.literal = '+';
   body->out1 = body->parent;
   body->out2 = accept;
 
@@ -332,7 +318,6 @@ new_alternation_nfa(NFA * nfa1, NFA * nfa2)
   if(nfa1->ctrl != nfa2->ctrl) {
     fatal("Alternation between different nfa families not allowed\n");
   }
-////printf("BUILDING NEW ALTERNATION NFA\n");
   NFA * start  = new_nfa(nfa1->ctrl, NFA_SPLIT);
   NFA * accept = new_nfa(nfa1->ctrl, NFA_ACCEPTING);
 
@@ -347,8 +332,6 @@ new_alternation_nfa(NFA * nfa1, NFA * nfa2)
   start->out1 = nfa1->parent;
   start->out2 = nfa2->parent;
 
-//printf("DONE BUILDING NEW ALTERNATION NFA\n");
-//printf("START: [ 0x%x ] ; END: [ 0x%x ]\n", accept->parent, accept);
   return accept;
 }
 
@@ -380,15 +363,18 @@ concatenate_nfa(NFA * prev, NFA * next)
     *prev = *(next->parent);
     next->parent = tmp;
     discard_node->parent = discard_node->out1 = discard_node->out2 = NULL;
-    free(discard_node);
+    discard_node->value.literal = 0;
+    discard_node->parent = discard_node;
+    release_nfa(discard_node);
   }
+
 
   return next;
 }
 
 
 
-static int g_states_added = 0;
+//static int g_states_added = 0;
 
 void *
 nfa_compare_equal(void * nfa1, void *nfa2)
@@ -408,32 +394,50 @@ nfa_compare_equal(void * nfa1, void *nfa2)
 
 
 void
-free_nfa_helper(NFA * n, List * l, List * seen_states)
+release_nfa(NFA * nfa)
 {
-  if(n == NULL) {
-    return;
-  }
-
-  int i = 0;
-  int already_seen = 0;
-
-  if(!list_search(seen_states, n, nfa_compare_equal)) {
-    list_push(seen_states, n);
-    //list_append(seen_states, n);
-    if(n->value.type & ~(NFA_SPLIT)) {
-      list_push(l, n);
-      ++g_states_added;
+  if(nfa) {
+    if((*(NFACtrl **)nfa)->free_nfa) {
+      nfa->out2 = (*(NFACtrl **)nfa)->free_nfa;
     }
     else {
-      if((n->value.type & (NFA_SPLIT))) {
-        // n->out1 is not a loop
-        free_nfa_helper(n->out1, l, seen_states);
-      }
-      if(n->out2) {
-        free_nfa_helper(n->out2, l, seen_states);
+      nfa->out1 = nfa->out2 = NULL;
+      (*(NFACtrl **)nfa)->last_free_nfa = nfa;
+    }
+    (*(NFACtrl **)nfa)->free_nfa = nfa->parent;
+  }
+  return;
+}
+
+
+unsigned int nodes_freed = 0;
+void
+free_alternation_nfa(NFA * nfa)
+{
+  NFA * parent = nfa;
+  NFA * target = nfa->out1;
+  NFA * tmp;
+  while(target->parent != parent) {
+    switch(target->value.literal) {
+      case '|': {
+        free_alternation_nfa(target);
+        tmp = target->out2;
+      } break;
+      case '+':
+      case '?': 
+      case '*': {
+        tmp = target->out1;
+      } break;
+      default: {
+        tmp = target->out2;
       }
     }
+    tmp = target->out2;
+    free(target);
+    ++nodes_freed;
+    target = tmp;
   }
+  return;
 }
 
 
@@ -449,62 +453,31 @@ free_nfa(NFA * nfa)
     return;
   }
 
-  List * cur_state_set  = new_list(); 
-  List * next_state_set = new_list();
-  List * seen_states    = new_list();
-  int total_states = 0;
-  // step 1 - load the set of next states;
-  // step 2 - delete NFAs in set of current states
-  // step 3 - move NFA's in set of next states into set of current states
-  // repeat until all states have been deleted
-//printf("nfa: 0x%x\n", nfa);
-  g_states_added = 0;
-  free_nfa_helper(nfa->parent, next_state_set, seen_states);
-//printf("FREE NFA\n");
-  while(g_states_added > 0) {
-//printf("STATES ADDED: %d\n", g_states_added);
-    total_states += g_states_added;
-    g_states_added = 0;
-    list_swap(cur_state_set, next_state_set);
-    list_clear(next_state_set);
-    while((nfa = list_shift(cur_state_set))) {
-    //for(int i = 0; i < cur_state_set->size; ++i) {
-      //nfa = list_get_at(cur_state_set, i);
-      if((nfa = nfa->out2)){
-        free_nfa_helper(nfa, next_state_set, seen_states);
+  NFA * tmp = NULL;
+  NFA * current = nfa->parent;
+  if((*(NFACtrl **)nfa)->free_nfa) {
+    nfa->out2 = (*(NFACtrl **)nfa)->free_nfa;
+    (*(NFACtrl **)nfa)->last_free_nfa->out2 = NULL;
+  }
+  while(current) {
+    switch(current->value.literal) {
+      case '|': {
+        free_alternation_nfa(current);
+        tmp = current->out2;
+      } break;
+      case '+':
+      case '?': 
+      case '*': {
+        tmp = current->out1;
+      } break;
+      default: {
+        tmp = current->out2;
       }
     }
-  }
- 
-  NFA * del_nfa = NULL;
-  for(int i = 0; i < seen_states->size; ++i) {
-    del_nfa = (NFA *)list_get_at(seen_states, i);
-    if(del_nfa->value.type == NFA_RANGE) {
-      free(del_nfa->value.range);
-    }
-//printf("FREEING NFA: 0x%x\n", del_nfa);
-    free(del_nfa);
+    free(current);
+    current = tmp;
+    ++nodes_freed;
   }
 
-  list_free(&cur_state_set, NULL);
-  list_free(&next_state_set, NULL);
-  list_free(&seen_states, NULL);
-}
-
-
-void
-release_nfa(NFA * nfa)
-{
-  if(nfa) {
-    ((NFACtrl *)nfa)->free_nfa = nfa->parent;
-    if(((NFACtrl *)nfa)->free_nfa) {
-      nfa->out2 = ((NFACtrl *)nfa)->free_nfa;
-    }
-    else {
-      // first nfa to be released
-      nfa->out1 = nfa->out2 = NULL;
-    }
-    ((NFACtrl *)nfa)->last_free_nfa = nfa;
-  }
   return;
 }
