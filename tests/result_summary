@@ -1,5 +1,9 @@
 #!/bin/bash
-num_tests=23;
+
+RED='\033[0;31m'
+GREEN='\033[0;32m'
+NOCOLOR='\033[0m'
+
 echo "Diff results"
 testdir="tests"
 rdir="$testdir/regex_output";
@@ -7,5 +11,9 @@ gdir="$testdir/grep_output";
 rinput="$testdir/regex_input"
 for i in $(ls $rinput | sort -g| grep -o '[0-9]\+$'); do
   diff $rdir/regex_$i $gdir/grep_$i >& /dev/null; 
-  echo test_$i: $?;
+  if [[ $? == 1 ]]; then 
+    echo -e "test_$i: ${RED}Failed${NOCOLOR}";
+  else
+    echo -e "test_$i: ${GREEN}Passed${NOCOLOR}";
+  fi
 done;
