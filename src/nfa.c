@@ -343,7 +343,9 @@ new_alternation_nfa(NFA * nfa1, NFA * nfa2)
 
   // set the accepting states of nfa1 and nfa2 to type EPSILON so we
   // don't confuse them for ACCEPTING states when we simulate the NFA
-  nfa1->value.type = nfa2->value.type = NFA_EPSILON;
+//  nfa1->value.type = nfa2->value.type = NFA_EPSILON;
+  nfa1->value.type = NFA_EPSILON | ((nfa1->value.type & NFA_MERGE_NODE) ? NFA_MERGE_NODE : 0);
+  nfa2->value.type = NFA_EPSILON | ((nfa2->value.type & NFA_MERGE_NODE) ? NFA_MERGE_NODE : 0);
   nfa1->out1 = nfa1->out2 = nfa2->out1 = nfa2->out2 = accept;
   accept->parent = start;
 
@@ -442,18 +444,14 @@ free_alternation_nfa(NFA * head, NFA * parent, NFA * accept)
     switch(target->value.literal) {
       case '|': {
         free_alternation_nfa(head, target, accept);
-        tmp = target->out2;
-      } break;
-      case '+':
-      case '?':
-      case '*': {
-        tmp = target->out1;
-      } break;
-      default: {
+      } // fallthrough
+      case '+': // fallthrough
+      case '?': // fallthrough
+      case '*': // fallthrough
+      default:  {
         tmp = target->out2;
       }
     }
-    tmp = target->out2;
     free(target);
     ++nodes_freed;
     target = tmp;
@@ -481,13 +479,10 @@ free_nfa(NFA * nfa)
     switch(current->value.literal) {
       case '|': {
         free_alternation_nfa(head, current, accept);
-        tmp = current->out2;
-      } break;
-      case '+':
-      case '?': 
-      case '*': {
-        tmp = current->out1;
-      } break;
+      } // fallthrough
+      case '+': // fallthrough
+      case '?': // fallthrough
+      case '*': // fallthrough
       default: {
         tmp = current->out2;
       }

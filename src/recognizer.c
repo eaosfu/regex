@@ -102,7 +102,7 @@ int
 get_states(NFASim * sim, NFA * nfa, List * lp, int iteration)
 {
   int found_accepting_state = 0;
-  if(nfa->value.type & ~(NFA_SPLIT|NFA_EPSILON|NFA_CAPTUREGRP_BEGIN|NFA_CAPTUREGRP_END)) {
+  if((nfa->value.type & 0x1FFF) & ~(NFA_SPLIT|NFA_EPSILON|NFA_CAPTUREGRP_BEGIN|NFA_CAPTUREGRP_END)) {
     if(nfa->value.type & NFA_ACCEPTING) {
       found_accepting_state = 1;
     }
