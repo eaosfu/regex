@@ -19,6 +19,7 @@
 #define NFA_BACKREFERENCE    0x0400 
 #define NFA_CAPTUREGRP_END   0x0800 
 #define NFA_CAPTUREGRP_BEGIN 0x1000 
+#define NFA_MERGE_NODE       0x80000000
 
 
 typedef unsigned int nfa_range[SIZE_OF_RANGE];
@@ -38,6 +39,11 @@ typedef struct NFA {
     union {
       unsigned int literal;
       nfa_range * range;
+      struct {
+        unsigned int min_rep;
+        unsigned int max_rep;
+        unsigned int count;
+      };
     };
   } value;
   struct NFA * parent;
@@ -51,6 +57,7 @@ NFA * new_nfa(NFACtrl *, unsigned int);
 NFA * new_alternation_nfa(NFA *, NFA *);
 NFA * new_kleene_nfa(NFA *);
 NFA * new_literal_nfa(NFACtrl *, unsigned int, unsigned int);
+NFA * new_interval_nfa(NFA *, unsigned int, unsigned int);
 NFA * new_posclosure_nfa(NFA *);
 NFA * new_qmark_nfa(NFA *);
 NFA * new_range_nfa(NFACtrl *, int);

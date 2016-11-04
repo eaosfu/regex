@@ -12,6 +12,7 @@ NFACtrl *
 new_nfa_ctrl()
 {
   NFACtrl * nfa_ctrl = xmalloc(sizeof * nfa_ctrl);
+  nfa_ctrl->ctrl_id = nfa_ctrl;
   nfa_ctrl->next_seq_id = 1;
   return nfa_ctrl;
 }
@@ -33,12 +34,6 @@ mark_nfa(NFA * nfa)
 NFA *
 new_nfa(NFACtrl * ctrl, unsigned int type)
 {
-//printf("ALLOCATED NFA: ");
-  // TOOD: check nfa_pool, if not empty pop an nfa from the pool
-  //       set its type to 't' and it's parent, out1, out2 pointers to NULL and
-  //       return that as the new nfa
-
-// Add check for free nodes, if no free nodes use malloc
   NFA * nfa = NULL;
   if(ctrl->free_nfa) {
     nfa = ctrl->free_nfa;
@@ -296,6 +291,30 @@ new_posclosure_nfa(NFA * body)
 }
 
 
+NFA *
+new_interval_nfa(NFA * body, unsigned int min, unsigned int max)
+{
+  if(body == 0) {
+    // should never hit this condition
+    return NULL;
+  }
+
+  NFA * start  = body;
+  NFA * accept = new_nfa(body->ctrl, NFA_ACCEPTING);
+
+  start->value.type = NFA_INTERVAL;
+  start->value.min_rep = min;
+  start->value.max_rep = max;
+  start->value.count = 0;
+
+  start->out1 = start->out2 = accept;
+
+  accept->parent = start->parent;
+
+  return accept;
+}
+
+
 //
 // FUNCTION: new_alternation_nfa:
 // INPUT:
@@ -320,6 +339,7 @@ new_alternation_nfa(NFA * nfa1, NFA * nfa2)
   }
   NFA * start  = new_nfa(nfa1->ctrl, NFA_SPLIT);
   NFA * accept = new_nfa(nfa1->ctrl, NFA_ACCEPTING);
+  accept->value.type |= NFA_MERGE_NODE;
 
   // set the accepting states of nfa1 and nfa2 to type EPSILON so we
   // don't confuse them for ACCEPTING states when we simulate the NFA
@@ -350,17 +370,20 @@ new_alternation_nfa(NFA * nfa1, NFA * nfa2)
 NFA *
 concatenate_nfa(NFA * prev, NFA * next)
 {
-  NFA * discard_node = NULL;
-  NFA * tmp          = NULL;
-
   if(next == NULL) {
     return prev;
   }
 
+  NFA * discard_node = NULL;
+  NFA * tmp          = NULL;
+  unsigned int old_type = 0;
+
   if(prev != NULL) {
     discard_node = next->parent;
     tmp = prev->parent;
+    old_type = prev->value.type;
     *prev = *(next->parent);
+    prev->value.type |= (old_type & NFA_MERGE_NODE) ? old_type : 0;
     next->parent = tmp;
     discard_node->parent = discard_node->out1 = discard_node->out2 = NULL;
     discard_node->value.literal = 0;
@@ -374,8 +397,6 @@ concatenate_nfa(NFA * prev, NFA * next)
 
 
 
-//static int g_states_added = 0;
-
 void *
 nfa_compare_equal(void * nfa1, void *nfa2)
 {
@@ -384,6 +405,7 @@ nfa_compare_equal(void * nfa1, void *nfa2)
     return ret;
   }
 
+  // FIXME: This seems like it might become an issue
   if(nfa1 == nfa2) {
     // just return a non null
     ret = nfa1;
@@ -412,19 +434,18 @@ release_nfa(NFA * nfa)
 
 unsigned int nodes_freed = 0;
 void
-free_alternation_nfa(NFA * nfa)
+free_alternation_nfa(NFA * head, NFA * parent, NFA * accept)
 {
-  NFA * parent = nfa;
-  NFA * target = nfa->out1;
+  NFA * target = parent->out1;
   NFA * tmp;
-  while(target->parent != parent) {
+  while(target && !(target->value.type & NFA_MERGE_NODE)) {
     switch(target->value.literal) {
       case '|': {
-        free_alternation_nfa(target);
+        free_alternation_nfa(head, target, accept);
         tmp = target->out2;
       } break;
       case '+':
-      case '?': 
+      case '?':
       case '*': {
         tmp = target->out1;
       } break;
@@ -441,11 +462,6 @@ free_alternation_nfa(NFA * nfa)
 }
 
 
-// walk the NFA collecting every node in the graph
-// mark a node as 'special' if its type is NOT one of:
-//   -- NFA_LITERAL    # matches a literal
-//   -- NFA_NGLITERAL  # negates matching a literal
-// all other nodes encountered are classified as 'simple'
 void
 free_nfa(NFA * nfa)
 {
@@ -454,6 +470,8 @@ free_nfa(NFA * nfa)
   }
 
   NFA * tmp = NULL;
+  NFA * accept = nfa;
+  NFA * head = nfa->parent;
   NFA * current = nfa->parent;
   if((*(NFACtrl **)nfa)->free_nfa) {
     nfa->out2 = (*(NFACtrl **)nfa)->free_nfa;
@@ -462,7 +480,7 @@ free_nfa(NFA * nfa)
   while(current) {
     switch(current->value.literal) {
       case '|': {
-        free_alternation_nfa(current);
+        free_alternation_nfa(head, current, accept);
         tmp = current->out2;
       } break;
       case '+':
