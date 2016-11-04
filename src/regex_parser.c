@@ -54,18 +54,6 @@ track_capture_group(Parser * parser, unsigned int type)
 }
 
 
-IntervalRecord *
-new_interval_record(NFA * nfa, unsigned int min, unsigned int max)
-{
-  IntervalRecord * ir = xmalloc(sizeof * ir);
-  ir->node = nfa;
-  ir->min_rep = min;
-  ir->max_rep = max;
-  ir->count = 0;
-  return ir;
-}
-
-
 static inline void
 parser_consume_token(Parser * parser)
 {
@@ -94,7 +82,6 @@ init_parser(Scanner * scanner, ctrl_flags * cfl)
   parser->scanner         = scanner;
   parser->ctrl_flags      = cfl;
   parser->symbol_stack    = new_stack();
-  parser->interval_stack  = new_stack();
   parser->nfa_ctrl        = new_nfa_ctrl();
   parser_consume_token(parser);
   return parser;
@@ -152,7 +139,7 @@ parse_quantifier_expression(Parser * parser)
       int dec_pos = 0;
       unsigned int min = 0;
       unsigned int max = 0;
-      IntervalRecord * interval_record;
+      NFA * interval_nfa;
       
       CHECK_MULTI_QUANTIFIER_ERROR;
       parser_consume_token(parser);
@@ -171,9 +158,8 @@ parse_quantifier_expression(Parser * parser)
         set_max = 1;
       }
 
-//printf("MIN: %d, MAX: %d\n", min, max);
-
       if(parser->lookahead.type == CLOSEBRACE) {
+        parser_consume_token(parser);
         if(set_max) {
           if((max != 0) && (min > max)) {
             fatal(INVALID_INTERVAL_EXPRESSION_ERROR);
@@ -186,6 +172,9 @@ parse_quantifier_expression(Parser * parser)
             // <expression>{0,1} ; equivalent to <expression>?
             push(parser->symbol_stack, new_qmark_nfa(pop(parser->symbol_stack)));
           }
+          else if(min == 1 && max == 1) {
+            // do nothing
+          }
           else if(min == 1 && max == 0) {
             // <expression>{1,} ; equivalent to <expression>+
             push(parser->symbol_stack, new_posclosure_nfa(pop(parser->symbol_stack)));
@@ -193,19 +182,25 @@ parse_quantifier_expression(Parser * parser)
           else {
             if(min > 0 && max == 0) {
               // <expression>{Min,} ;match at least Min, at most Infinity
-              push(parser->symbol_stack, new_kleene_nfa(pop(parser->symbol_stack)));
+// FIXME kleene is not the right one to use here!... INSERT INTERVAL NODE
+//       HANDLE PROCESSING IN THE RECOGNIZER.
+//push(parser->symbol_stack, new_kleene_nfa(pop(parser->symbol_stack)));
+              interval_nfa = pop(parser->symbol_stack);
+              push(parser->symbol_stack, new_interval_nfa(interval_nfa, min, max));
             }
-            // <expression>{,Max} ;match between 0 and Max
-            // <expression>{Min,Max} ;match between Min and Max
-            interval_record = new_interval_record(peek(parser->symbol_stack), min, max);
-            push(parser->interval_stack, interval_record);
+            else {
+              // <expression>{,Max} ;match between 0 and Max
+              // <expression>{Min,Max} ;match between Min and Max
+              interval_nfa = pop(parser->symbol_stack);
+              push(parser->symbol_stack, new_interval_nfa(interval_nfa, min, max));
+            }
           }
         }
         else {
           if(min > 0) {
             // <expression>{M}
-            interval_record = new_interval_record(peek(parser->symbol_stack), min, max);
-            push(parser->interval_stack, interval_record);
+            interval_nfa = pop(parser->symbol_stack);
+            push(parser->symbol_stack, new_interval_nfa(interval_nfa, min, max));
           }
           else {
             // if we hit this point then min == 0 and max == 0 which is
@@ -817,7 +812,6 @@ void
 parser_free(Parser * parser)
 {
   //free_scanner(parser->scanner);
-  stack_delete(&(parser->interval_stack), NULL);
   free_nfa(pop(parser->symbol_stack));
   stack_delete(&(parser->symbol_stack), NULL);
   free(parser->nfa_ctrl);

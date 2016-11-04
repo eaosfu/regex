@@ -103,7 +103,7 @@ get_states(NFASim * sim, NFA * nfa, List * lp, int iteration)
 {
   int found_accepting_state = 0;
   if(nfa->value.type & ~(NFA_SPLIT|NFA_EPSILON|NFA_CAPTUREGRP_BEGIN|NFA_CAPTUREGRP_END)) {
-    if(nfa->value.type == NFA_ACCEPTING) {
+    if(nfa->value.type & NFA_ACCEPTING) {
       found_accepting_state = 1;
     }
     else if(nfa->value.type & NFA_BACKREFERENCE) {
@@ -183,7 +183,6 @@ record_match(char * buffer, List * matches, char * start, char * end, int new_ma
   match->end    = end;
 
   list_push(matches, match);
-
 #undef MATCH_BUFFER
 RETURN:
   return match;
@@ -229,6 +228,7 @@ run_nfa(NFASim * sim)
   ((GLOBAL_MATCH(s)) ? 1 : (MATCH_COUNT(s) == 1) ? 0 : 1)
 
 #define NEXT_STATE(n) ((NFA *)(n)->data)->out2
+#define PARENT_STATE(n) ((NFA *)(n)->data)->parent
 #define MATCH_COUNT(s) ((s)->matches->size)
 #define MATCH_FAILED(s) (((s)->state_set2->size == 0) ? 1 : 0)
 #define MATCH_LINE(s) 0 // replace this with the above line when MATCH_LINE_FLAG has been added
@@ -258,8 +258,24 @@ run_nfa(NFASim * sim)
       accept = 0;
       eol_adjust = 0;
       switch(nfa->value.type) {
+        case NFA_INTERVAL: {
+          ++(nfa->value.count);
+//printf("min: %d\n", nfa->value.min_rep);
+//printf("max: %d\n", nfa->value.max_rep);
+//printf("count: %d\n", nfa->value.count);
+          if(nfa->value.count < nfa->value.min_rep
+          || nfa->value.count < nfa->value.max_rep) {
+//printf("JUMP BACK TO START NODE: 0x%x\n", PARENT_STATE(current_state));
+            accept = 1;
+            get_states(sim, PARENT_STATE(current_state), sim->state_set1, iteration);
+          }
+          else {
+            nfa->value.count = 0;
+            accept = get_states(sim, NEXT_STATE(current_state), sim->state_set2, iteration);
+//printf("ACCEPT?:%d\n", accept);
+          }
+        } break;
         case NFA_BACKREFERENCE: {
-//          int br_mlen = 0;
           int br_match_status = 0;
           // check if capture group has matched anything
           if(((sim->backref_matches)[nfa->id - 1].end) == 0) {
@@ -341,7 +357,6 @@ run_nfa(NFASim * sim)
 
 //print_backref_match(sim, 2);
       if(accept) {
-//printf("NEW MATCH\n");
         record_match(sim->scanner->buffer,
                      sim->matches, 
                      sim->scanner->str_begin,
