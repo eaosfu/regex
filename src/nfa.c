@@ -5,6 +5,8 @@
 #include "nfa.h"
 #include "misc.h"
 
+static unsigned int next_nfa_id = 0;
+
 #include <stdio.h>
 
 
@@ -12,6 +14,7 @@ NFACtrl *
 new_nfa_ctrl()
 {
   NFACtrl * nfa_ctrl = xmalloc(sizeof * nfa_ctrl);
+  nfa_ctrl->free_range = new_list();
   nfa_ctrl->ctrl_id = nfa_ctrl;
   nfa_ctrl->next_seq_id = 1;
   return nfa_ctrl;
@@ -46,6 +49,10 @@ new_nfa(NFACtrl * ctrl, unsigned int type)
         ctrl->last_free_nfa = nfa->out1;
       }
       ctrl->free_nfa = nfa->out2;
+    }
+    if(nfa->value.type == NFA_RANGE) {
+      list_push((*(NFACtrl**)nfa)->free_range, nfa->value.range);
+      nfa->value.range = 0;
     }
   }
   else {
@@ -230,11 +237,11 @@ new_kleene_nfa(NFA * body)
   NFA * start  = new_nfa(body->ctrl, NFA_SPLIT);
   NFA * accept = new_nfa(body->ctrl, NFA_ACCEPTING);
 
-  start->value.literal = '*';
   start->out1 = body->parent;
   start->out2 = accept;
 
   body->value.type = NFA_SPLIT;
+  body->value.literal = '*';
   body->out1 = body->parent;
   body->out2 = accept;
 
@@ -278,10 +285,11 @@ new_posclosure_nfa(NFA * body)
   NFA * start  = new_nfa(body->ctrl, NFA_EPSILON);
   NFA * accept = new_nfa(body->ctrl, NFA_ACCEPTING);
 
-  start->value.literal = '+';
+  // there is no direct transition to the accepting state
   start->out1 = start->out2 = body->parent;
 
   body->value.type = NFA_SPLIT;
+  body->value.literal = '+';
   body->out1 = body->parent;
   body->out2 = accept;
 
@@ -302,6 +310,7 @@ new_interval_nfa(NFA * body, unsigned int min, unsigned int max)
   NFA * start  = body;
   NFA * accept = new_nfa(body->ctrl, NFA_ACCEPTING);
 
+  mark_nfa(start);
   start->value.type = NFA_INTERVAL;
   start->value.min_rep = min;
   start->value.max_rep = max;
@@ -339,13 +348,15 @@ new_alternation_nfa(NFA * nfa1, NFA * nfa2)
   }
   NFA * start  = new_nfa(nfa1->ctrl, NFA_SPLIT);
   NFA * accept = new_nfa(nfa1->ctrl, NFA_ACCEPTING);
-  accept->value.type |= NFA_MERGE_NODE;
+//  accept->value.type |= NFA_MERGE_NODE;
 
   // set the accepting states of nfa1 and nfa2 to type EPSILON so we
   // don't confuse them for ACCEPTING states when we simulate the NFA
-//  nfa1->value.type = nfa2->value.type = NFA_EPSILON;
+  nfa1->value.type = nfa2->value.type = NFA_EPSILON;
+/*
   nfa1->value.type = NFA_EPSILON | ((nfa1->value.type & NFA_MERGE_NODE) ? NFA_MERGE_NODE : 0);
   nfa2->value.type = NFA_EPSILON | ((nfa2->value.type & NFA_MERGE_NODE) ? NFA_MERGE_NODE : 0);
+*/
   nfa1->out1 = nfa1->out2 = nfa2->out1 = nfa2->out2 = accept;
   accept->parent = start;
 
@@ -385,7 +396,7 @@ concatenate_nfa(NFA * prev, NFA * next)
     tmp = prev->parent;
     old_type = prev->value.type;
     *prev = *(next->parent);
-    prev->value.type |= (old_type & NFA_MERGE_NODE) ? old_type : 0;
+//    prev->value.type |= (old_type & NFA_MERGE_NODE) ? old_type : 0;
     next->parent = tmp;
     discard_node->parent = discard_node->out1 = discard_node->out2 = NULL;
     discard_node->value.literal = 0;
@@ -393,11 +404,12 @@ concatenate_nfa(NFA * prev, NFA * next)
     release_nfa(discard_node);
   }
 
-
   return next;
 }
 
 
+
+static int g_states_added = 0;
 
 void *
 nfa_compare_equal(void * nfa1, void *nfa2)
@@ -424,7 +436,7 @@ release_nfa(NFA * nfa)
     if((*(NFACtrl **)nfa)->free_nfa) {
       nfa->out2 = (*(NFACtrl **)nfa)->free_nfa;
     }
-    else {
+    else { // first 'free_nfa'
       nfa->out1 = nfa->out2 = NULL;
       (*(NFACtrl **)nfa)->last_free_nfa = nfa;
     }
@@ -434,32 +446,41 @@ release_nfa(NFA * nfa)
 }
 
 
-unsigned int nodes_freed = 0;
 void
-free_alternation_nfa(NFA * head, NFA * parent, NFA * accept)
+free_nfa_helper(NFA * n, List * l, List * seen_states)
 {
-  NFA * target = parent->out1;
-  NFA * tmp;
-  while(target && !(target->value.type & NFA_MERGE_NODE)) {
-    switch(target->value.literal) {
-      case '|': {
-        free_alternation_nfa(head, target, accept);
-      } // fallthrough
-      case '+': // fallthrough
-      case '?': // fallthrough
-      case '*': // fallthrough
-      default:  {
-        tmp = target->out2;
+  if(n == NULL) {
+    return;
+  }
+
+  int i = 0;
+  int already_seen = 0;
+
+  if(!list_search(seen_states, n, nfa_compare_equal)) {
+    list_push(seen_states, n);
+    //list_append(seen_states, n);
+    if(n->value.type & ~(NFA_SPLIT)) {
+      list_push(l, n);
+      ++g_states_added;
+    }
+    else {
+      if((n->value.type & (NFA_SPLIT))) {
+        // n->out1 is not a loop
+        free_nfa_helper(n->out1, l, seen_states);
+      }
+      if(n->out2) {
+        free_nfa_helper(n->out2, l, seen_states);
       }
     }
-    free(target);
-    ++nodes_freed;
-    target = tmp;
   }
-  return;
 }
 
 
+// walk the NFA collecting every node in the graph
+// mark a node as 'special' if its type is NOT one of:
+//   -- NFA_LITERAL    # matches a literal
+//   -- NFA_NGLITERAL  # negates matching a literal
+// all other nodes encountered are classified as 'simple'
 void
 free_nfa(NFA * nfa)
 {
@@ -467,30 +488,48 @@ free_nfa(NFA * nfa)
     return;
   }
 
-  NFA * tmp = NULL;
-  NFA * accept = nfa;
-  NFA * head = nfa->parent;
-  NFA * current = nfa->parent;
-  if((*(NFACtrl **)nfa)->free_nfa) {
-    nfa->out2 = (*(NFACtrl **)nfa)->free_nfa;
-    (*(NFACtrl **)nfa)->last_free_nfa->out2 = NULL;
-  }
-  while(current) {
-    switch(current->value.literal) {
-      case '|': {
-        free_alternation_nfa(head, current, accept);
-      } // fallthrough
-      case '+': // fallthrough
-      case '?': // fallthrough
-      case '*': // fallthrough
-      default: {
-        tmp = current->out2;
+  List * cur_state_set  = new_list(); 
+  List * next_state_set = new_list();
+  List * seen_states    = new_list();
+  NFACtrl * ctrl = (*(NFACtrl **)nfa)->ctrl_id;
+  int total_states = 0;
+  // step 1 - load the set of next states;
+  // step 2 - delete NFAs in set of current states
+  // step 3 - move NFA's in set of next states into set of current states
+  // repeat until all states have been deleted
+//printf("nfa: 0x%x\n", nfa);
+  g_states_added = 0;
+  free_nfa_helper(nfa->parent, next_state_set, seen_states);
+//printf("FREE NFA\n");
+  nfa->out2 = (*(NFACtrl **)nfa)->free_nfa;
+  while(g_states_added > 0) {
+//printf("STATES ADDED: %d\n", g_states_added);
+    total_states += g_states_added;
+    g_states_added = 0;
+    list_swap(cur_state_set, next_state_set);
+    list_clear(next_state_set);
+    while((nfa = list_shift(cur_state_set))) {
+    //for(int i = 0; i < cur_state_set->size; ++i) {
+      //nfa = list_get_at(cur_state_set, i);
+      if((nfa = nfa->out2)){
+        free_nfa_helper(nfa, next_state_set, seen_states);
       }
     }
-    free(current);
-    current = tmp;
-    ++nodes_freed;
+  }
+ 
+  NFA * del_nfa = NULL;
+//  for(int i = 0; i < seen_states->size; ++i) {
+  while((del_nfa = list_shift(seen_states))) {
+    //del_nfa = list_get_at(seen_states, i);
+    if(del_nfa->value.type == NFA_RANGE) {
+      free(del_nfa->value.range);
+    }
+//printf("FREEING NFA: 0x%x\n", del_nfa);
+    free(del_nfa);
   }
 
-  return;
+  list_free(&cur_state_set, NULL);
+  list_free(&next_state_set, NULL);
+  list_free(&seen_states, NULL);
+  list_free(&(ctrl->free_range), (void *)free);
 }

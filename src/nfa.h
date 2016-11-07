@@ -1,6 +1,7 @@
 #ifndef NFA_H_
 #define NFA_H_
 #include <limits.h>
+#include "slist.h"
 
 #define MAX_NFA_STATES 512
 #define SIZE_OF_LOCALE 128
@@ -27,6 +28,7 @@ typedef unsigned int nfa_range[SIZE_OF_RANGE];
 typedef struct NFACtrl {
   struct NFACtrl * ctrl_id;
   unsigned int next_seq_id;
+  List * free_range;
   struct NFA * free_nfa;
   struct NFA * last_free_nfa;
 } NFACtrl;
