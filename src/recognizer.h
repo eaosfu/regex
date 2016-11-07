@@ -32,7 +32,7 @@ typedef struct NFASim {
 
 
 int run_nfa(NFASim *);
-int get_states(NFASim *, NFA *, List *, int);
+int get_states(NFASim *, NFA *, List *, int, int);
 void new_matched_string(NFASim *, int, int);
 void print_matches(List *);
 void free_nfa_sim(NFASim *);

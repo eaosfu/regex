@@ -10,8 +10,6 @@
 #include <string.h>
 #include <stdio.h>
 
-//#define CTRL_FLAGS(s) (*((s)->ctrl_flags))
-
 // TESTING
 void
 print_backref_match(NFASim * sim, int id)
@@ -50,10 +48,6 @@ record_capturegroup_match(NFASim * sim, unsigned int capturegroup_idx, unsigned 
   else {
     // if we reach this point all that remains is to mark where the match ends.
     sim->backref_matches[capturegroup_idx].end = get_cur_pos(sim->scanner);
-    //sim->backref_matches[capturegroup_idx].end = get_scanner_readhead(sim->scanner);
-//printf("backref start: 0x%x\n", sim->backref_matches[capturegroup_idx].start);
-//printf("backref end: 0x%x\n", sim->backref_matches[capturegroup_idx].end);
-//print_backref_match(sim, capturegroup_idx);
   }
 
   return;
@@ -73,10 +67,6 @@ id_in_stateset2(NFASim * sim, unsigned int id)
 {
 #define index(id)  ((id) / UINT_BITS)
 #define offset(id) (((id) % UINT_BITS) - 1)
-//printf("CHECK ID: %d vs. WORKING SET: %d -- [index: %d -- offset: %d] %d\n", id, 
-//  UINT_BITS * index(id) + offset(id), 
-//  index(id), offset(id),
-//  (((sim->stateset2_ids)[index(id)] & (0x01 << offset(id))) == 0) ? 0 : 1);
   return ((sim->stateset2_ids)[index(id)] & (0x01 << offset(id)));
 #undef index
 #undef offset
@@ -96,37 +86,63 @@ add_id_to_stateset2(NFASim * sim, unsigned int id)
 
 
 int
-get_states(NFASim * sim, NFA * nfa, List * lp, int in_match)
+get_states(NFASim * sim, NFA * nfa, List * lp, int in_match, int treacherous)
 {
+#define IS_NFA_ACCEPT(nfa)                       \
+  (nfa->value.type & NFA_ACCEPTING)
+
+#define IS_LOOPY(nfa)                            \
+  ((nfa)->value.literal == '+' ||                \
+   (nfa)->value.literal == '*')
+
+#define IS_QMARK(nfa)                            \
+  ((nfa)->value.literal == '?')
+
+#define IS_NFA_SPLIT(nfa)                        \
+  ((nfa)->value.type & NFA_SPLIT)
+
+#define IS_BACKREFERENCE(nfa)                    \
+  ((nfa)->value.type & NFA_BACKREFERENCE)
+
+#define MARK_STATES(sim)                         \
+  (CTRL_FLAGS(sim) & MARK_STATES_FLAG)
+
+#define IS_MATCHABLE_OR_INTERVAL_NFA(nfa)        \
+  ((nfa)->value.type & ~(NFA_SPLIT|NFA_EPSILON | \
+                         NFA_CAPTUREGRP_BEGIN  | \
+                         NFA_CAPTUREGRP_END))
+
+#define IS_CAPTUREGRP_MARKER(nfa)                \
+  ((nfa)->value.type & (NFA_CAPTUREGRP_BEGIN |   \
+                        NFA_CAPTUREGRP_END))
+
   int found_accepting_state = 0;
-  if(nfa->value.type & ~(NFA_SPLIT|NFA_EPSILON|NFA_CAPTUREGRP_BEGIN|NFA_CAPTUREGRP_END)) {
-    if(nfa->value.type & NFA_ACCEPTING) {
-      found_accepting_state = 1;
-    }
-    else if(nfa->value.type & NFA_BACKREFERENCE) {
-      list_append(lp, nfa);
-    }
-    else {
-      if(CTRL_FLAGS(sim) & MARK_STATES_FLAG) {
-        if(id_in_stateset2(sim, nfa->id) == 0) {
-          add_id_to_stateset2(sim, nfa->id);
-          list_append(lp, nfa);
-        }
-      }
-      else {
-        list_append(lp, nfa);
-      }
-    }
+
+  if(IS_MATCHABLE_OR_INTERVAL_NFA(nfa)) {
+    found_accepting_state = IS_NFA_ACCEPT(nfa);
+    list_append(lp, nfa);
   }
   else {
-    if(nfa->value.type & NFA_SPLIT) {
-      found_accepting_state += get_states(sim, nfa->out1, lp, in_match);
+    if(IS_NFA_SPLIT(nfa)) {
+      // Avoid endlessly adding the same nodes in epsilon
+      // closure containing loops such as in cases like:
+      // (<expression>?)+
+      if((treacherous && IS_LOOPY(nfa)) == 0) {
+        found_accepting_state += get_states(sim, nfa->out1, lp, in_match, treacherous);
+      }
     }
-    else if(nfa->value.type & (NFA_CAPTUREGRP_BEGIN|NFA_CAPTUREGRP_END)) {
+    else if(IS_CAPTUREGRP_MARKER(nfa)) {
       record_capturegroup_match(sim, nfa->id, nfa->value.type, in_match);
     }
-    found_accepting_state += get_states(sim, nfa->out2, lp, in_match);
+    found_accepting_state += get_states(sim, nfa->out2, lp, in_match, IS_QMARK(nfa));
   }
+#undef IS_LOOPY
+#undef IS_NFA_SPLIT
+#undef IS_NFA_ACCEPT
+#undef NOT_SEEN_BEFORE
+#undef IS_BACKREFERNECE
+#undef IS_CAPTUREGRP_MAKER
+#undef IS_MATCHABLE_OR_INTERVAL_NFA
   return found_accepting_state;
 }
 
@@ -134,13 +150,16 @@ get_states(NFASim * sim, NFA * nfa, List * lp, int in_match)
 static inline int
 is_literal_in_range(nfa_range range, unsigned int c)
 {
-  #define index(c)  ((c) / 32)
-  #define offset(c) ((c) % 32)
+#define index(c)  ((c) / 32)
+#define offset(c) ((c) % 32)
   unsigned int mask = 0x01 << (offset(c));
+  int ret = 0;
   if(range[index(c)] & mask) {
-    return 1;
+    ret = 1;
   }
-   return 0;
+#undef index
+#undef offset
+  return ret;
 }
 
 
@@ -180,7 +199,6 @@ record_match(char * buffer, List * matches, char * start, char * end, int new_ma
 #undef MATCH_BUFFER
 RETURN:
   return match;
-  
 }
 
 
@@ -202,15 +220,10 @@ new_nfa_sim(Parser * parser, Scanner * scanner, ctrl_flags * cfl)
 void
 reset_nfa_sim(NFASim * sim)
 {
-//printf("\treset nfa sim\n");
   list_clear(sim->state_set1);
   list_clear(sim->state_set2);
-//printf("WORKING SET ID BITS: %d\n", WORKING_SET_ID_BITS);
   clear_stateset2_ids(sim);
-  CLEAR_MARK_STATES_FLAG(&CTRL_FLAGS(sim));
-  get_states(sim, sim->nfa->parent, sim->state_set1, 0);
-//fatal("DONE HERE\n");
-  SET_MARK_STATES_FLAG(&CTRL_FLAGS(sim));
+  get_states(sim, sim->nfa->parent, sim->state_set1, 0, 0);
 }
 
 
@@ -221,7 +234,6 @@ run_nfa(NFASim * sim)
 #define PARENT_STATE(n) ((NFA *)(n)->data)->parent
 #define BACKREF_MATCH_LEN(sim, idx) \
   (((sim)->backref_matches)[(idx)].end - ((sim)->backref_matches)[(idx)].start)
-
 
   ListItem * current_state;
   int iteration = 0;
@@ -244,18 +256,14 @@ run_nfa(NFASim * sim)
       eol_adjust = 0;
       switch(nfa->value.type) {
         case NFA_INTERVAL: {
-          if(id_in_stateset2(sim, nfa->id)) ++(nfa->value.count);
-          else nfa->value.count = 0;
           if(nfa->value.count < nfa->value.min_rep
           || nfa->value.count < nfa->value.max_rep) {
-//printf("JUMP BACK TO START NODE: 0x%x\n", PARENT_STATE(current_state));
             accept = 1;
-            get_states(sim, PARENT_STATE(current_state), sim->state_set1, 0);
+            get_states(sim, PARENT_STATE(current_state), sim->state_set1, 0, 0);
           }
           else {
             nfa->value.count = 0;
-            accept = get_states(sim, NEXT_STATE(current_state), sim->state_set2, 1);
-//printf("ACCEPT?:%d\n", accept);
+            accept = get_states(sim, NEXT_STATE(current_state), sim->state_set2, 1, 0);
           }
         } break;
         case NFA_BACKREFERENCE: {
@@ -289,19 +297,19 @@ run_nfa(NFASim * sim)
             // recording of capture-groups
             // FIXME: replace this call with restart_from
             sim->scanner->readhead = tmp_input;
-            accept = get_states(sim, NEXT_STATE(current_state), sim->state_set2, 1);
+            accept = get_states(sim, NEXT_STATE(current_state), sim->state_set2, 1, 0);
           }
         } break;
         case NFA_ANY: {
           if(c != sim->scanner->eol_symbol) {
-            accept = get_states(sim, NEXT_STATE(current_state), sim->state_set2, 1);
+            accept = get_states(sim, NEXT_STATE(current_state), sim->state_set2, 1, 0);
           }
         } break;
         case NFA_RANGE: {
           if(c != sim->scanner->eol_symbol) {
             if(is_literal_in_range(*(nfa->value.range), c)) {
 //printf("%c IS IN RANGE -- ", c);
-              accept = get_states(sim, NEXT_STATE(current_state), sim->state_set2, 1);
+              accept = get_states(sim, NEXT_STATE(current_state), sim->state_set2, 1, 0);
 //printf("\n");
 //printf("ACCEPT: %d, SIZE OF STATE_SET2: %d\n", accept, sim->state_set2->size);
             }
@@ -309,7 +317,7 @@ run_nfa(NFASim * sim)
         } break;
         case NFA_BOL_ANCHOR: {
           if(CTRL_FLAGS(sim) & AT_BOL_FLAG) {
-            accept = get_states(sim, NEXT_STATE(current_state), sim->state_set1, 1);
+            accept = get_states(sim, NEXT_STATE(current_state), sim->state_set1, 1, 0);
           }
         } break;
         case NFA_EOL_ANCHOR: {
@@ -321,7 +329,7 @@ run_nfa(NFASim * sim)
         default: {
           if(c == nfa->value.literal) {
 //printf("%c MATCH -- %c", c, nfa->value.literal);
-            accept = get_states(sim, NEXT_STATE(current_state), sim->state_set2, 1);
+            accept = get_states(sim, NEXT_STATE(current_state), sim->state_set2, 1, 0);
 //printf("\n");
 //printf("ACCEPT: %d\n", accept);
           }
