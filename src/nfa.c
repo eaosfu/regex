@@ -5,8 +5,6 @@
 #include "nfa.h"
 #include "misc.h"
 
-static unsigned int next_nfa_id = 0;
-
 #include <stdio.h>
 
 
@@ -389,14 +387,11 @@ concatenate_nfa(NFA * prev, NFA * next)
 
   NFA * discard_node = NULL;
   NFA * tmp          = NULL;
-  unsigned int old_type = 0;
 
   if(prev != NULL) {
     discard_node = next->parent;
     tmp = prev->parent;
-    old_type = prev->value.type;
     *prev = *(next->parent);
-//    prev->value.type |= (old_type & NFA_MERGE_NODE) ? old_type : 0;
     next->parent = tmp;
     discard_node->parent = discard_node->out1 = discard_node->out2 = NULL;
     discard_node->value.literal = 0;
@@ -452,9 +447,6 @@ free_nfa_helper(NFA * n, List * l, List * seen_states)
   if(n == NULL) {
     return;
   }
-
-  int i = 0;
-  int already_seen = 0;
 
   if(!list_search(seen_states, n, nfa_compare_equal)) {
     list_push(seen_states, n);

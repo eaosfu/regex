@@ -20,7 +20,6 @@
 #define NFA_BACKREFERENCE    0x0400 
 #define NFA_CAPTUREGRP_END   0x0800 
 #define NFA_CAPTUREGRP_BEGIN 0x1000 
-#define NFA_MERGE_NODE       0x80000000
 
 
 typedef unsigned int nfa_range[SIZE_OF_RANGE];
