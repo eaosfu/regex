@@ -36,7 +36,7 @@ int get_states(NFASim *, NFA *, List *, int);
 void new_matched_string(NFASim *, int, int);
 void print_matches(List *);
 void free_nfa_sim(NFASim *);
-void reset_nfa_sim(NFASim *, int);
+void reset_nfa_sim(NFASim *);
 void * free_match_string(void *);
 NFASim * new_nfa_sim(Parser *, Scanner *, ctrl_flags *);
 

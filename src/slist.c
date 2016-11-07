@@ -21,6 +21,7 @@ release_to_pool(List * list, ListItem * item)
   return;
 }
 
+
 static inline ListItem *
 allocate_from_pool(List * list)
 {
@@ -30,6 +31,7 @@ allocate_from_pool(List * list)
   list->pool_size--;
   return old_head;
 }
+
 
 ListItem *
 new_list_item(List * list, void * data)

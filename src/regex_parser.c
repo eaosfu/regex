@@ -444,7 +444,8 @@ void
 parse_bracket_expression(Parser * parser)
 {
   // use this as the new bottom of the stack
-  NFA * open_delim_p = new_literal_nfa(parser->nfa_ctrl, parser->lookahead.value, 0);
+//  NFA * open_delim_p = new_literal_nfa(parser->nfa_ctrl, parser->lookahead.value, 0);
+  void * open_delim_p = (void *)NULL;
   push(parser->symbol_stack, open_delim_p);
   CLEAR_ESCP_FLAG(&CTRL_FLAGS(parser));
   parser_consume_token(parser);
@@ -489,7 +490,8 @@ parse_bracket_expression(Parser * parser)
       fatal("Error parsing bracket expression\n");
     }
     
-    release_nfa(open_delim_p);
+//    release_nfa(open_delim_p);
+//free_nfa(open_delim_p);
 
     push(parser->symbol_stack, right);
 //printf("PUSHED NFA BACK ONTO STACK: symbol stack top: 0x%x\n", peek(parser->symbol_stack));
@@ -568,6 +570,7 @@ parse_paren_expression(Parser * parser)
 static inline void
 parser_purge_branch(Parser * parser)
 {
+//printf("PURGING BRANCH\n");
   NFA * popped = NULL;
   while((popped = pop(parser->symbol_stack)) != NULL) release_nfa(popped);
   int stop = 0;
