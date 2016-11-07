@@ -12,8 +12,7 @@
 #define BOL_FLAG           0x020
 #define AT_EOL_FLAG        0x100
 #define AT_BOL_FLAG        0x200
-#define MARK_STATES_FLAG   0x400
-#define FIX_STREAM_ID_FLAG 0x800 // parser specific flag
+#define FIX_STREAM_ID_FLAG 0x400 // parser specific flag
 
 // Access the control flags
 #define CTRL_FLAGS(s) (*((s)->ctrl_flags))
@@ -46,9 +45,6 @@
 #define CLEAR_AT_BOL_FLAG(ctrl_flags) (*(ctrl_flags) = *(ctrl_flags) & ~AT_BOL_FLAG)
 #define SET_AT_EOL_FLAG(ctrl_flags)   (*(ctrl_flags) = *(ctrl_flags) | AT_EOL_FLAG)
 #define CLEAR_AT_EOL_FLAG(ctrl_flags) (*(ctrl_flags) = *(ctrl_flags) & ~AT_EOL_FLAG)
-
-#define SET_MARK_STATES_FLAG(ctrl_flags)   (*(ctrl_flags) = *(ctrl_flags) | MARK_STATES_FLAG)
-#define CLEAR_MARK_STATES_FLAG(ctrl_flags) (*(ctrl_flags) = *(ctrl_flags) & ~MARK_STATES_FLAG)
 
 typedef unsigned int ctrl_flags;
 

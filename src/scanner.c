@@ -11,6 +11,7 @@
 static List G_STATE_STACK = {.head = NULL, .size = 0, .pool = NULL, .pool_size = 0};
 static Stack * g_state_stack = &G_STATE_STACK;
 
+
 static inline void
 update_flags(Scanner * s)
 {
