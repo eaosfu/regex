@@ -20,6 +20,7 @@
 #define NFA_BACKREFERENCE    0x0400 
 #define NFA_CAPTUREGRP_END   0x0800 
 #define NFA_CAPTUREGRP_BEGIN 0x1000 
+#define NFA_TREE             0x2000 
 
 
 typedef unsigned int nfa_range[SIZE_OF_RANGE];
@@ -45,6 +46,7 @@ typedef struct NFA {
         unsigned int max_rep;
         unsigned int count;
       };
+      List * branches;
     };
   } value;
   struct NFA * parent;
@@ -55,7 +57,8 @@ typedef struct NFA {
 NFACtrl * new_nfa_ctrl(void);
 NFA * concatenate_nfa(NFA *, NFA *);
 NFA * new_nfa(NFACtrl *, unsigned int);
-NFA * new_alternation_nfa(NFA *, NFA *);
+//NFA * new_simple_alternation_nfa(NFA *, NFA *);
+NFA * new_alternation_nfa(NFACtrl *, List *, unsigned int, NFA *);
 NFA * new_kleene_nfa(NFA *);
 NFA * new_literal_nfa(NFACtrl *, unsigned int, unsigned int);
 NFA * new_interval_nfa(NFA *, unsigned int, unsigned int);
@@ -64,6 +67,7 @@ NFA * new_qmark_nfa(NFA *);
 NFA * new_range_nfa(NFACtrl *, int);
 NFA * new_backreference_nfa(NFACtrl *, unsigned int);
 
+NFA * nfa_tie_branches(NFA *, List *, unsigned int);
 
 void free_nfa(NFA *);
 void release_nfa(NFA *);

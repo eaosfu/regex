@@ -808,6 +808,13 @@ test_list_deep_copy(List * list)
   return PASS;
 } // test_list_deep_copy
 
+test_status
+test_list_chop(List * list, unsigned int sz)
+{
+  printf("Not implemented yet!\n");
+  return PASS;
+}
+
 
 /***********************************************************************************************************/
 /******************************************** MAIN *********************************************************/
@@ -870,6 +877,8 @@ main(void)
 
 // TEST FREE LIST
   test_list_free();
+
+  // test_list_chop
 
 // ACTUALLY FREE THE LIST... ASSUMING THE ABOVE CASE WORKED
   list_free(&list, NULL);

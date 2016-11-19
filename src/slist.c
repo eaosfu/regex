@@ -1,8 +1,20 @@
+#include <stddef.h>
 #include <stdlib.h>
 #include "slist.h"
 #include "misc.h"
 
 #include <stdio.h>
+
+
+unsigned int
+list_size(List * list)
+{
+  unsigned int size = 0;
+  if(list) {
+    size = list->size;
+  }
+  return size;
+}
 
 
 static inline void
@@ -413,4 +425,40 @@ list_search(List * list, void * target, COMPARE_PROC_pt compare)
   }
 
   return ret;
+}
+
+
+// 0 indexed
+List *
+list_chop(List * list, unsigned int sz)
+{
+  List * chopped = NULL;
+
+  if(list == NULL || list->head == NULL || sz < 1) {
+    return chopped;
+  }
+
+  chopped = new_list();
+  chopped->head = list->head;
+
+  if(sz >= list->size) {
+    chopped->size = list->size;
+    chopped->tail = list->tail;
+    list->head = NULL;
+    list->tail = NULL;
+    list->size = 0;
+  }
+  else {
+    chopped->size = sz;
+    ListItem ** new_head = &(list->head);
+    for(int i = 0; i < sz; ++i) {
+      new_head = &((*new_head)->next);
+    }
+    list->head = (*new_head);
+    list->size -= sz;
+    chopped->tail = (*new_head) - offsetof(ListItem, next);
+    (*new_head) = NULL;
+  }
+
+  return chopped;
 }

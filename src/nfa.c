@@ -1,7 +1,7 @@
 // TODO: implement nfa_pool
 #include <stdlib.h>
 #include <string.h>
-#include "slist.h"
+#include "stack.h"
 #include "nfa.h"
 #include "misc.h"
 
@@ -330,6 +330,59 @@ new_interval_nfa(NFA * body, unsigned int min, unsigned int max)
 //  - finsih -- type: NFA *
 // SYNOPSIS:
 //  
+
+NFA *
+new_alternation_nfa(NFACtrl * ctrl, List * branches_list, unsigned int num_branches, NFA * terminator)
+{
+#ifdef DEBUG_OR_TEST
+  if(ctrl == 0 || branches_list == 0) {
+    // should never hit this condiiton
+    fatal("No branches in alternation\n");
+  }
+#else
+#endif
+
+  if(num_branches < 2) {
+    return pop(branches_list);
+  }
+
+  NFA * start  = new_nfa(ctrl, NFA_TREE);
+  if(terminator == NULL) {
+    terminator = new_nfa(ctrl, NFA_ACCEPTING);
+    terminator->parent = terminator;
+  }
+
+  start->value.branches = list_chop(branches_list, num_branches);
+
+  ListItem * li = start->value.branches->head;
+
+  for(int i = 0; i < num_branches; ++i) {
+    ((NFA *)li->data)->value.type = NFA_EPSILON;
+    ((NFA *)li->data)->out2 = terminator->parent;
+    li->data = ((NFA *)li->data)->parent;
+    li = li->next;
+  }
+
+  terminator->parent = start;
+
+  return terminator;
+}
+
+NFA *
+nfa_tie_branches(NFA * target, List * branches_list, unsigned int num_branches)
+{
+#ifdef DEBUG_OR_TEST
+  if(target == 0 || branches_list == 0 || num_branches < 2) {
+    // should never hit this condiiton
+    fatal("No branches in alternation\n");
+  }
+#else
+#endif
+
+  return new_alternation_nfa(target->ctrl, branches_list, num_branches, target);
+}
+
+/*
 NFA *
 new_alternation_nfa(NFA * nfa1, NFA * nfa2)
 {
@@ -351,10 +404,6 @@ new_alternation_nfa(NFA * nfa1, NFA * nfa2)
   // set the accepting states of nfa1 and nfa2 to type EPSILON so we
   // don't confuse them for ACCEPTING states when we simulate the NFA
   nfa1->value.type = nfa2->value.type = NFA_EPSILON;
-/*
-  nfa1->value.type = NFA_EPSILON | ((nfa1->value.type & NFA_MERGE_NODE) ? NFA_MERGE_NODE : 0);
-  nfa2->value.type = NFA_EPSILON | ((nfa2->value.type & NFA_MERGE_NODE) ? NFA_MERGE_NODE : 0);
-*/
   nfa1->out1 = nfa1->out2 = nfa2->out1 = nfa2->out2 = accept;
   accept->parent = start;
 
@@ -365,6 +414,7 @@ new_alternation_nfa(NFA * nfa1, NFA * nfa2)
 
   return accept;
 }
+*/
 
 
 // FIXME not doing this properly, so getting duplicates!!!

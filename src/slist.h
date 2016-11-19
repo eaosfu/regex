@@ -22,12 +22,14 @@ typedef struct ListItem {
 
 
 List * new_list();
+List * list_chop(List *, unsigned int);
 List * list_deep_copy(ListItem *);
 ListItem * list_reverse(ListItem *);
 
 int list_push(List *, void *);
 int list_insert_at(List *, void *, int);
 int list_append(List *, void *);
+unsigned int list_size(List *);
 
 void * list_search(List *, void *, COMPARE_PROC_pt);
 void * list_shift(List *);

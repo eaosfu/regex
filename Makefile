@@ -28,6 +28,7 @@ $(eval TO_UPPER=$(shell echo $(basename $(notdir ${1}))| tr a-z A-Z))
     ${${TO_UPPER}_TARGET}:;\
       ${CC} -o ${${TO_UPPER}_TARGET}\
       ${CFLAGS} ${${TO_UPPER}_CFLAGS} ${${TO_UPPER}_SRC}\
+      ${DFLAGS} \
       ${${TO_UPPER}_INCLUDE_FLAGS} ${${TO_UPPER}_LD_FLAGS}\
       ${${TO_UPPER}_LINK_OBJS}
     $(eval generated_recipes += ${${TO_UPPER}_TARGET})
@@ -49,6 +50,7 @@ define make_goal
     $(eval ${1}: ${FINAL_LINK_OBJ};\
       ${CC} -o ${${FINAL_TARGET}_TARGET}\
       ${CFLAGS} ${${FINAL_TARGET}_CFLAGS} ${${FINAL_TARGET}_SRC}\
+      ${DFLAGS} \
       ${${FINAL_TARGET}_INCLUDE_FLAGS} ${${FINAL_TARGET}_LD_FLAGS}\
       ${FINAL_LINK_OBJ})
     $(eval generated_recipes += ${1})

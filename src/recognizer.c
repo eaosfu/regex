@@ -1,11 +1,10 @@
 #include <stdlib.h>
-#include "scanner.h"
 #include "slist.h"
 #include "token.h"
 #include "misc.h"
 #include "nfa.h"
-#include "scanner.h"
 #include "recognizer.h"
+#include "scanner.h"
 
 #include <string.h>
 #include <stdio.h>
@@ -88,6 +87,9 @@ add_id_to_stateset2(NFASim * sim, unsigned int id)
 int
 get_states(NFASim * sim, NFA * nfa, List * lp, int in_match, int treacherous)
 {
+#define IS_NFA_TREE(nfa)                         \
+  (nfa->value.type & NFA_TREE)
+
 #define IS_NFA_ACCEPT(nfa)                       \
   (nfa->value.type & NFA_ACCEPTING)
 
@@ -108,7 +110,9 @@ get_states(NFASim * sim, NFA * nfa, List * lp, int in_match, int treacherous)
   (CTRL_FLAGS(sim) & MARK_STATES_FLAG)
 
 #define IS_MATCHABLE_OR_INTERVAL_NFA(nfa)        \
-  ((nfa)->value.type & ~(NFA_SPLIT|NFA_EPSILON | \
+  ((nfa)->value.type & ~(NFA_SPLIT             | \
+                         NFA_EPSILON           | \
+                         NFA_TREE              | \
                          NFA_CAPTUREGRP_BEGIN  | \
                          NFA_CAPTUREGRP_END))
 
@@ -123,18 +127,29 @@ get_states(NFASim * sim, NFA * nfa, List * lp, int in_match, int treacherous)
     list_append(lp, nfa);
   }
   else {
-    if(IS_NFA_SPLIT(nfa)) {
-      // Avoid endlessly adding the same nodes in epsilon
-      // closure containing loops such as in cases like:
-      // (<expression>?)+
-      if((treacherous && IS_LOOPY(nfa)) == 0) {
-        found_accepting_state += get_states(sim, nfa->out1, lp, in_match, treacherous);
+    if(IS_NFA_TREE(nfa)) {
+      ListItem * li = nfa->value.branches->head;
+      unsigned int list_sz = list_size(nfa->value.branches);
+      for(int i = 0; i < list_sz; ++i) {
+        nfa = li->data;
+        found_accepting_state += get_states(sim, nfa, lp, in_match, treacherous);
+        li = li->next;
       }
     }
-    else if(IS_CAPTUREGRP_MARKER(nfa)) {
-      record_capturegroup_match(sim, nfa->id, nfa->value.type, in_match);
+    else {
+      if(IS_NFA_SPLIT(nfa)) {
+        // Avoid endlessly adding the same nodes in epsilon
+        // closure containing loops such as in cases like:
+        // (<expression>?)+
+        if((treacherous && IS_LOOPY(nfa)) == 0) {
+          found_accepting_state += get_states(sim, nfa->out1, lp, in_match, treacherous);
+        }
+      }
+      else if(IS_CAPTUREGRP_MARKER(nfa)) {
+        record_capturegroup_match(sim, nfa->id, nfa->value.type, in_match);
+      }
+      found_accepting_state += get_states(sim, nfa->out2, lp, in_match, IS_QMARK(nfa));
     }
-    found_accepting_state += get_states(sim, nfa->out2, lp, in_match, IS_QMARK(nfa));
   }
 #undef IS_LOOPY
 #undef IS_NFA_SPLIT

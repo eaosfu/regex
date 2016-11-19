@@ -2,7 +2,15 @@
 #define NFA_SIM_H_
 
 #include <limits.h>
-#define UINT_BITS (sizeof(unsigned int) * CHAR_BIT)
+
+#ifndef UINT_BITS
+  #ifdef __linux__
+    #ifdef __x86_64__
+      #define UINT_BITS (4 * CHAR_BIT)
+    #endif
+  #endif
+#endif
+
 #define WORKING_SET_ID_BITS (MAX_NFA_STATES / UINT_BITS + \
                             ((MAX_NFA_STATES % UINT_BITS == 0) ? 0 : 1))
 
