@@ -12,8 +12,8 @@ RUN_SLIST_TEST := ./bin/test_slist
 
 MODULE_DESCRIPTORS:=${TOP_DIR}/build/module_descriptors
 
-test_targets    := test_slist test_all wrapper_funcs
-product_targets := scanner misc nfa slist token regex_parser recognizer
+test_targets    := test_slist test_all wrapper_funcs test_btrec
+product_targets := scanner misc nfa slist token regex_parser recognizer backtrack_recognizer
 
 .PHONY: ${product_targets} ${test_targets}
 
@@ -94,6 +94,11 @@ define make_recognizer
   $(call make_goal,recognizer)
 endef
 
+define make_backtrack_recognizer
+  $(call make_deps,backtrack_recognizer)
+  $(call make_goal,backtrack_recognizer)
+endef
+
 define make_test_slist
   $(eval CFLAGS += -g)
   $(call make_deps,test_slist)
@@ -105,6 +110,16 @@ define make_test_all
   $(call make_recognizer)
   $(call make_test_slist)
   test_all: recognizer test_slist
+		${RUN_SLIST_TEST}
+		${PERL} ${PERL_TEST}
+		${BASH} ${BASH_SCRIPT}
+endef
+
+define make_test_btrec
+  $(eval CFLAGS += -g)
+  $(call make_backtrack_recognizer)
+  $(call make_test_slist)
+  test_btrec: backtrack_recognizer test_slist
 		${RUN_SLIST_TEST}
 		${PERL} ${PERL_TEST}
 		${BASH} ${BASH_SCRIPT}

@@ -16,8 +16,8 @@ new_token()
 void
 update_token(Token * t, unsigned int c, symbol_type type)
 {
-  t->type = type;
-  t->value = c;
+  t->type   = type;
+  t->value  = c;
   return;
 }
 

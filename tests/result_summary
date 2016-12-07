@@ -19,4 +19,4 @@ for i in $(ls $rinput | sort -g| grep -o '[0-9]\+$'); do
     echo -e "test_$i: ${GREEN}Passed${NOCOLOR}";
   fi
 done;
-echo "Failed ${failed_count}/${i} tests"
+echo "Failed ${failed_count}/$((${i} + 1)) tests"

@@ -37,6 +37,7 @@ void * list_remove_at(List *, int);
 void * list_get_at(List *, int);
 void * list_extend(List *, void *);
 void list_clear(List *);
+void list_iterate(List *, VISIT_PROC_pt);
 void list_free(List **, VISIT_PROC_pt);
 
 

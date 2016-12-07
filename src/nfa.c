@@ -15,7 +15,21 @@ new_nfa_ctrl()
   nfa_ctrl->free_range = new_list();
   nfa_ctrl->ctrl_id = nfa_ctrl;
   nfa_ctrl->next_seq_id = 1;
+  nfa_ctrl->next_interval_seq_id = 1;
   return nfa_ctrl;
+}
+
+
+static inline int
+mark_interval_nfa(NFA * nfa)
+{
+  if(nfa->id == 0) {
+    if(nfa->ctrl->next_interval_seq_id + 1 > MAX_NFA_STATES) {
+      fatal("Too many states. Maximum is 512\n");
+    }
+    nfa->id = nfa->ctrl->next_interval_seq_id;
+    ++(nfa->ctrl->next_interval_seq_id);
+  }
 }
 
 
@@ -150,13 +164,18 @@ update_range_nfa(unsigned int low, unsigned int high, NFA * range_nfa, int negat
 
 
 NFA *
-new_range_nfa(NFACtrl * ctrl, int negate)
+new_range_nfa(NFACtrl * ctrl, NFA * interval, int negate, unsigned int branch_id)
 {
   NFA * start  = new_nfa(ctrl, NFA_RANGE);
   NFA * accept = new_nfa(ctrl, NFA_ACCEPTING);
   
   mark_nfa(start);
-  
+ 
+  if(interval) {
+    start->parent = interval;
+    start->value.type |= NFA_IN_INTERVAL;
+  }
+  start->branch_id = branch_id;
   start->value.range = xmalloc(sizeof *(start->value.range));
 
   if(negate) {
@@ -174,20 +193,49 @@ new_range_nfa(NFACtrl * ctrl, int negate)
 
 
 NFA *
-new_literal_nfa(NFACtrl * ctrl, unsigned int literal, unsigned int special_meaning)
+new_lliteral_nfa(NFACtrl * ctrl, NFA * interval, char * src, 
+   unsigned int len, unsigned int branch_id)
+{
+  NFA * start    = new_nfa(ctrl, NFA_EPSILON);
+  NFA * lliteral = xmalloc(sizeof(*lliteral)+ len + 1);
+  NFA * accept   = new_nfa(ctrl, NFA_ACCEPTING);
+
+  start->out1 = start->out2 = lliteral;
+
+  lliteral->ctrl = ctrl;
+  mark_nfa(lliteral);
+  lliteral->branch_id  = branch_id;
+  lliteral->out1 = lliteral->out2 = accept;
+  lliteral->value.type = NFA_LONG_LITERAL;
+  lliteral->value.len = len;
+  lliteral->value.lliteral = ((char *)(lliteral) + sizeof(*lliteral));
+  memcpy((void *)(lliteral->value.lliteral), src, len);
+  (lliteral->value.lliteral)[len] = '\0';
+  
+
+  accept->parent = start;
+
+  return accept;
+}
+
+
+NFA *
+new_literal_nfa(NFACtrl * ctrl, NFA * interval, unsigned int literal, unsigned int type, unsigned int branch_id)
 {
   NFA * start;
   NFA * accept = new_nfa(ctrl, NFA_ACCEPTING);
 
-  if(special_meaning) {
-    start = new_nfa(ctrl, special_meaning);
-  }
-  else {
-    start = new_nfa(ctrl, NFA_LITERAL);
-  }
+  start = new_nfa(ctrl, type);
+
+  start->branch_id = branch_id;
 
   mark_nfa(start);
   
+  if(interval) {
+    start->parent = interval;
+//    start->value.type |= NFA_IN_INTERVAL;
+  }
+
   start->value.literal = literal;
   start->out1 = start->out2 = accept;
 
@@ -198,12 +246,14 @@ new_literal_nfa(NFACtrl * ctrl, unsigned int literal, unsigned int special_meani
 
 
 NFA *
-new_backreference_nfa(NFACtrl * ctrl, unsigned int capture_group_id)
+new_backreference_nfa(NFACtrl * ctrl, NFA * interval, unsigned int capture_group_id, unsigned int branch_id)
 {
   NFA * start  = new_nfa(ctrl, NFA_BACKREFERENCE);
   NFA * accept = new_nfa(ctrl, NFA_ACCEPTING);
 
+  start->parent = interval;
   start->id = capture_group_id;
+  start->branch_id = branch_id;
   start->out1 = start->out2 = accept;
 
   accept->parent = start;
@@ -212,29 +262,16 @@ new_backreference_nfa(NFACtrl * ctrl, unsigned int capture_group_id)
 }
 
 
-//
-// FUNCTION: new_kleene_nfa:
-// INPUT:
-//  - body -- type: NFA  *
-// OUTPUT:
-//  - finsih -- type: NFA *
-// SYNOPSIS:
-//  Creates tow new NFA nodes, start and accept. The start has two transitions,
-//  the first to the body node and the second to the accept node. The body node
-//  (which is realy just an accept node from a previous nfa... see comment in 
-//  concatenate_nfa for further details on this) is converted to a SPLIT node
-//  with out1 looping back to body->parent (i.e. body's start node) and out2
-//  transitioning to the new accept state of the closure.
-//
-//  NOTE: The accept node's parent is set to the start node so that the nfa
-//        returned appears as a single node.
-//  
 NFA *
 new_kleene_nfa(NFA * body)
 {
   NFA * start  = new_nfa(body->ctrl, NFA_SPLIT);
   NFA * accept = new_nfa(body->ctrl, NFA_ACCEPTING);
 
+
+  mark_interval_nfa(start);
+
+  start->value.literal = '*';
   start->out1 = body->parent;
   start->out2 = accept;
 
@@ -254,9 +291,12 @@ new_qmark_nfa(NFA * body)
 {
   NFA * start  = new_nfa(body->ctrl, NFA_SPLIT);
   NFA * accept = new_nfa(body->ctrl, NFA_ACCEPTING);
+  
+  
+  mark_interval_nfa(start);
 
-  start->out1 = body->parent;
-  start->out2 = accept;
+  start->out1 = accept;
+  start->out2 = body->parent;
   start->value.literal = '?';
 
   body->value.type = NFA_EPSILON;
@@ -269,14 +309,6 @@ new_qmark_nfa(NFA * body)
 }
 
 
-//
-// FUNCTION: new_posclosure_nfa:
-// INPUT:
-//  - body -- type: NFA  *
-// OUTPUT:
-//  - finsih -- type: NFA *
-// SYNOPSIS:
-//  
 NFA *
 new_posclosure_nfa(NFA * body)
 {
@@ -287,6 +319,7 @@ new_posclosure_nfa(NFA * body)
   start->out1 = start->out2 = body->parent;
 
   body->value.type = NFA_SPLIT;
+  mark_interval_nfa(body);
   body->value.literal = '+';
   body->out1 = body->parent;
   body->out2 = accept;
@@ -296,7 +329,7 @@ new_posclosure_nfa(NFA * body)
   return accept;
 }
 
-
+/*
 NFA *
 new_interval_nfa(NFA * body, unsigned int min, unsigned int max)
 {
@@ -317,6 +350,84 @@ new_interval_nfa(NFA * body, unsigned int min, unsigned int max)
   start->out1 = start->out2 = accept;
 
   accept->parent = start->parent;
+
+  return accept;
+}
+*/
+
+
+// This is for intervals that only influence a single character
+// i.e <expression>{min, Max} where <expression> is a single character.
+// These can however be under the influence of another interval. If this
+// is the case, the new interval's 'parent' pointer will point to the 
+// influencing interval.
+NFA *
+new_interval_nfa(NFACtrl * ctrl, NFA * target, NFA * interval, unsigned int min, unsigned int max)
+{
+  NFA * start = new_nfa(ctrl, NFA_EPSILON);
+  NFA * accept = new_nfa(ctrl, NFA_ACCEPTING);
+  NFA * new_interval = new_nfa(ctrl, NFA_INTERVAL);
+
+
+  start->out1 = start->out2 = target->parent;
+
+  target->value.type = NFA_EPSILON;
+  target->out2 = new_interval;
+
+  mark_interval_nfa(new_interval);
+
+  new_interval->value.min_rep = min;
+  new_interval->value.max_rep = max;
+  new_interval->value.count = 0;
+
+  new_interval->parent = interval;
+
+  new_interval->out1 = target->parent;
+
+  if(target->parent->value.type == NFA_LITERAL
+  || target->parent->value.type == NFA_LONG_LITERAL) {
+//    target->parent->value.type |= NFA_IN_INTERVAL;
+    target->parent->parent = new_interval;
+  }
+
+  new_interval->out2 = accept;
+
+
+  accept->parent = start;
+
+  return accept;
+}
+
+
+NFA *
+fill_interval_nfa(NFACtrl * ctrl, NFA * target, NFA * interval, NFA * parent_interval, 
+  unsigned int min, unsigned int max)
+{
+  NFA * start = new_nfa(ctrl, NFA_EPSILON);
+  NFA * accept = new_nfa(ctrl, NFA_ACCEPTING);
+
+  start->out1 = start->out2 = target->parent;
+
+  target->value.type = NFA_EPSILON;
+  target->out2 = target->out1 = interval;
+
+  if(!interval) {
+    fatal("Expected a provisioned interval\n");
+  }
+
+
+  interval->ctrl = target->ctrl;
+  interval->value.type = NFA_INTERVAL;
+  interval->value.min_rep = min;
+  interval->value.max_rep = max;
+  interval->value.count = 0;
+  interval->parent = (interval == parent_interval) ? NULL : parent_interval;
+  interval->out1 = target->parent;
+  interval->out2 = accept;
+
+  mark_interval_nfa(interval);
+
+  accept->parent = start;
 
   return accept;
 }
@@ -367,6 +478,7 @@ new_alternation_nfa(NFACtrl * ctrl, List * branches_list, unsigned int num_branc
 
   return terminator;
 }
+
 
 NFA *
 nfa_tie_branches(NFA * target, List * branches_list, unsigned int num_branches)

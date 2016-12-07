@@ -54,20 +54,42 @@
 
 
 #define mark_closure_map_complex(cgrp, i)                              \
-  ({do {                                                                \
+  ({do {                                                               \
     if((i) > 0) {                                                      \
-      cgrp[CGRP_MAP_BLOCK(i)] |= (0x001 << CGRP_MAP_CHUNK((i))); \
+      cgrp[CGRP_MAP_BLOCK(i)] |= (0x001 << CGRP_MAP_CHUNK((i)));       \
      }                                                                 \
   } while(0);})
   
   
 #define mark_closure_map_backref(cgrp, i)                              \
-  ({do {                                                                \
+  ({do {                                                               \
     if((i) > 0) {                                                      \
       cgrp[CGRP_MAP_BLOCK(i)] |= (0x001 << (CGRP_MAP_CHUNK((i)) + 1)); \
      }                                                                 \
   } while(0);})
 
+
+#define INTERVAL(p)                                                    \
+  (((p)->interval_list_sz)                                             \
+  ? &((p)->interval_list[(p)->influencing_interval])                   \
+  : 0)
+
+#define PROVISIONED_INTERVAL(p)                                        \
+  (((p)->interval_list_sz)                                             \
+  ? ((p)->next_interval_id <= (p->interval_list_sz))                   \
+    ? &((p)->interval_list[(p)->next_interval_id - 1])                 \
+    : NULL                                                             \
+  : NULL)
+
+#define PARENT_INTERVAL(p)                                            \
+  ((p->is_complex)                                                    \
+  ? ((p)->next_interval_id <= (p->interval_list_sz))                  \
+    ? (&((p)->interval_list[(p)->next_interval_id - 1]))              \
+    : NULL                                                            \
+  : NULL)
+
+
+#define NFA_TRACK_PROGRESS(nfa) ((nfa)->value.type |= NFA_PROGRESS)
 
 typedef struct IntervalRecord {
   NFA * node;
@@ -82,8 +104,11 @@ typedef struct Parser {
   Scanner    * scanner;
   Stack      * symbol_stack;
   Stack      * branch_stack;
+  List       * loop_nfas;
   NFACtrl    * nfa_ctrl;
   ctrl_flags * ctrl_flags;
+
+  int requires_backtracking;
   
   // Count open parens
   int paren_count;
@@ -99,6 +124,8 @@ typedef struct Parser {
   // entering the current branch
   int branch_id;
 
+  int push_to_branch_stack;
+
   // If branch was purged... then the closing paren was consumed
   // this flag is set to avoid erroring out if a close-paren was
   // expected
@@ -111,13 +138,22 @@ typedef struct Parser {
   int in_new_cgrp;
   int in_alternation;
   int in_complex_cgrp;
+  int left_cgrp;
+
+  // INTERVAL STUFF
+  int interval_list_sz;
+  int in_cmplex_interval;
+  unsigned int next_interval_id;
+  int influencing_interval;
+  NFA * interval_list;
 
   // current tokens are 'complex'
   int is_complex;
 
-  int cgrp_map[CGRP_MAP_SIZE];
+  // Flag to indicate whether to use backtracking or not
+  int use_backtracking;
 
-  IntervalRecord interval_list[];
+  int cgrp_map[CGRP_MAP_SIZE];
 } Parser;
 
 

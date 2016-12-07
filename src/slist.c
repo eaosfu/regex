@@ -462,3 +462,20 @@ list_chop(List * list, unsigned int sz)
 
   return chopped;
 }
+
+
+void
+list_iterate(List * list, VISIT_PROC_pt action)
+{
+  if(list == NULL) {
+    return;
+  }
+
+  ListItem * li = list->head;
+  for(int i = 0; i < list->size; ++i) {
+    action((void *)(li->data));
+    li = li->next;
+  }
+
+  return;
+}

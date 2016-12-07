@@ -27,32 +27,6 @@ printf("'\n");
 
 
 
-// We want to grab the next position in the buffer if the '(' occurs after we've matched
-// some input. Otherwise we need to get the current position in the buffer;
-void
-record_capturegroup_match(NFASim * sim, unsigned int capturegroup_idx, unsigned int flag, int in_match)
-{
-  if(flag == NFA_CAPTUREGRP_BEGIN) {
-    sim->backref_matches[capturegroup_idx].buffer = sim->scanner->buffer;
-    if(in_match == 0 ) {
-      sim->backref_matches[capturegroup_idx].start = get_cur_pos(sim->scanner);
-    }
-    else {
-      sim->backref_matches[capturegroup_idx].start = get_scanner_readhead(sim->scanner);
-    }
-    // set end to NULL so when we process a backreference we can tell whether or
-    // not the associated capture group matched.
-    sim->backref_matches[capturegroup_idx].end = NULL;
-  }
-  else {
-    // if we reach this point all that remains is to mark where the match ends.
-    sim->backref_matches[capturegroup_idx].end = get_cur_pos(sim->scanner);
-  }
-
-  return;
-}
-
-
 void
 clear_stateset2_ids(NFASim * sim)
 {
@@ -77,88 +51,11 @@ add_id_to_stateset2(NFASim * sim, unsigned int id)
 {
 #define index(id)  ((id) / UINT_BITS)
 #define offset(id) (((id) % UINT_BITS) - 1)
-  (sim->stateset2_ids)[index(id)] |= (0x01 << ((id) ? offset(id) : 0));
+  //(sim->stateset2_ids)[index(id)] |= (0x01 << ((id) ? offset(id) : 0));
+  (sim->stateset2_ids)[index(id)] |= (0x01 << offset(id));
 #undef index
 #undef offset
   return;
-}
-
-
-int
-get_states(NFASim * sim, NFA * nfa, List * lp, int in_match, int treacherous)
-{
-#define IS_NFA_TREE(nfa)                         \
-  (nfa->value.type & NFA_TREE)
-
-#define IS_NFA_ACCEPT(nfa)                       \
-  (nfa->value.type & NFA_ACCEPTING)
-
-#define IS_LOOPY(nfa)                            \
-  ((nfa)->value.literal == '+' ||                \
-   (nfa)->value.literal == '*')
-
-#define IS_QMARK(nfa)                            \
-  ((nfa)->value.literal == '?')
-
-#define IS_NFA_SPLIT(nfa)                        \
-  ((nfa)->value.type & NFA_SPLIT)
-
-#define IS_BACKREFERENCE(nfa)                    \
-  ((nfa)->value.type & NFA_BACKREFERENCE)
-
-#define MARK_STATES(sim)                         \
-  (CTRL_FLAGS(sim) & MARK_STATES_FLAG)
-
-#define IS_MATCHABLE_OR_INTERVAL_NFA(nfa)        \
-  ((nfa)->value.type & ~(NFA_SPLIT             | \
-                         NFA_EPSILON           | \
-                         NFA_TREE              | \
-                         NFA_CAPTUREGRP_BEGIN  | \
-                         NFA_CAPTUREGRP_END))
-
-#define IS_CAPTUREGRP_MARKER(nfa)                \
-  ((nfa)->value.type & (NFA_CAPTUREGRP_BEGIN |   \
-                        NFA_CAPTUREGRP_END))
-
-  int found_accepting_state = 0;
-
-  if(IS_MATCHABLE_OR_INTERVAL_NFA(nfa)) {
-    found_accepting_state = IS_NFA_ACCEPT(nfa);
-    list_append(lp, nfa);
-  }
-  else {
-    if(IS_NFA_TREE(nfa)) {
-      ListItem * li = nfa->value.branches->head;
-      unsigned int list_sz = list_size(nfa->value.branches);
-      for(int i = 0; i < list_sz; ++i) {
-        nfa = li->data;
-        found_accepting_state += get_states(sim, nfa, lp, in_match, treacherous);
-        li = li->next;
-      }
-    }
-    else {
-      if(IS_NFA_SPLIT(nfa)) {
-        // Avoid endlessly adding the same nodes in epsilon
-        // closure containing loops such as in cases like:
-        // (<expression>?)+
-        if((treacherous && IS_LOOPY(nfa)) == 0) {
-          found_accepting_state += get_states(sim, nfa->out1, lp, in_match, treacherous);
-        }
-      }
-      else if(IS_CAPTUREGRP_MARKER(nfa)) {
-        record_capturegroup_match(sim, nfa->id, nfa->value.type, in_match);
-      }
-      found_accepting_state += get_states(sim, nfa->out2, lp, in_match, IS_QMARK(nfa));
-    }
-  }
-#undef IS_LOOPY
-#undef IS_NFA_SPLIT
-#undef IS_NFA_ACCEPT
-#undef NOT_SEEN_BEFORE
-#undef IS_BACKREFERNECE
-#undef IS_CAPTUREGRP_MAKER
-#undef IS_MATCHABLE_OR_INTERVAL_NFA
-  return found_accepting_state;
 }
 
 
@@ -194,14 +91,12 @@ record_match(char * buffer, List * matches, char * start, char * end, int new_ma
 {
 #define MATCH_BUFFER(m) ((char *)((Match *)(m)->head->data)->buffer)
   Match * match = NULL;
-  if(matches->head != NULL && buffer == MATCH_BUFFER(matches) && !new_match) {
+  //if(matches->head != NULL && buffer == MATCH_BUFFER(matches) && !new_match) {
+  if(new_match == 0) {
     // Extend a previous match
     match = matches->head->data;
     if((start - match->end) <= 1) {
       match->end = end;
-      // We don't want to add a new match to the 'matches' list
-      // so make sure we return NULL.
-      match = NULL;
       goto RETURN;
     }
   }
@@ -217,6 +112,39 @@ RETURN:
 }
 
 
+// We want to grab the next position in the buffer if the '(' occurs after we've matched
+// some input. Otherwise we need to get the current position in the buffer; the in_match
+// flag let's us know which case we're dealing with.
+void
+record_capturegroup_match(NFASim * sim, unsigned int capturegroup_idx, unsigned int flag, int in_match)
+{
+  if(flag == NFA_CAPTUREGRP_BEGIN) {
+    sim->backref_matches[capturegroup_idx].buffer = sim->scanner->buffer;
+    if(in_match == 0 ) {
+      sim->backref_matches[capturegroup_idx].start = get_cur_pos(sim->scanner);
+    }
+    else {
+      sim->backref_matches[capturegroup_idx].start = get_scanner_readhead(sim->scanner);
+    }
+    // If the sim reset count is greater than the count recorded by the match then
+    // this is the first time processing this capture group. Otherwise we're in a loop
+    if(sim->reset_count > sim->backref_matches[capturegroup_idx].last_reset) {
+      // set end to NULL so when we process a backreference we can tell whether or
+      // not the associated capture group matched.
+      sim->backref_matches[capturegroup_idx].end = NULL;
+      sim->backref_matches[capturegroup_idx].count = 0;
+    }
+  }
+  else {
+    // if we reach this point all that remains is to mark where the match ends.
+    sim->backref_matches[capturegroup_idx].end = get_cur_pos(sim->scanner);
+    ++(sim->backref_matches[capturegroup_idx].count);
+  }
+
+  return;
+}
+
+
 NFASim *
 new_nfa_sim(Parser * parser, Scanner * scanner, ctrl_flags * cfl)
 {
@@ -227,6 +155,7 @@ new_nfa_sim(Parser * parser, Scanner * scanner, ctrl_flags * cfl)
   sim->nfa = peek(parser->symbol_stack);
   sim->state_set1 = new_list();
   sim->state_set2 = new_list();
+//  sim->mmrecord_stack = new_stack();
   sim->matches = new_list();
   return sim;
 }
@@ -235,51 +164,227 @@ new_nfa_sim(Parser * parser, Scanner * scanner, ctrl_flags * cfl)
 void
 reset_nfa_sim(NFASim * sim)
 {
+  ++sim->reset_count;
   list_clear(sim->state_set1);
   list_clear(sim->state_set2);
   clear_stateset2_ids(sim);
-  get_states(sim, sim->nfa->parent, sim->state_set1, 0, 0);
+  get_states(sim, sim->nfa->parent, sim->state_set1, 0, 1, 0);
+  clear_stateset2_ids(sim);
+}
+
+
+// int
+// backtrack(NFASim * sim)
+// {
+//   MUltiMatchRecord * mmecord = peek(sim->mmrecord_stack);
+//   while(mmrecord && (mmrecord->min_sz >= mmrecord->count)) {
+//     pop(sim->mmrecord_stack);
+//     if(mmrecord->cgrp) {
+//       if(mmrecord->sibling) {
+//         mmercord = peek(sim->mmrecord_stack);
+//         break;
+//       }
+//     }
+//     mmercord = peek(sim->mmrecord_stack);
+//   }
+//
+//   if(mmrecord) {
+//     --(mmrecord->count);
+//     // the mmrecord we hold now may or may not be part of a cgrp.
+//     // consider the case: a+(b+)x\1
+//     // b+ is a sibling of a+ which itself is not part of a cgrp.
+//     if(mmrecord->cgrp) {
+//       --(mmrecord->cgrp->end);
+//     }
+//     list_append(sim->state_set2, mmrecord->start);
+//     return 1;
+//   }
+//
+//   return 0;
+// }
+//
+//
+// MUltiMatchRecord * 
+// new_mmrecord(NFA * start, NFA * end, Match * cgrp) {
+//   MUltiMatchRecord * mmrecord = malloc(sizeof(*mmrecord));
+//   mmrecord->start = start;
+//   mmrecord->end = end;
+//   mmrecord->count = 1;
+//   mmrecord->min_sz = end->value.last_match - start->value.last_match;
+// }
+//
+//
+// void
+// track_mmrecord(sim, NFA * start, NFA *end, int cgrp)
+// {
+//   MUltiMatchRecord * mmecord = peek(sim->mmrecord_stack);
+//   if(mmrecord && (mmrecord->start == start) && (mmrecord->end == end)) {
+//     // this is an extension of our last mmrecord
+//     ++(mmercord->count);
+//     if(mmrecord->cgrp) {
+//       ++(mmrecord->cgrp->end);
+//     }
+//   }
+//   else {
+//     MUltiMatchRecord * sibling = deep_peek(sim->mmrecord_stack, 2);
+//     int distance = (mmrecord->start->match_pos - sibling->end->match_pos);
+//     if(sibling) {
+//       switch(distance) {
+//         case 0: {
+//           // squabbling siblings... favor the youngest
+//         } break;
+//         case 1: {
+//           // perefect siblings
+//         } break;
+//         default:
+//       }
+//     mmrecord = new_mmrecord(start, end, (sim->backref_matches)[cgrp - 1]);
+//     }
+//     push(sim->mmrecord_stack, mmrecord);
+//   }
+// }
+
+
+int
+get_states(NFASim * sim, NFA * nfa, List * lp, int in_match, int first_entry, unsigned int origin)
+{
+#define IS_NFA_TREE(nfa)                         \
+  (nfa->value.type & NFA_TREE)
+
+#define IS_NFA_ACCEPT(nfa)                       \
+  (nfa->value.type & NFA_ACCEPTING)
+
+#define IS_NFA_SPLIT(nfa)                        \
+  ((nfa)->value.type & NFA_SPLIT)
+
+#define IS_BACKREFERENCE(nfa)                    \
+  ((nfa)->value.type & NFA_BACKREFERENCE)
+
+#define IS_NFA_INTERVAL(nfa)                    \
+  ((nfa)->value.type & NFA_INTERVAL)
+
+#define MARK_STATES(sim)                         \
+  (CTRL_FLAGS(sim) & MARK_STATES_FLAG)
+
+#define IS_MATCHABLE_OR_INTERVAL_NFA(nfa)        \
+  ((nfa)->value.type & ~(NFA_SPLIT             | \
+                         NFA_EPSILON           | \
+                         NFA_TREE              | \
+                         NFA_CAPTUREGRP_BEGIN  | \
+                         NFA_CAPTUREGRP_END))
+
+#define IS_CAPTUREGRP_MARKER(nfa)                \
+  ((nfa)->value.type & (NFA_CAPTUREGRP_BEGIN |   \
+                        NFA_CAPTUREGRP_END))
+
+  int found_accepting_state = 0;
+
+  if(IS_MATCHABLE_OR_INTERVAL_NFA(nfa)) {
+    if(first_entry || (id_in_stateset2(sim, nfa->id) == 0)) {
+      if((found_accepting_state = IS_NFA_ACCEPT(nfa)) != NFA_ACCEPTING) {
+        add_id_to_stateset2(sim, nfa->id);
+        list_append(lp, nfa);
+        if(IS_NFA_INTERVAL(nfa) && origin == 0) {
+          nfa->value.count = 0;
+        }
+      }
+    }
+  }
+  else {
+    if(IS_NFA_TREE(nfa)) {
+      ListItem * li = nfa->value.branches->head;
+      unsigned int list_sz = list_size(nfa->value.branches);
+      for(int i = 0; i < list_sz; ++i) {
+        nfa = li->data;
+        found_accepting_state += get_states(sim, nfa, lp, in_match, 0, origin);
+        li = li->next;
+      }
+    }
+    else {
+      if(IS_NFA_SPLIT(nfa)) {
+        // Avoid endlessly adding the same nodes in epsilon
+        // closure containing loops such as in cases like:
+        // (<expression>?)+
+        int list_sz = list_size(lp);
+        int accepting = found_accepting_state;
+        found_accepting_state += get_states(sim, nfa->out2, lp, in_match, 0, origin);
+        if(first_entry || list_size(lp) != list_sz || accepting != found_accepting_state) {
+//printf("\tLOOPING: nfa id --  %d\n", nfa->id);
+          found_accepting_state += get_states(sim, nfa->out1, lp, in_match, 0, nfa->id);
+        }
+      }
+      else if(IS_CAPTUREGRP_MARKER(nfa)) {
+        record_capturegroup_match(sim, nfa->id, nfa->value.type, in_match);
+        found_accepting_state += get_states(sim, nfa->out2, lp, in_match, 0, origin);
+      }
+      else{
+        found_accepting_state += get_states(sim, nfa->out2, lp, in_match, 0, origin);
+      }
+    }
+  }
+#undef IS_NFA_SPLIT
+#undef IS_NFA_ACCEPT
+#undef NOT_SEEN_BEFORE
+#undef IS_BACKREFERNECE
+#undef IS_CAPTUREGRP_MAKER
+#undef IS_MATCHABLE_OR_INTERVAL_NFA
+  return found_accepting_state;
 }
 
 
 int
 run_nfa(NFASim * sim)
 {
-#define NEXT_STATE(n) ((NFA *)(n)->data)->out2
-#define PARENT_STATE(n) ((NFA *)(n)->data)->parent
-#define BACKREF_MATCH_LEN(sim, idx) \
+//#define NEXT_STATE(n) ((NFA *)(n)->data)->out2
+#define NEXT_STATE(n) ((n)->out2)
+#define STATE_HEAD(n) ((NFA *)(n)->data)->out1
+#define BACKREF_MATCH_LEN(sim, idx)                                            \
   (((sim)->backref_matches)[(idx)].end - ((sim)->backref_matches)[(idx)].start)
 
   ListItem * current_state;
-  int iteration = 0;
   int match_start = 0;
   int match_end   = 0;
   int c = next_char(sim->scanner);
   int accept = 0;
   int eol_adjust = 0;
   int new_match = 1;
+  int unrecorded_match;
   NFA * nfa;
   
   reset_nfa_sim(sim);
-
+int t = 0;
   while(c != '\0') {
-    ++iteration;
+++t;
     current_state = sim->state_set1->head;
-    for(int i = 0; i < sim->state_set1->size; ++i) {
+    unrecorded_match = 1;
+    for(int i = 0; i < list_size(sim->state_set1); ++i) {
       nfa = current_state->data;
       accept = 0;
       eol_adjust = 0;
       switch(nfa->value.type) {
         case NFA_INTERVAL: {
-          if(nfa->value.count < nfa->value.min_rep
-          || nfa->value.count < nfa->value.max_rep) {
-            accept = 1;
-            get_states(sim, PARENT_STATE(current_state), sim->state_set1, 0, 0);
+          ++nfa->value.count;
+//printf("INTERVAL [0x%x]: count: %d\n", nfa, nfa->value.count);
+          if(nfa->value.count < nfa->value.min_rep) {
+            get_states(sim, STATE_HEAD(current_state), sim->state_set1, 1, 1, nfa->id);
+          }
+          else if(nfa->value.count < nfa->value.max_rep) {
+            get_states(sim, STATE_HEAD(current_state), sim->state_set1, 1, 1, nfa->id);
+            if(nfa->parent == 0) {
+              // no need to backtrack;
+//printf("\t NO PARENT: %d\n", nfa->value.count);              
+              accept = get_states(sim, NEXT_STATE(nfa), sim->state_set1, 1, 1, nfa->id);
+            }
           }
           else {
+            if(nfa->parent) {
+               NFA * parent_interval = nfa->parent;
+            }
+//printf("LOAD NEXT INTERVAL AFTER: %d matches\n", nfa->value.count);
+            accept = get_states(sim, NEXT_STATE(nfa), sim->state_set1, 1, 1, nfa->id);
             nfa->value.count = 0;
-            accept = get_states(sim, NEXT_STATE(current_state), sim->state_set2, 1, 0);
           }
+//printf("accept: %d\n", accept);
         } break;
         case NFA_BACKREFERENCE: {
           // check if capture group has matched anything
@@ -312,55 +417,100 @@ run_nfa(NFASim * sim)
             // recording of capture-groups
             // FIXME: replace this call with restart_from
             sim->scanner->readhead = tmp_input;
-            accept = get_states(sim, NEXT_STATE(current_state), sim->state_set2, 1, 0);
+            accept = get_states(sim, NEXT_STATE(nfa), sim->state_set2, 1, 1, nfa->id);
           }
         } break;
         case NFA_ANY: {
           if(c != sim->scanner->eol_symbol) {
-            accept = get_states(sim, NEXT_STATE(current_state), sim->state_set2, 1, 0);
+            accept = get_states(sim, NEXT_STATE(nfa), sim->state_set2, 1, 1, nfa->id);
+//            nfa->value.last_match = get_cur_pos(sim->scanner);
           }
         } break;
         case NFA_RANGE: {
           if(c != sim->scanner->eol_symbol) {
             if(is_literal_in_range(*(nfa->value.range), c)) {
-//printf("%c IS IN RANGE -- ", c);
-              accept = get_states(sim, NEXT_STATE(current_state), sim->state_set2, 1, 0);
-//printf("\n");
-//printf("ACCEPT: %d, SIZE OF STATE_SET2: %d\n", accept, sim->state_set2->size);
+              accept = get_states(sim, NEXT_STATE(nfa), sim->state_set2, 1, 1, nfa->id);
+//              nfa->value.last_match = get_cur_pos(sim->scanner);
             }
           }
         } break;
         case NFA_BOL_ANCHOR: {
           if(CTRL_FLAGS(sim) & AT_BOL_FLAG) {
-            accept = get_states(sim, NEXT_STATE(current_state), sim->state_set1, 1, 0);
+            accept = get_states(sim, NEXT_STATE(nfa), sim->state_set1, 1, 1, nfa->id);
+//            nfa->value.last_match = get_cur_pos(sim->scanner);
           }
         } break;
         case NFA_EOL_ANCHOR: {
           if(c == sim->scanner->eol_symbol) {
             eol_adjust = 1;
             accept = 1;
+//            nfa->value.last_match = get_cur_pos(sim->scanner);
           }
+        } break;
+        case NFA_LONG_LITERAL: {
+          if(c == nfa->value.lliteral[nfa->value.idx]) {
+            nfa->value.idx = (++nfa->value.idx) % nfa->value.len;
+            if(nfa->value.idx == 0) {
+              accept = get_states(sim, NEXT_STATE(nfa), sim->state_set2, 1, 1, nfa->id);
+            }
+            else {
+              // append state as-is
+              accept = get_states(sim, nfa, sim->state_set2, 1, 1, nfa->id);
+              //list_append(sim->state_set2, nfa);
+            }
+//            nfa->value.last_match = get_cur_pos(sim->scanner);
+          }
+          else {
+            nfa->value.idx = 0;
+          }
+        } break;
+        case NFA_LITERAL|NFA_IN_INTERVAL: {
+          if(c == nfa->value.literal) {
+//printf("%d: matched: %c\n", t, c);
+            accept = get_states(sim, NEXT_STATE(nfa), sim->state_set2, 1, 1, nfa->id);
+          }
+          else {
+            #define LINTERVAL(nfa)         ((nfa)->parent)
+            #define LINTERVAL_COUNT(nfa)   ((nfa)->parent->value.count)
+            #define LINTERVAL_MIN_REP(nfa) ((nfa)->parent->value.min_rep)
+            if(LINTERVAL_COUNT(nfa) == LINTERVAL_MIN_REP(nfa)) {
+//printf("%d: NEED TO BACKTRACK? %c vs. %c\n", t, c, nfa->value.literal);
+              accept = get_states(sim, NEXT_STATE(LINTERVAL(nfa)), sim->state_set1, 1, 1, nfa->id);
+            }
+            else if(LINTERVAL_COUNT(nfa) >= LINTERVAL_MIN_REP(nfa)) {
+              // if we were the only state able to match this far
+              // retract the input to the where the interval began matching
+              if(list_size(sim->state_set1) == 1) {
+//printf("%d-- NEED TO BACKTRACK AFTER %d MATCHES?\n", t, LINTERVAL_COUNT(nfa));
+              }
+              else {
+                accept = get_states(sim, NEXT_STATE(LINTERVAL(nfa)), sim->state_set1, 1, 1, nfa->id);
+              }
+            }
+            LINTERVAL_COUNT(nfa) = 0;
+          }
+//printf("-- accept: %d\n", accept);
+          #undef LINTERVAL
+          #undef LITERAL_INTERVAL_COUNT
+          #undef LITERAL_INTERVAL_MIN_REP
         } break;
         default: {
           if(c == nfa->value.literal) {
-//printf("%c MATCH -- %c", c, nfa->value.literal);
-            accept = get_states(sim, NEXT_STATE(current_state), sim->state_set2, 1, 0);
-//printf("\n");
-//printf("ACCEPT: %d\n", accept);
+            accept = get_states(sim, NEXT_STATE(nfa), sim->state_set2, 1, 1, nfa->id);
+//            nfa->value.last_match = get_cur_pos(sim->scanner);
           }
         } break;
       }
 
-//print_backref_match(sim, 2);
-      if(accept) {
+      if(unrecorded_match && accept) {
         record_match(sim->scanner->buffer,
                      sim->matches, 
                      sim->scanner->str_begin,
-                     //get_scanner_readhead(sim->scanner) - 1 - eol_adjust,
                      get_cur_pos(sim->scanner) - eol_adjust,
                      new_match);
         match_start = match_end;
         new_match = 0;
+        unrecorded_match = 0;
       }
 
       // load the next item in state_set1
@@ -374,33 +524,27 @@ run_nfa(NFASim * sim)
   ((GLOBAL_MATCH(s)) ? 1 : (MATCH_COUNT(s) == 1) ? 0 : 1)
 
     if(MATCH_FAILED(sim)) {
-      if(CONTINUE_MATCHING(sim) == 0) {
-        break;
-      }
-//printf("\tRESET ON: %c\n", c);
-//iteration = 0;
-      ++match_start;
-//printf("readhead: 0x%x\n", sim->scanner->readhead);
-      restart_from(sim->scanner, (sim->scanner->buffer + match_start));
-//printf("readhead: 0x%x\n", sim->scanner->readhead);
-      c = next_char(sim->scanner);
-//printf("readhead: 0x%x\n", sim->scanner->readhead);
-//printf("NEXT CHAR AFTER RESET: %c\n", c);
-      match_end = match_start;
-      new_match = 1;
-      // need to call reset_nfa_sim inorder to ensure proper recording
-      // of capture-groups.
-      reset_nfa_sim(sim);
-//printf("\n");
+// IF WE CAN BACKTRACK... DO IT HERE
+//    if(backtrack(sim) == 0) {
+        if(CONTINUE_MATCHING(sim) == 0) {
+          break;
+        }
+        ++match_start;
+        restart_from(sim->scanner, (sim->scanner->buffer + match_start));
+        c = next_char(sim->scanner);
+        match_end = match_start;
+        new_match = 1;
+        // need to call reset_nfa_sim inorder to ensure proper recording
+        // of capture-groups.
+        reset_nfa_sim(sim);
+//    }
     }
     else {
       list_swap(sim->state_set1, sim->state_set2);
       list_clear(sim->state_set2);
       clear_stateset2_ids(sim);
-//printf("\n");
       match_end += 1;
       c = next_char(sim->scanner);
-//printf("readhead: 0x%x\n", sim->scanner->readhead);
     }
   }
 #undef NEXT_STATE
