@@ -253,7 +253,13 @@ regex_scan(Scanner * s)
               update_token(s->curtoken, (c - '0'), BACKREFERENCE);
             }
             else {
-              update_token(s->curtoken, c, ALPHA);
+              switch(c) {
+                // Insert escape sequences like '\d', '\b', '\D'
+                // here
+                default: {
+                  update_token(s->curtoken, c, ALPHA);
+                } break;
+              }
             }
           }
           else {

@@ -1182,6 +1182,7 @@ insert_progress_nfa(List * loop_nfas)
             case '?': walker = walker->out1; break;
           }
         } break;
+        case NFA_INTERVAL:
         case NFA_EPSILON: {
           walker = walker->out2;
         } break;
@@ -1192,8 +1193,6 @@ insert_progress_nfa(List * loop_nfas)
     }
     if(needs_progress) {
       NFA_TRACK_PROGRESS(looper);
-      // re-use list
-      list_append(loop_nfas, (void *)&(looper->last_match));
     }
   }
 }

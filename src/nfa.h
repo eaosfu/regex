@@ -42,7 +42,7 @@ typedef struct NFA {
   struct NFA * parent;
   struct NFA * out1;
   struct NFA * out2;
-  char * last_match;
+  int greedy;
   unsigned int id;
   unsigned int branch_id;
   struct {

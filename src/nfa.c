@@ -272,10 +272,12 @@ new_kleene_nfa(NFA * body)
   mark_interval_nfa(start);
 
   start->value.literal = '*';
+  start->greedy = 1;
   start->out1 = body->parent;
   start->out2 = accept;
 
   body->value.type = NFA_SPLIT;
+  body->greedy = 1;
   body->value.literal = '*';
   body->out1 = body->parent;
   body->out2 = accept;
@@ -295,6 +297,7 @@ new_qmark_nfa(NFA * body)
   
   mark_interval_nfa(start);
 
+  start->greedy = 1;
   start->out1 = accept;
   start->out2 = body->parent;
   start->value.literal = '?';
@@ -319,6 +322,7 @@ new_posclosure_nfa(NFA * body)
   start->out1 = start->out2 = body->parent;
 
   body->value.type = NFA_SPLIT;
+  body->greedy = 1;
   mark_interval_nfa(body);
   body->value.literal = '+';
   body->out1 = body->parent;
@@ -369,7 +373,16 @@ new_interval_nfa(NFACtrl * ctrl, NFA * target, NFA * interval, unsigned int min,
   NFA * new_interval = new_nfa(ctrl, NFA_INTERVAL);
 
 
-  start->out1 = start->out2 = target->parent;
+  if(min == 0) {
+    start->value.type = NFA_SPLIT;
+    start->value.literal = '*';
+    start->greedy = 1;
+    start->out1 = target->parent;
+    start->out2 = accept;
+  }
+  else {
+    start->out1 = start->out2 = target->parent;
+  }
 
   target->value.type = NFA_EPSILON;
   target->out2 = new_interval;
