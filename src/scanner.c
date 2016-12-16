@@ -140,8 +140,12 @@ get_cur_pos(Scanner * s)
   char * ret = NULL;
   if(s) {
     ret = s->buffer;
-    if(s->readhead > s->buffer) {
+    //if(s->readhead > s->buffer) {
+    if(s->readhead > s->str_begin) {
       ret = s->readhead - 1;
+    }
+    else {
+      ret = s->readhead;
     }
   }
   return ret;

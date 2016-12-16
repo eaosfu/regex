@@ -155,13 +155,7 @@ parse_interval_expression(Parser * parser)
   unsigned int max = 0;
   NFA * interval_nfa;
   NFA * target;
-
-  if(parser->tie_branches) {
-    target = tie_branches(parser, pop(parser->symbol_stack), 0);
-  }
-  else {
-    target = pop(parser->symbol_stack);
-  }
+  target = pop(parser->symbol_stack);
 
   int influences_cgrp = ((get_cur_pos(parser->scanner) - 1)[0] == ')');
   int braces_balance = 0;
@@ -307,10 +301,21 @@ parse_quantifier_expression(Parser * parser)
     case PLUS: { 
       CHECK_MULTI_QUANTIFIER_ERROR;
       parser_consume_token(parser);
-      nfa = pop(parser->symbol_stack);
+/*
+      if(parser->tie_branches) {
+        nfa = new_alternation_nfa(parser->nfa_ctrl, parser->branch_stack,
+          parser->tie_branches, NULL);
+        parser->tie_branches = 0;
+        parser->subtree_branch_count = 1;
+      }
+      else {
+*/
+        nfa = pop(parser->symbol_stack);
+//      }
+      // point loop_nfa to nfa since this will be over-written with the SPLIT
+      // node
 push(parser->loop_nfas, nfa);
       nfa = new_posclosure_nfa(nfa);
-      nfa = tie_branches(parser, nfa, 0);
       push(parser->symbol_stack, nfa);
       quantifier_count++;
       parse_quantifier_expression(parser);
@@ -322,7 +327,7 @@ push(parser->loop_nfas, nfa);
       nfa = pop(parser->symbol_stack);
 push(parser->loop_nfas, nfa);
       nfa = new_kleene_nfa(nfa);
-      nfa = tie_branches(parser, nfa, 0);
+//      nfa = tie_branches(parser, nfa, 0);
       push(parser->symbol_stack, nfa);
       quantifier_count++;
       parse_quantifier_expression(parser);
@@ -332,7 +337,7 @@ push(parser->loop_nfas, nfa);
       parser_consume_token(parser);
       nfa = pop(parser->symbol_stack);
       nfa = new_qmark_nfa(nfa);
-      nfa = tie_branches(parser, nfa, 0);
+//      nfa = tie_branches(parser, nfa, 0);
       push(parser->symbol_stack, nfa);
       parse_quantifier_expression(parser);
     } break;
@@ -344,9 +349,9 @@ push(parser->loop_nfas, nfa);
     } break;
     case PIPE: {
       // In case of conditions like (<expression>|<expression>)|<expression>
-      if(parser->tie_branches) {
-        parser->tie_branches = 0;
-      }
+//      if(parser->tie_branches) {
+//        parser->tie_branches = 0;
+//      }
       // Let the parser know it is processing an alternation, this allows us
       // to properly handle backreferences
       ++(parser->in_alternation);
@@ -373,18 +378,20 @@ push(parser->loop_nfas, nfa);
       if((left = pop(parser->symbol_stack)) != 0) {
         push(parser->branch_stack, left);
       }
+
 if(parser->in_new_cgrp) {
-  parser->subtree_branch_count += (parser->subtree_branch_count == 0) ? 2: 1;
+//  parser->subtree_branch_count += (parser->subtree_branch_count == 0) ? 2: 1;
+  parser->subtree_branch_count = 2;
   parser->in_new_cgrp = 0;
 }
-//printf("\thit pipe\n", parser->subtree_branch_count);
+else {
+  parser->subtree_branch_count += 1;
+}
 
       // separation marker between alternation branches
       push(parser->symbol_stack, (void *)NULL);
       parse_sub_expression(parser);
       right = pop(parser->symbol_stack);
-      //push(parser->symbol_stack, new_alternation_nfa(left, right));
-
 
       int close_capture_group = 0;
       if(right != 0) {
@@ -395,6 +402,7 @@ if(parser->in_new_cgrp) {
  //printf("NFA CAPTURE GROUP BEGIN POPPED\n");
         }
         else {
+//printf("right literal: %c\n", right->parent->value.literal);
           push(parser->branch_stack, right);
         }
       }
@@ -408,18 +416,23 @@ if(parser->in_new_cgrp) {
 //  list_size(parser->branch_stack), parser->subtree_branch_count);
         left = new_alternation_nfa(parser->nfa_ctrl, parser->branch_stack, sz, NULL);
         parser->subtree_branch_count = 0;
-        parser->tie_branches = 0;
-        if(close_capture_group) {
-          push(parser->symbol_stack, concatenate_nfa(right, left));
-        }
-        else {
-          push(parser->symbol_stack, left);
-        }
+//        parser->tie_branches = 0;
+        push(parser->symbol_stack, left);
       }
-
-
+      else {
+//printf("HERE!: %s branches: %d -- tie branches: %d\n",
+//parser->scanner->readhead, parser->subtree_branch_count, parser->tie_branches);
+        left = new_alternation_nfa(parser->nfa_ctrl, parser->branch_stack,
+          parser->subtree_branch_count, NULL);
+        push(parser->symbol_stack, left);
+//        parser->tie_branches = 0;
+        parser->subtree_branch_count = 0;
+      }
     } break;
-    case CLOSEPAREN: // fallthrough
+    case __EOF: {
+//printf("TIE BRANCHES?\n");
+    } break;
+//    case CLOSEPAREN: // fallthrough
     default: {       // epsilon production
       break;
     }
@@ -655,9 +668,6 @@ parse_bracket_expression(Parser * parser)
       fatal("Error parsing bracket expression\n");
     }
     
-//    release_nfa(open_delim_p);
-//free_nfa(open_delim_p);
-
     push(parser->symbol_stack, right);
 //printf("PUSHED NFA BACK ONTO STACK: symbol stack top: 0x%x\n", peek(parser->symbol_stack));
     parse_quantifier_expression(parser);
@@ -769,20 +779,21 @@ update_open_paren_accounting(Parser * parser)
   parser->in_new_cgrp = 1;
   ++(parser->paren_count);// += 1;
   parser->current_cgrp = ++(parser->cgrp_count);
+//printf("parser current cgrp: %d\n", parser->current_cgrp);
 
   if(parser->root_cgrp == 0) {
     parser->root_cgrp = parser->current_cgrp;
   }
 
   track_capture_group(parser, NFA_CAPTUREGRP_BEGIN);
-
-
+/*
   if(parser->tie_branches) {
     tie_and_push_branches(parser, pop(parser->symbol_stack), 
       ((parser->push_to_branch_stack == 0) ? 2 : 1));
   }
-
+*/
   subtree_branch_count = parser->subtree_branch_count;
+//printf("OPEN PAREN ACCOUNT UPDATED: %d\n", parser->subtree_branch_count);
   parser->subtree_branch_count = 0;
   return subtree_branch_count;
 }
@@ -794,6 +805,7 @@ update_close_paren_accounting(Parser * parser, unsigned int subtree_br_cnt)
   if(parser->subtree_branch_count > 0) {
     parser->tie_branches = parser->subtree_branch_count;
   }
+//printf("CLOSE PAREN ACCOUNT UPDATED: %d\n", parser->tie_branches);
   parser->subtree_branch_count = subtree_br_cnt;
 }
 
@@ -802,12 +814,15 @@ void
 parse_paren_expression(Parser * parser)
 {
   unsigned int subtree_branch_count = update_open_paren_accounting(parser);
+  int in_new_cgrp = parser->in_new_cgrp;
+  int preceding_stack_size = list_size(parser->symbol_stack);
+
   parser_consume_token(parser);
 
   // Used by PIPE to determine where lhs operand starts otherwise gets popped
   // as lhs operand in a concatenation wich will simply return the rhs 
   // operand.
-  push(parser->symbol_stack, (void *)NULL);
+  push(parser->symbol_stack, (void*)NULL);
   regex_parser_start(parser);
 
   if(parser->paren_count > 0 && parser->ignore_missing_paren == 0) {
@@ -818,10 +833,21 @@ parse_paren_expression(Parser * parser)
       track_capture_group(parser, NFA_CAPTUREGRP_END);
       --(parser->paren_count);
       parser_consume_token(parser);
-      parser->in_new_cgrp = 0;
+
+      update_close_paren_accounting(parser, subtree_branch_count);
+
+      parser->in_new_cgrp = in_new_cgrp;;
+
+      NFA * right = pop(parser->symbol_stack);
+      NFA * left = NULL;
+      while((list_size(parser->symbol_stack) > preceding_stack_size)) {
+        left =  pop(parser->symbol_stack);
+        right = concatenate_nfa(left, right);
+      }
+
+      push(parser->symbol_stack, right);
 
       parse_quantifier_expression(parser);
-      update_close_paren_accounting(parser, subtree_branch_count);
     }
     else {
       fatal("--Expected ')'\n");
@@ -912,42 +938,19 @@ parse_sub_expression(Parser * parser)
     case CIRCUMFLEX: // fallthrough
     case ASCIIDIGIT: {
       parse_literal_expression(parser);
-
-      if(parser->tie_branches) {
-        tie_and_push_branches(parser, pop(parser->symbol_stack), 1);
-      }
-
       parse_sub_expression(parser);
-      right = pop(parser->symbol_stack);
-      left = pop(parser->symbol_stack);
-      push(parser->symbol_stack, concatenate_nfa(left, right));
-    } break;
-    case OPENPAREN: {
-      parse_paren_expression(parser);
-      parse_sub_expression(parser);
-
-      parser->push_to_branch_stack -= (parser->push_to_branch_stack > 1) ? 1 : 0;
-      if(parser->push_to_branch_stack == 1) {
-        // if we're here then we know we were the first to start this trend
-        // so we can end it
-        parser->push_to_branch_stack = 0;
-        push(parser->branch_stack, pop(parser->symbol_stack));
-      }
-      else {
-// FIXME: we might not have anything on the stack!!!
+      if(peek(parser->symbol_stack)) {
         right = pop(parser->symbol_stack);
         left = pop(parser->symbol_stack);
         push(parser->symbol_stack, concatenate_nfa(left, right));
       }
-
+    } break;
+    case OPENPAREN: {
+      parse_paren_expression(parser);
+      parse_sub_expression(parser);
     } break;
     case OPENBRACKET: {
       parse_bracket_expression(parser);
-
-      if(parser->tie_branches) {
-        tie_and_push_branches(parser, pop(parser->symbol_stack), 1);
-      }
-
       parse_sub_expression(parser);
       right = pop(parser->symbol_stack);
       left = pop(parser->symbol_stack);
@@ -1002,9 +1005,6 @@ parse_sub_expression(Parser * parser)
       else {
         left = new_backreference_nfa(parser->nfa_ctrl, INTERVAL(parser),
           parser->lookahead.value, parser->branch_id);
-
-        left = tie_branches(parser, left, 1);
-
         push(parser->symbol_stack, left);
         parser_consume_token(parser);
         parse_quantifier_expression(parser);
@@ -1158,42 +1158,46 @@ insert_progress_nfa(List * loop_nfas)
   int needs_progress = 0;
   int stop = 0;
   NFA * looper = list_shift(loop_nfas);
-  NFA * walker = looper->out1;
+  NFA * walker = NULL; 
   for(int i = 0; i < sz; ++i) {
-    stop = needs_progress = 0;
-    while(stop == 0) {
-      switch(walker->value.type) {
-        case NFA_SPLIT: {
-          if(walker == looper) {
-            needs_progress = 1;
+    if(looper && (looper->value.type & NFA_SPLIT)) {
+      walker = looper->out1;
+      stop = needs_progress = 0;
+      while(stop == 0) {
+        switch(walker->value.type) {
+          case NFA_SPLIT: {
+            if(walker == looper) {
+              needs_progress = 1;
+              stop = 1;
+              continue;
+            }
+            switch(walker->value.literal) {
+              case '*': // fallthrough
+              case '+': {
+                if(walker->out2 == looper->out2) {
+                  walker = walker->out1;
+                }
+                else {
+                  walker = walker->out2;
+                }
+              } break;
+              case '?': walker = walker->out1; break;
+            }
+          } break;
+          case NFA_INTERVAL:
+          case NFA_EPSILON: {
+            walker = walker->out2;
+          } break;
+          default: {
             stop = 1;
-            continue;
-          }
-          switch(walker->value.literal) {
-            case '*': // fallthrough
-            case '+': {
-              if(walker->out2 == looper->out2) {
-                walker = walker->out1;
-              }
-              else {
-                walker = walker->out2;
-              }
-            } break;
-            case '?': walker = walker->out1; break;
-          }
-        } break;
-        case NFA_INTERVAL:
-        case NFA_EPSILON: {
-          walker = walker->out2;
-        } break;
-        default: {
-          stop = 1;
-        } break;
+          } break;
+        }
+      }
+      if(needs_progress) {
+        NFA_TRACK_PROGRESS(looper);
       }
     }
-    if(needs_progress) {
-      NFA_TRACK_PROGRESS(looper);
-    }
+    looper = list_shift(loop_nfas);
   }
 }
 

@@ -451,12 +451,15 @@ list_chop(List * list, unsigned int sz)
   else {
     chopped->size = sz;
     ListItem ** new_head = &(list->head);
+    ListItem * chop_tail = *new_head;
     for(int i = 0; i < sz; ++i) {
+      chop_tail = *new_head;
       new_head = &((*new_head)->next);
     }
     list->head = (*new_head);
     list->size -= sz;
-    chopped->tail = (*new_head) - offsetof(ListItem, next);
+//    chopped->tail = (*new_head) - offsetof(ListItem, next);
+    chopped->tail = chop_tail;
     (*new_head) = NULL;
   }
 

@@ -268,7 +268,6 @@ new_kleene_nfa(NFA * body)
   NFA * start  = new_nfa(body->ctrl, NFA_SPLIT);
   NFA * accept = new_nfa(body->ctrl, NFA_ACCEPTING);
 
-
   mark_interval_nfa(start);
 
   start->value.literal = '*';
@@ -506,6 +505,7 @@ nfa_tie_branches(NFA * target, List * branches_list, unsigned int num_branches)
 
   return new_alternation_nfa(target->ctrl, branches_list, num_branches, target);
 }
+
 
 /*
 NFA *

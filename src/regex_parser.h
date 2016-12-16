@@ -138,7 +138,6 @@ typedef struct Parser {
   int in_new_cgrp;
   int in_alternation;
   int in_complex_cgrp;
-  int left_cgrp;
 
   // INTERVAL STUFF
   int interval_list_sz;
