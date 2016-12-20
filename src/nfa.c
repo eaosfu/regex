@@ -270,10 +270,10 @@ new_kleene_nfa(NFA * body)
 
   mark_interval_nfa(start);
 
-  start->value.literal = '*';
+  start->value.literal = '?';
   start->greedy = 1;
-  start->out1 = body->parent;
-  start->out2 = accept;
+  start->out1 = accept;
+  start->out2 = body->parent;
 
   body->value.type = NFA_SPLIT;
   body->greedy = 1;

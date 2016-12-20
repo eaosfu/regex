@@ -69,10 +69,12 @@ tie_and_push_branches(Parser * parser, NFA * nfa, unsigned int increment)
 // and we know there is a backreference to this capture group
 // insert a marker node so the recognizer knows to start tracking
 // what this matches
-void
+int
 track_capture_group(Parser * parser, unsigned int type)
 {
+  int ret = 0;
   if(cgrp_has_backref(parser->cgrp_map, parser->current_cgrp)) {
+    ret = 1;
     NFA * right = new_literal_nfa(parser->nfa_ctrl, NULL, NFA_LITERAL, type,
                                   parser->branch_id);
     NFA * left  = pop(parser->symbol_stack);
@@ -81,6 +83,7 @@ track_capture_group(Parser * parser, unsigned int type)
   }
 
   if(cgrp_is_complex(parser->cgrp_map, parser->current_cgrp)) {
+    ret = 2;
     if(type == NFA_CAPTUREGRP_BEGIN) {
       ++(parser->in_complex_cgrp);
       ++(parser->is_complex);
@@ -102,12 +105,7 @@ track_capture_group(Parser * parser, unsigned int type)
     }
     parser->current_cgrp = --(parser->current_cgrp);
   }
-//  else {
-//  if(parser->in_complex_cgrp)
-//printf("in complex cgrp: %d -- influenced by interval %d \n",
-//  parser->current_cgrp, parser->influencing_interval);
-//  }
-
+  return ret;
 }
 
 
@@ -348,14 +346,11 @@ push(parser->loop_nfas, nfa);
       quantifier_count--;
     } break;
     case PIPE: {
-      // In case of conditions like (<expression>|<expression>)|<expression>
-//      if(parser->tie_branches) {
-//        parser->tie_branches = 0;
-//      }
+      parser->alt_sz = list_size(parser->symbol_stack);
       // Let the parser know it is processing an alternation, this allows us
       // to properly handle backreferences
       ++(parser->in_alternation);
-      parser->branch_id = parser->cgrp_count;
+      parser->branch_id = parser->current_cgrp - 1;
       // reset the quantifier_count for rhs of alternation
       quantifier_count = 0;
       parser_consume_token(parser);
@@ -379,14 +374,15 @@ push(parser->loop_nfas, nfa);
         push(parser->branch_stack, left);
       }
 
-if(parser->in_new_cgrp) {
-//  parser->subtree_branch_count += (parser->subtree_branch_count == 0) ? 2: 1;
-  parser->subtree_branch_count = 2;
-  parser->in_new_cgrp = 0;
-}
-else {
-  parser->subtree_branch_count += 1;
-}
+      if(parser->in_new_cgrp) {
+      //  parser->subtree_branch_count += (parser->subtree_branch_count == 0) ? 2: 1;
+        parser->subtree_branch_count = 2;
+        parser->in_new_cgrp = 0;
+      }
+      else {
+        parser->subtree_branch_count += 1;
+      //printf("\tparser subtree count: %d -- %s\n", parser->subtree_branch_count, parser->scanner->readhead - 1);
+      }
 
       // separation marker between alternation branches
       push(parser->symbol_stack, (void *)NULL);
@@ -420,8 +416,8 @@ else {
         push(parser->symbol_stack, left);
       }
       else {
-//printf("HERE!: %s branches: %d -- tie branches: %d\n",
-//parser->scanner->readhead, parser->subtree_branch_count, parser->tie_branches);
+//printf("HERE!: %s subtree branches: %d -- tie branches: %d -- %s\n",
+//parser->scanner->readhead, parser->subtree_branch_count, parser->tie_branches, parser->scanner->readhead - 1);
         left = new_alternation_nfa(parser->nfa_ctrl, parser->branch_stack,
           parser->subtree_branch_count, NULL);
         push(parser->symbol_stack, left);
@@ -830,7 +826,8 @@ parse_paren_expression(Parser * parser)
       if(parser->paren_count == 0) {
         fatal("Unmatched ')'\n");
       }
-      track_capture_group(parser, NFA_CAPTUREGRP_END);
+      int has_backref = track_capture_group(parser, NFA_CAPTUREGRP_END);
+//printf("[%d] %s\n", parser->current_cgrp, parser->scanner->readhead);
       --(parser->paren_count);
       parser_consume_token(parser);
 
@@ -840,13 +837,19 @@ parse_paren_expression(Parser * parser)
 
       NFA * right = pop(parser->symbol_stack);
       NFA * left = NULL;
-      while((list_size(parser->symbol_stack) > preceding_stack_size)) {
+      unsigned int sz = list_size(parser->symbol_stack);
+      while((sz > preceding_stack_size)) {
         left =  pop(parser->symbol_stack);
         right = concatenate_nfa(left, right);
+        --sz;
+      }
+
+      if(has_backref) {
+        right = concatenate_nfa(pop(parser->symbol_stack), right);
       }
 
       push(parser->symbol_stack, right);
-
+//printf("subtree count: %d -- %s\n", parser->subtree_branch_count, parser->scanner->readhead - 1);
       parse_quantifier_expression(parser);
     }
     else {
@@ -859,68 +862,6 @@ parse_paren_expression(Parser * parser)
   }
   // don't ignore another missing paren unless explicitly told to do so again.
   parser->ignore_missing_paren = 0;
-  return;
-}
-
-
-// NOTE: we need to free these nodes as they're being popped off the stack
-// This function is only called after we've fully processed the first branch
-// of an alternation and we know that the rest of the enclosing expression
-// will not be able to match.
-static inline void
-parser_purge_branch(Parser * parser)
-{
-//printf("PURGING BRANCH\n");
-  NFA * popped = NULL;
-  while((popped = pop(parser->symbol_stack)) != NULL) release_nfa(popped);
-  int stop = 0;
-  while(stop == 0) {
-    parser_consume_token(parser);
-//printf("SKIPPING OVER: %c\n", parser->lookahead.value);
-    switch(parser->lookahead.type) {
-      case PIPE: {
-        push(parser->symbol_stack, (void *)NULL);
-        parser_consume_token(parser);
-        parse_sub_expression(parser);
-//printf("HERE: LOOKAHEAD: %c!\n", parser->lookahead.value);
-        stop = 1;
-      } break;
-      case CLOSEPAREN: { // THINK ABOUT THIS A BIT MORE!!!
-        if(parser->paren_count > 1) {
-          --(parser->paren_count);
-          if(parser->cgrp_count > parser->branch_id) {
-            --(parser->cgrp_count);
-          }
-        }
-        else {
-          // From here we return to parse_paren_expression which is expecting
-          // a ')'. However, rather than making the parser backtrack we simply
-          // tell the parser to ignore this requirement by setting the flag 
-          // ignore_missing_paren. This allows the parser to continue trying to
-          // parse the rest of input, if any.
-          --(parser->paren_count);
-          if(parser->cgrp_count > parser->branch_id) {
-            --(parser->cgrp_count);
-          }
-          parser_consume_token(parser);
-          parser->ignore_missing_paren = 1;
-          stop = 1;
-        }
-      } break;
-      case __EOF: {
-        if(parser->paren_count) {
-          fatal("Expected ')'\n");
-        }
-        stop = 1;
-      } break;
-    }
-  }
-
-  // if there are still open parens then we should ignore the missing paren
-  if(parser->paren_count) {
-    parser->ignore_missing_paren = 1;
-  }
-
   return;
 }
 
@@ -939,11 +880,9 @@ parse_sub_expression(Parser * parser)
     case ASCIIDIGIT: {
       parse_literal_expression(parser);
       parse_sub_expression(parser);
-      if(peek(parser->symbol_stack)) {
-        right = pop(parser->symbol_stack);
-        left = pop(parser->symbol_stack);
-        push(parser->symbol_stack, concatenate_nfa(left, right));
-      }
+      right = pop(parser->symbol_stack);
+      left = pop(parser->symbol_stack);
+      push(parser->symbol_stack, concatenate_nfa(left, right));
     } break;
     case OPENPAREN: {
       parse_paren_expression(parser);
@@ -959,57 +898,21 @@ parse_sub_expression(Parser * parser)
     case BACKREFERENCE: {
       // we start capture_group_count at - 1 and only increase from there
       // so we subtract 1 from the lookahead.value
-      if(parser->lookahead.value == '0'
-      || parser->lookahead.value > parser->cgrp_count
+      if(parser->lookahead.value == 0
+      || (parser->lookahead.value > parser->cgrp_count)
       || (parser->current_cgrp > 0 
          && parser->lookahead.value == parser->root_cgrp)) {
         fatal("Invalid back-reference\n");
       }
-      // If the backreference is in an alternation and reffers to a capture-group inside 
-      // a separate branch that same alternation, then we should skip processing the backrefernce
-      // since it could only match the empty string.
-      int purge_branch = 0;
-      if(parser->in_alternation) {
-        if(parser->paren_count) {
-          // At this point the back refernce correctly refers to a capture-group that
-          // was defined prior to the backref itself, we now need to determine whether
-          // that capture-group is on a different branch of the same alternation.
-          // If it is we ignore this backreference
-          //
-          // root_cgrp holds the id of the root of the current capture-group (or paren expression)
-          // subtree:
-          //
-          //   i.e. <expression>-->(<--(...(...<expression>...)...)...)
-          //   the arrows indicate the root
-          //
-          // The capture-group referenced by the current backref must be strickly less than the
-          // id of the current capture-group root. Otherwise it can only match the empty string, and
-          // hence should be ignored.
-          if(parser->lookahead.value == parser->branch_id) {
-            purge_branch = 1;
-          }
-          else if(parser->lookahead.value > (parser->root_cgrp - 1)
-          && parser->lookahead.value < parser->branch_id) {
-            purge_branch = 1;
-          }
-        }
-        else {
-          if(parser->lookahead.value <= parser->branch_id) {
-            purge_branch = 1;
-          }
-        }
-      }
-      if(purge_branch) {
-        parser_purge_branch(parser);
-      }
-      else {
-        left = new_backreference_nfa(parser->nfa_ctrl, INTERVAL(parser),
-          parser->lookahead.value, parser->branch_id);
-        push(parser->symbol_stack, left);
-        parser_consume_token(parser);
-        parse_quantifier_expression(parser);
-        parse_sub_expression(parser);
-      }
+      left = new_backreference_nfa(parser->nfa_ctrl, INTERVAL(parser),
+        parser->lookahead.value, parser->branch_id);
+      push(parser->symbol_stack, left);
+      parser_consume_token(parser);
+      parse_quantifier_expression(parser);
+      parse_sub_expression(parser);
+      right = pop(parser->symbol_stack);
+      left = pop(parser->symbol_stack);
+      push(parser->symbol_stack, concatenate_nfa(left, right));
     } break;
     case CLOSEPAREN: // fallthrough
     case __EOF: {
@@ -1088,7 +991,6 @@ prescan_input(Parser * parser)
   int next_complex_interval = 0;
 
 
-  // FIXME: we might want more than 9... 
   char barckrefs[CAPTURE_GROUP_MAX] = {0};
   int next_backref = 0;
   
@@ -1212,9 +1114,6 @@ parse_regex(Parser * parser)
   prescan_input(parser);
   regex_parser_start(parser);
 
-//fatal("DONE PARSING\n");
-
-// FIXME: This is a bit of a cluge...
   if(parser->symbol_stack->size > 1) {
     NFA * right = pop(parser->symbol_stack);
     NFA * left  = pop(parser->symbol_stack);
@@ -1222,7 +1121,6 @@ parse_regex(Parser * parser)
     while(parser->symbol_stack->size > 0) {
       left = pop(parser->symbol_stack);
       right = concatenate_nfa(left, right);
-//printf("STUCK?\n");
     }
     push(parser->symbol_stack, right);
   }
