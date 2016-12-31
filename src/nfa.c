@@ -20,7 +20,7 @@ new_nfa_ctrl()
 }
 
 
-static inline int
+static inline void
 mark_interval_nfa(NFA * nfa)
 {
   if(nfa->id == 0) {
@@ -33,7 +33,7 @@ mark_interval_nfa(NFA * nfa)
 }
 
 
-static inline int
+static inline void
 mark_nfa(NFA * nfa)
 {
   if(nfa->id == 0) {
@@ -173,9 +173,9 @@ new_range_nfa(NFACtrl * ctrl, NFA * interval, int negate, unsigned int branch_id
  
   if(interval) {
     start->parent = interval;
-    start->value.type |= NFA_IN_INTERVAL;
+    //start->value.type |= NFA_IN_INTERVAL;
   }
-  start->branch_id = branch_id;
+//  start->branch_id = branch_id;
   start->value.range = xmalloc(sizeof *(start->value.range));
 
   if(negate) {
@@ -193,8 +193,7 @@ new_range_nfa(NFACtrl * ctrl, NFA * interval, int negate, unsigned int branch_id
 
 
 NFA *
-new_lliteral_nfa(NFACtrl * ctrl, NFA * interval, char * src, 
-   unsigned int len, unsigned int branch_id)
+new_lliteral_nfa(NFACtrl * ctrl, char * src, unsigned int len)
 {
   NFA * start    = new_nfa(ctrl, NFA_EPSILON);
   NFA * lliteral = xmalloc(sizeof(*lliteral)+ len + 1);
@@ -204,7 +203,6 @@ new_lliteral_nfa(NFACtrl * ctrl, NFA * interval, char * src,
 
   lliteral->ctrl = ctrl;
   mark_nfa(lliteral);
-  lliteral->branch_id  = branch_id;
   lliteral->out1 = lliteral->out2 = accept;
   lliteral->value.type = NFA_LONG_LITERAL;
   lliteral->value.len = len;
@@ -220,22 +218,23 @@ new_lliteral_nfa(NFACtrl * ctrl, NFA * interval, char * src,
 
 
 NFA *
-new_literal_nfa(NFACtrl * ctrl, NFA * interval, unsigned int literal, unsigned int type, unsigned int branch_id)
+//new_literal_nfa(NFACtrl * ctrl, NFA * interval, unsigned int literal, unsigned int type, unsigned int branch_id)
+new_literal_nfa(NFACtrl * ctrl, unsigned int literal, unsigned int type)
 {
   NFA * start;
   NFA * accept = new_nfa(ctrl, NFA_ACCEPTING);
 
   start = new_nfa(ctrl, type);
 
-  start->branch_id = branch_id;
+//  start->branch_id = branch_id;
 
   mark_nfa(start);
-  
+ /* 
   if(interval) {
     start->parent = interval;
 //    start->value.type |= NFA_IN_INTERVAL;
   }
-
+*/
   start->value.literal = literal;
   start->out1 = start->out2 = accept;
 
@@ -253,7 +252,7 @@ new_backreference_nfa(NFACtrl * ctrl, NFA * interval, unsigned int capture_group
 
   start->parent = interval;
   start->id = capture_group_id;
-  start->branch_id = branch_id;
+//  start->branch_id = branch_id;
   start->out1 = start->out2 = accept;
 
   accept->parent = start;
@@ -332,32 +331,6 @@ new_posclosure_nfa(NFA * body)
   return accept;
 }
 
-/*
-NFA *
-new_interval_nfa(NFA * body, unsigned int min, unsigned int max)
-{
-  if(body == 0) {
-    // should never hit this condition
-    return NULL;
-  }
-
-  NFA * start  = body;
-  NFA * accept = new_nfa(body->ctrl, NFA_ACCEPTING);
-
-  mark_nfa(start);
-  start->value.type = NFA_INTERVAL;
-  start->value.min_rep = min;
-  start->value.max_rep = max;
-  start->value.count = 0;
-
-  start->out1 = start->out2 = accept;
-
-  accept->parent = start->parent;
-
-  return accept;
-}
-*/
-
 
 // This is for intervals that only influence a single character
 // i.e <expression>{min, Max} where <expression> is a single character.
@@ -365,11 +338,11 @@ new_interval_nfa(NFA * body, unsigned int min, unsigned int max)
 // is the case, the new interval's 'parent' pointer will point to the 
 // influencing interval.
 NFA *
-new_interval_nfa(NFACtrl * ctrl, NFA * target, NFA * interval, unsigned int min, unsigned int max)
+new_interval_nfa(NFA * target, unsigned int min, unsigned int max)
 {
-  NFA * start = new_nfa(ctrl, NFA_EPSILON);
-  NFA * accept = new_nfa(ctrl, NFA_ACCEPTING);
-  NFA * new_interval = new_nfa(ctrl, NFA_INTERVAL);
+  NFA * start = new_nfa(target->ctrl, NFA_EPSILON);
+  NFA * accept = new_nfa(target->ctrl, NFA_ACCEPTING);
+  NFA * new_interval = new_nfa(target->ctrl, NFA_INTERVAL);
 
 
   if(min == 0) {
@@ -392,52 +365,9 @@ new_interval_nfa(NFACtrl * ctrl, NFA * target, NFA * interval, unsigned int min,
   new_interval->value.max_rep = max;
   new_interval->value.count = 0;
 
-  new_interval->parent = interval;
-
   new_interval->out1 = target->parent;
-
-  if(target->parent->value.type == NFA_LITERAL
-  || target->parent->value.type == NFA_LONG_LITERAL) {
-//    target->parent->value.type |= NFA_IN_INTERVAL;
-    target->parent->parent = new_interval;
-  }
-
   new_interval->out2 = accept;
 
-
-  accept->parent = start;
-
-  return accept;
-}
-
-
-NFA *
-fill_interval_nfa(NFACtrl * ctrl, NFA * target, NFA * interval, NFA * parent_interval, 
-  unsigned int min, unsigned int max)
-{
-  NFA * start = new_nfa(ctrl, NFA_EPSILON);
-  NFA * accept = new_nfa(ctrl, NFA_ACCEPTING);
-
-  start->out1 = start->out2 = target->parent;
-
-  target->value.type = NFA_EPSILON;
-  target->out2 = target->out1 = interval;
-
-  if(!interval) {
-    fatal("Expected a provisioned interval\n");
-  }
-
-
-  interval->ctrl = target->ctrl;
-  interval->value.type = NFA_INTERVAL;
-  interval->value.min_rep = min;
-  interval->value.max_rep = max;
-  interval->value.count = 0;
-  interval->parent = (interval == parent_interval) ? NULL : parent_interval;
-  interval->out1 = target->parent;
-  interval->out2 = accept;
-
-  mark_interval_nfa(interval);
 
   accept->parent = start;
 
@@ -453,7 +383,6 @@ fill_interval_nfa(NFACtrl * ctrl, NFA * target, NFA * interval, NFA * parent_int
 //  - finsih -- type: NFA *
 // SYNOPSIS:
 //  
-
 NFA *
 new_alternation_nfa(NFACtrl * ctrl, List * branches_list, unsigned int num_branches, NFA * terminator)
 {

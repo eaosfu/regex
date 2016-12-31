@@ -44,7 +44,6 @@ typedef struct NFA {
   struct NFA * out2;
   int greedy;
   unsigned int id;
-  unsigned int branch_id;
   struct {
     unsigned int type;
     union {
@@ -73,13 +72,14 @@ NFA * new_nfa(NFACtrl *, unsigned int);
 //NFA * new_simple_alternation_nfa(NFA *, NFA *);
 NFA * new_alternation_nfa(NFACtrl *, List *, unsigned int, NFA *);
 NFA * new_kleene_nfa(NFA *);
-NFA * new_literal_nfa(NFACtrl *, NFA *, unsigned int, unsigned int, unsigned int);
-NFA * new_lliteral_nfa(NFACtrl *, NFA *, char *, unsigned int, unsigned int);
+//NFA * new_literal_nfa(NFACtrl *, NFA *, unsigned int, unsigned int, unsigned int);
+NFA * new_literal_nfa(NFACtrl *, unsigned int, unsigned int);
+//NFA * new_lliteral_nfa(NFACtrl *, NFA *, char *, unsigned int, unsigned int);
+NFA * new_lliteral_nfa(NFACtrl *, char *, unsigned int);
 //NFA * new_long_literal_nfa(NFACtrl *, char *, unsigned int);
-//NFA * new_interval_nfa(NFA *, unsigned int, unsigned int);
-NFA * new_interval_nfa(NFACtrl *, NFA *, NFA *, unsigned int, unsigned int);
+NFA * new_interval_nfa(NFA *, unsigned int, unsigned int);
+//NFA * new_interval_nfa(NFACtrl *, NFA *, NFA *, unsigned int, unsigned int);
 //NFA * new_interval_nfa(NFACtrl *, NFA *, unsigned int, unsigned int);
-NFA * fill_interval_nfa(NFACtrl *, NFA *, NFA *, NFA *, unsigned int, unsigned int);
 NFA * new_posclosure_nfa(NFA *);
 NFA * new_qmark_nfa(NFA *);
 NFA * new_range_nfa(NFACtrl *, NFA *, int, unsigned int);

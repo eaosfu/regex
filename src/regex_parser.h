@@ -125,8 +125,6 @@ typedef struct Parser {
   // entering the current branch
   int branch_id;
 
-  int push_to_branch_stack;
-
   // If branch was purged... then the closing paren was consumed
   // this flag is set to avoid erroring out if a close-paren was
   // expected
@@ -146,9 +144,6 @@ typedef struct Parser {
   unsigned int next_interval_id;
   int influencing_interval;
   NFA * interval_list;
-
-  // TESTING:
-  int alt_sz;
 
   // current tokens are 'complex'
   int is_complex;

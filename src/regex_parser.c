@@ -17,10 +17,6 @@ static void regex_parser_start(Parser * parser);
 static inline void parser_consume_token(Parser * parser);
 
 
-
-// NOTE:
-// set capture_group_count to -1 to avoid having to subtrack by 1 every time
-// we need to update the the capture group list;
 Parser *
 init_parser(Scanner * scanner, ctrl_flags * cfl)
 {
@@ -39,32 +35,6 @@ init_parser(Scanner * scanner, ctrl_flags * cfl)
 }
 
 
-NFA *
-tie_branches(Parser * parser, NFA * nfa, unsigned int increment)
-{
-  if(parser->tie_branches) {
-    nfa = nfa_tie_branches(nfa, parser->branch_stack, parser->tie_branches);
-    parser->tie_branches = 0;
-    parser->subtree_branch_count = 1;
-    parser->push_to_branch_stack += increment;
-  }
-  return nfa;
-}
-
-
-void
-tie_and_push_branches(Parser * parser, NFA * nfa, unsigned int increment)
-{
-  if(parser->tie_branches) {
-    nfa = nfa_tie_branches(nfa, parser->branch_stack, parser->tie_branches);
-    parser->tie_branches = 0;
-    parser->subtree_branch_count = 1;
-    parser->push_to_branch_stack += increment;
-    push(parser->symbol_stack, nfa);
-  }
-}
-
-
 // If we are currently parsing a subexpression (i.e. '('<expression')'
 // and we know there is a backreference to this capture group
 // insert a marker node so the recognizer knows to start tracking
@@ -75,8 +45,7 @@ track_capture_group(Parser * parser, unsigned int type)
   int ret = 0;
   if(cgrp_has_backref(parser->cgrp_map, parser->current_cgrp)) {
     ret = 1;
-    NFA * right = new_literal_nfa(parser->nfa_ctrl, NULL, NFA_LITERAL, type,
-                                  parser->branch_id);
+    NFA * right = new_literal_nfa(parser->nfa_ctrl, NFA_LITERAL, type);
     NFA * left  = pop(parser->symbol_stack);
     right->parent->id = parser->cgrp_count - 1;
     push(parser->symbol_stack, concatenate_nfa(left, right));
@@ -87,15 +56,10 @@ track_capture_group(Parser * parser, unsigned int type)
     if(type == NFA_CAPTUREGRP_BEGIN) {
       ++(parser->in_complex_cgrp);
       ++(parser->is_complex);
-//printf("Entering complex cgrp %d -- interval is: %d -- next interval: %d\n",
-//  parser->current_cgrp, parser->influencing_interval, parser->next_interval_id);
-      parser->influencing_interval = parser->next_interval_id;
       ++(parser->next_interval_id);
     }
     else {
-      --(parser->influencing_interval);
       --(parser->in_complex_cgrp);
-      //parser->is_complex = (parser->in_complex_cgrp != 0);
     }
   }
 
@@ -103,7 +67,7 @@ track_capture_group(Parser * parser, unsigned int type)
     if(parser->root_cgrp == parser->current_cgrp) {
       parser->root_cgrp = 0;
     }
-    parser->current_cgrp = --(parser->current_cgrp);
+    --(parser->current_cgrp);
   }
   return ret;
 }
@@ -137,6 +101,7 @@ parse_interval_expression(Parser * parser)
 
 #define CONVERT_TO_UINT(p, interval)                                      \
   do {                                                                    \
+    int dec_pos = 0;                                                      \
     while((p)->lookahead.type == ASCIIDIGIT) {                            \
       dec_pos *= 10;                                                      \
       (interval) = ((interval) * dec_pos) + ((p)->lookahead.value - '0'); \
@@ -148,25 +113,25 @@ parse_interval_expression(Parser * parser)
 
   // handle interval expression like in '<expression>{m,n}'
   int set_max = 0;
-  int dec_pos = 0;
-  unsigned int min = 0;
-  unsigned int max = 0;
+  int min = -1;
+  int max = -1;
   NFA * interval_nfa;
   NFA * target;
   target = pop(parser->symbol_stack);
 
-  int influences_cgrp = ((get_cur_pos(parser->scanner) - 1)[0] == ')');
   int braces_balance = 0;
   
   --(parser->is_complex);
 
-//  CHECK_MULTI_QUANTIFIER_ERROR;
-
   // Loop over interval that are back to back like in:
-  // <expression>{min,Max}{min',Max'}...{min'',Max''}
+  // <expression>{min,Max}{min,Max}...{min,Max}
+  // NOTE: this does not handle cases like:
+  //   (<expression>{min,Max}){min,Max}...{min,Max}
+  //   i.e: we break out of the loop when we hit anything other than a '{'
+  //        after seeing a '}'.
   do {
-    int local_min = 0;
-    int local_max = 0;
+    int local_min = -1;
+    int local_max = -1;
     braces_balance = 0;
     parser_consume_token(parser);
     DISCARD_WHITESPACE(parser);
@@ -176,20 +141,27 @@ parse_interval_expression(Parser * parser)
     // Note we use lookahead.value instead of lookahead.type
     // since the scanner never assigns special meaning to ','
     if(parser->lookahead.value == ',') {
-      dec_pos = 0;
       parser_consume_token(parser);
       DISCARD_WHITESPACE(parser);
       CONVERT_TO_UINT(parser, local_max);
       DISCARD_WHITESPACE(parser);
-      set_max = 1;
     }
 
-    min = (min == 0) ? local_min : (local_min) ? min * local_min : min;
-    max = (max == 0) ? local_max : (local_max) ? max * local_max : max;
+    min = (min == -1) ? local_min : (local_min >= 0) ? min * local_min : min;
+    max = (max == -1) ? local_max : (local_max >= 0) ? max * local_max : max;
 
+    set_max = (max > 0) ? 1 : 0;
     if(parser->lookahead.type == CLOSEBRACE) {
       braces_balance = 1;
       parser_consume_token(parser);
+    }
+    
+    if(min == -1) {
+      // we can't combine the two intervals in cases like <expression>{,Max}{min,Max}
+      // since the first interval needs to be able to match between 0 and Max times.
+      // Combining the two would force us to match at least 'min' times which is not
+      // the intention.
+      break;
     }
   } while(parser->lookahead.type == OPENBRACE);
 
@@ -198,14 +170,8 @@ parse_interval_expression(Parser * parser)
       if((max != 0) && (min > max)) {
         fatal(INVALID_INTERVAL_EXPRESSION_ERROR);
       }
-      if(min == 0 && max == 0) {
-        // <expression>{,} ;create a kleenes closure
-        //push(parser->symbol_stack, new_kleene_nfa(pop(parser->symbol_stack)));
-        push(parser->symbol_stack, new_kleene_nfa(target));
-      }
-      else if(min == 0 && max == 1) {
+      if(min == 0 && max == 1) {
         // <expression>{0,1} ; equivalent to <expression>?
-        //push(parser->symbol_stack, new_qmark_nfa(pop(parser->symbol_stack)));
         push(parser->symbol_stack, new_qmark_nfa(target));
       }
       else if(min == 1 && max == 1) {
@@ -214,64 +180,48 @@ parse_interval_expression(Parser * parser)
       }
       else if(min == 1 && max == 0) {
         // <expression>{1,} ; equivalent to <expression>+
-        //push(parser->symbol_stack, new_posclosure_nfa(pop(parser->symbol_stack)));
         push(parser->symbol_stack, new_posclosure_nfa(target));
       }
       else {
         if(min > 0 && max == 0) {
           // <expression>{Min,} ;match at least Min, at most Infinity
-// FIXME kleene is not the right one to use here!... INSERT INTERVAL NODE
-//       HANDLE PROCESSING IN THE RECOGNIZER.
-//push(parser->symbol_stack, new_kleene_nfa(pop(parser->symbol_stack)));
-          /*
-           * interval_nfa = pop(parser->symbol_stack);
-           * push(parser->symbol_stack, new_interval_nfa(interval_nfa, min, max));
-           */
-//printf("populating interval: %d\n", parser->next_interval_id);
-          interval_nfa = new_interval_nfa(parser->nfa_ctrl, target,
-            &((parser->interval_list)[parser->next_interval_id]), min, max);
+          interval_nfa = new_interval_nfa(target, min, max);
         }
         else {
           // <expression>{,Max} ;match between 0 and Max
           // <expression>{Min,Max} ;match between Min and Max
-          /* interval_nfa = pop(parser->symbol_stack);
-           * push(parser->symbol_stack, new_interval_nfa(interval_nfa, min, max));
-           */
-//printf("-- populating interval: %d, parent interval: %d\n", parser->next_interval_id - 1, 
-//(parser->is_complex) ? parser->next_interval_id : -1);
-
-          if(influences_cgrp) {
-            // handle case like '(<expression>){min,MAX}'
-            interval_nfa = fill_interval_nfa(parser->nfa_ctrl, target,
-              PROVISIONED_INTERVAL(parser), PARENT_INTERVAL(parser), min, max);
-          }
-          else {
-            // handle case like 'a{min,MAX}'
-            interval_nfa = new_interval_nfa(parser->nfa_ctrl, target, INTERVAL(parser), min, max);
-          }
+          min = (min >= 0) ? min : 0;
+          // handle case like 'a{min,MAX}'
+          interval_nfa = new_interval_nfa(target, min, max);
         }
         push(parser->symbol_stack, interval_nfa);
       }
     }
     else {
-      if(min > 0) {
+      if(min > 0 && max == -1) {
         // <expression>{M}
-        /*
-         * interval_nfa = pop(parser->symbol_stack);
-         * push(parser->symbol_stack, new_interval_nfa(interval_nfa, min, max));
-         */
-//printf("populating interval: %d\n", parser->next_interval_id);
-          interval_nfa = new_interval_nfa(parser->nfa_ctrl, target,
-            &((parser->interval_list)[parser->next_interval_id]), min, max);
+        interval_nfa = new_interval_nfa(target, min, max);
 
-          push(parser->symbol_stack,
-            concatenate_nfa(pop(parser->symbol_stack), interval_nfa));
+        push(parser->symbol_stack,
+          concatenate_nfa(pop(parser->symbol_stack), interval_nfa));
+      }
+      else if(min == -1 && max == -1) {
+        // <expression>{,} ;create a kleenes closure
+        push(parser->symbol_stack, new_kleene_nfa(target));
       }
       else {
         // if we hit this point then min == 0 and max == 0 which is
         // essentially a 'don't match' operation; so pop the nfa
         // off of the symbol_stack
-        pop(parser->symbol_stack);
+        release_nfa(target);
+        if(parser->in_alternation) {
+          --(parser->subtree_branch_count);
+        }
+        if((list_size(parser->symbol_stack) == 0) && (parser->in_alternation == 0)) {
+          NFA * accept = new_nfa(parser->nfa_ctrl, NFA_ACCEPTING);
+          accept->parent = accept;
+          push(parser->symbol_stack, accept);
+        }
       }
     }
   }
@@ -286,73 +236,67 @@ parse_interval_expression(Parser * parser)
 void
 parse_quantifier_expression(Parser * parser)
 {
-#define CHECK_MULTI_QUANTIFIER_ERROR                                      \
-  if(quantifier_count >= 1)                                               \
-    fatal(INVALID_MULTI_MULTI_ERROR)
-
-  static int quantifier_count = 0;
-  static unsigned int last_interval_min = 0;
-  static unsigned int last_interval_max = 0;
   NFA * nfa;
 
   switch(parser->lookahead.type) {
     case PLUS: { 
-      CHECK_MULTI_QUANTIFIER_ERROR;
-      parser_consume_token(parser);
-/*
-      if(parser->tie_branches) {
-        nfa = new_alternation_nfa(parser->nfa_ctrl, parser->branch_stack,
-          parser->tie_branches, NULL);
-        parser->tie_branches = 0;
-        parser->subtree_branch_count = 1;
-      }
-      else {
-*/
-        nfa = pop(parser->symbol_stack);
-//      }
-      // point loop_nfa to nfa since this will be over-written with the SPLIT
-      // node
-push(parser->loop_nfas, nfa);
-      nfa = new_posclosure_nfa(nfa);
-      push(parser->symbol_stack, nfa);
-      quantifier_count++;
-      parse_quantifier_expression(parser);
-      quantifier_count--;
-    } break;
-    case KLEENE: {
-      CHECK_MULTI_QUANTIFIER_ERROR;
       parser_consume_token(parser);
       nfa = pop(parser->symbol_stack);
-push(parser->loop_nfas, nfa);
-      nfa = new_kleene_nfa(nfa);
-//      nfa = tie_branches(parser, nfa, 0);
+      push(parser->loop_nfas, nfa);
+      nfa = new_posclosure_nfa(nfa);
+/*
+      int kleene = 0;
+      int stop = 0;
+      while(stop == 0) {
+        switch(parser->lookahead.value) {
+          case '+': {
+            kleene = 0;
+            parser_consume_token(parser);
+          } break;
+          case '*': {
+            parser_consume_token(parser);
+            kleene = 1;
+          } break;
+          default: {
+            stop = 1;
+          }
+        }
+      }
+
+      if(kleene) {
+        nfa->parent->value.type = NFA_SPLIT;
+        nfa->parent->value.literal = '?';
+        nfa->parent->greedy = 1;
+        nfa->parent->out1 = nfa;
+      }
+*/
       push(parser->symbol_stack, nfa);
-      quantifier_count++;
       parse_quantifier_expression(parser);
-      quantifier_count--;
+    } break;
+    case KLEENE: {
+      parser_consume_token(parser);
+      nfa = pop(parser->symbol_stack);
+      push(parser->loop_nfas, nfa);
+      nfa = new_kleene_nfa(nfa);
+      push(parser->symbol_stack, nfa);
+      parse_quantifier_expression(parser);
     } break;
     case QMARK: {
       parser_consume_token(parser);
       nfa = pop(parser->symbol_stack);
       nfa = new_qmark_nfa(nfa);
-//      nfa = tie_branches(parser, nfa, 0);
       push(parser->symbol_stack, nfa);
       parse_quantifier_expression(parser);
     } break;
     case OPENBRACE: {
       parse_interval_expression(parser);
-      quantifier_count++;
       parse_quantifier_expression(parser);
-      quantifier_count--;
     } break;
     case PIPE: {
-      parser->alt_sz = list_size(parser->symbol_stack);
       // Let the parser know it is processing an alternation, this allows us
       // to properly handle backreferences
       ++(parser->in_alternation);
       parser->branch_id = parser->current_cgrp - 1;
-      // reset the quantifier_count for rhs of alternation
-      quantifier_count = 0;
       parser_consume_token(parser);
       // concatenate everything on the stack unitl we see an open paren
       // or until nothing is left on the stack
@@ -375,65 +319,41 @@ push(parser->loop_nfas, nfa);
       }
 
       if(parser->in_new_cgrp) {
-      //  parser->subtree_branch_count += (parser->subtree_branch_count == 0) ? 2: 1;
         parser->subtree_branch_count = 2;
         parser->in_new_cgrp = 0;
       }
       else {
         parser->subtree_branch_count += 1;
-      //printf("\tparser subtree count: %d -- %s\n", parser->subtree_branch_count, parser->scanner->readhead - 1);
       }
 
       // separation marker between alternation branches
       push(parser->symbol_stack, (void *)NULL);
       parse_sub_expression(parser);
-      right = pop(parser->symbol_stack);
 
-      int close_capture_group = 0;
-      if(right != 0) {
-//printf("pushing right: '%c' --- %c%s\n",
-//  right->parent->value.literal, parser->lookahead.value, parser->scanner->readhead);
-        if(right->parent->value.type == NFA_CAPTUREGRP_BEGIN) {
-          close_capture_group = 1;
- //printf("NFA CAPTURE GROUP BEGIN POPPED\n");
-        }
-        else {
-//printf("right literal: %c\n", right->parent->value.literal);
-          push(parser->branch_stack, right);
-        }
+      if(peek(parser->symbol_stack) != 0) {
+        push(parser->branch_stack, pop(parser->symbol_stack));
       }
 
-      //printf("PIPE DONE HERE\n");
       --(parser->in_alternation);
 
       if(parser->in_alternation == 0) {
         unsigned int sz = list_size(parser->branch_stack);
-//printf("TOTAL SUBTREE BRANCHES: %d -- subtree branches %d\n",
-//  list_size(parser->branch_stack), parser->subtree_branch_count);
         left = new_alternation_nfa(parser->nfa_ctrl, parser->branch_stack, sz, NULL);
         parser->subtree_branch_count = 0;
-//        parser->tie_branches = 0;
         push(parser->symbol_stack, left);
       }
       else {
-//printf("HERE!: %s subtree branches: %d -- tie branches: %d -- %s\n",
-//parser->scanner->readhead, parser->subtree_branch_count, parser->tie_branches, parser->scanner->readhead - 1);
         left = new_alternation_nfa(parser->nfa_ctrl, parser->branch_stack,
           parser->subtree_branch_count, NULL);
         push(parser->symbol_stack, left);
-//        parser->tie_branches = 0;
         parser->subtree_branch_count = 0;
       }
     } break;
-    case __EOF: {
-//printf("TIE BRANCHES?\n");
-    } break;
-//    case CLOSEPAREN: // fallthrough
-    default: {       // epsilon production
+    case __EOF: // fallthrough
+    default: {  // epsilon production
       break;
     }
   }
-#undef CHECK_MULTI_QUANTIFIER_ERROR
 }
 
 
@@ -501,7 +421,7 @@ parse_matching_list(Parser * parser, NFA * range_nfa, int negate)
       prev_token = parser->lookahead;
 
       push(parser->symbol_stack, new_literal_nfa(parser->nfa_ctrl, 
-        INTERVAL(parser), parser->lookahead.value, NFA_LITERAL, parser->branch_id));
+        parser->lookahead.value, NFA_LITERAL));
 
       parser_consume_token(parser);
     }
@@ -679,24 +599,20 @@ parse_literal_expression(Parser * parser)
   NFA * nfa;
   switch(parser->lookahead.type) {
     case DOT: {
-      nfa = new_literal_nfa(parser->nfa_ctrl, INTERVAL(parser), 
-        parser->lookahead.value, NFA_ANY, parser->branch_id);
+      nfa = new_literal_nfa(parser->nfa_ctrl, parser->lookahead.value, NFA_ANY);
       parser_consume_token(parser);
     } break;
     case DOLLAR: {
-      nfa = new_literal_nfa(parser->nfa_ctrl, INTERVAL(parser), 
-        parser->lookahead.value, NFA_EOL_ANCHOR, parser->branch_id);
+      nfa = new_literal_nfa(parser->nfa_ctrl, parser->lookahead.value, NFA_EOL_ANCHOR);
       parser_consume_token(parser);
     } break;
     case CIRCUMFLEX: {
-      nfa = new_literal_nfa(parser->nfa_ctrl, INTERVAL(parser),
-        parser->lookahead.value, NFA_BOL_ANCHOR, parser->branch_id);
+      nfa = new_literal_nfa(parser->nfa_ctrl, parser->lookahead.value, NFA_BOL_ANCHOR);
       parser_consume_token(parser);
     } break;
     default: {
        int stop = 0;
        unsigned int len = 2;
-       int followed_by_interval = 0;
        char * src = get_cur_pos(parser->scanner);
        CLEAR_ESCP_FLAG(&CTRL_FLAGS(parser));
 
@@ -743,22 +659,11 @@ parse_literal_expression(Parser * parser)
 
        SET_ESCP_FLAG(&CTRL_FLAGS(parser));
 
-       NFA * interval = NULL;
-       if((followed_by_interval == 0)
-       && (cgrp_is_complex(parser->cgrp_map, parser->current_cgrp))) {
-         interval = INTERVAL(parser);
-       }
-       else {
-         //interval = parse_interval_expression();
-       }
-
        if(len > 1) {
-         nfa = new_lliteral_nfa(parser->nfa_ctrl, interval, src, len,
-           parser->branch_id);
+         nfa = new_lliteral_nfa(parser->nfa_ctrl, src, len);
        }
        else {
-         nfa = new_literal_nfa(parser->nfa_ctrl, interval, c, NFA_LITERAL,
-           parser->branch_id);
+         nfa = new_literal_nfa(parser->nfa_ctrl, c, NFA_LITERAL);
        }
        parser_consume_token(parser);
     }
@@ -775,21 +680,13 @@ update_open_paren_accounting(Parser * parser)
   parser->in_new_cgrp = 1;
   ++(parser->paren_count);// += 1;
   parser->current_cgrp = ++(parser->cgrp_count);
-//printf("parser current cgrp: %d\n", parser->current_cgrp);
 
   if(parser->root_cgrp == 0) {
     parser->root_cgrp = parser->current_cgrp;
   }
 
   track_capture_group(parser, NFA_CAPTUREGRP_BEGIN);
-/*
-  if(parser->tie_branches) {
-    tie_and_push_branches(parser, pop(parser->symbol_stack), 
-      ((parser->push_to_branch_stack == 0) ? 2 : 1));
-  }
-*/
   subtree_branch_count = parser->subtree_branch_count;
-//printf("OPEN PAREN ACCOUNT UPDATED: %d\n", parser->subtree_branch_count);
   parser->subtree_branch_count = 0;
   return subtree_branch_count;
 }
@@ -798,10 +695,6 @@ update_open_paren_accounting(Parser * parser)
 void
 update_close_paren_accounting(Parser * parser, unsigned int subtree_br_cnt)
 {
-  if(parser->subtree_branch_count > 0) {
-    parser->tie_branches = parser->subtree_branch_count;
-  }
-//printf("CLOSE PAREN ACCOUNT UPDATED: %d\n", parser->tie_branches);
   parser->subtree_branch_count = subtree_br_cnt;
 }
 
@@ -821,47 +714,38 @@ parse_paren_expression(Parser * parser)
   push(parser->symbol_stack, (void*)NULL);
   regex_parser_start(parser);
 
-  if(parser->paren_count > 0 && parser->ignore_missing_paren == 0) {
-    if(parser->lookahead.type == CLOSEPAREN) {
-      if(parser->paren_count == 0) {
-        fatal("Unmatched ')'\n");
-      }
-      int has_backref = track_capture_group(parser, NFA_CAPTUREGRP_END);
-//printf("[%d] %s\n", parser->current_cgrp, parser->scanner->readhead);
-      --(parser->paren_count);
-      parser_consume_token(parser);
-
-      update_close_paren_accounting(parser, subtree_branch_count);
-
-      parser->in_new_cgrp = in_new_cgrp;;
-
-      NFA * right = pop(parser->symbol_stack);
-      NFA * left = NULL;
-      unsigned int sz = list_size(parser->symbol_stack);
-      while((sz > preceding_stack_size)) {
-        left =  pop(parser->symbol_stack);
-        right = concatenate_nfa(left, right);
-        --sz;
-      }
-
-      if(has_backref) {
-        right = concatenate_nfa(pop(parser->symbol_stack), right);
-      }
-
-      push(parser->symbol_stack, right);
-//printf("subtree count: %d -- %s\n", parser->subtree_branch_count, parser->scanner->readhead - 1);
-      parse_quantifier_expression(parser);
+  if(parser->lookahead.type == CLOSEPAREN) {
+    if(parser->paren_count == 0) {
+      fatal("Unmatched ')'\n");
     }
-    else {
-      fatal("--Expected ')'\n");
+    int has_backref = track_capture_group(parser, NFA_CAPTUREGRP_END);
+    --(parser->paren_count);
+    parser_consume_token(parser);
+
+    update_close_paren_accounting(parser, subtree_branch_count);
+
+    parser->in_new_cgrp = in_new_cgrp;;
+
+    NFA * right = pop(parser->symbol_stack);
+    NFA * left = NULL;
+    unsigned int sz = list_size(parser->symbol_stack);
+    while((sz > preceding_stack_size)) {
+      left =  pop(parser->symbol_stack);
+      right = concatenate_nfa(left, right);
+      --sz;
     }
+
+    if(has_backref) {
+      right = concatenate_nfa(pop(parser->symbol_stack), right);
+    }
+
+    push(parser->symbol_stack, right);
+    parse_quantifier_expression(parser);
   }
   else {
-    parse_quantifier_expression(parser);
-    update_close_paren_accounting(parser, subtree_branch_count);
+    fatal("--Expected ')'\n");
   }
-  // don't ignore another missing paren unless explicitly told to do so again.
-  parser->ignore_missing_paren = 0;
+
   return;
 }
 
@@ -896,8 +780,6 @@ parse_sub_expression(Parser * parser)
       push(parser->symbol_stack, concatenate_nfa(left, right));
     } break;
     case BACKREFERENCE: {
-      // we start capture_group_count at - 1 and only increase from there
-      // so we subtract 1 from the lookahead.value
       if(parser->lookahead.value == 0
       || (parser->lookahead.value > parser->cgrp_count)
       || (parser->current_cgrp > 0 
@@ -915,19 +797,10 @@ parse_sub_expression(Parser * parser)
       push(parser->symbol_stack, concatenate_nfa(left, right));
     } break;
     case CLOSEPAREN: // fallthrough
-    case __EOF: {
-      if(list_size(parser->symbol_stack) == 0) {
-        // we either didn't parse anything
-        // or the entire expression is an alternation
-        parser->tie_branches = 0;
+      if(parser->paren_count == 0) {
+        fatal("Unmatched ')'\n");
       }
-      return;
-    }
-    default: {
-//printf("ERROR? %c is this EOF? ==> %s\n",
-//  parser->lookahead.value,
-//  (parser->lookahead.value == EOF)? "YES": "NO");
-    } break;
+    default: /* epsilon production */ break;
   }
   return;
 }
@@ -952,7 +825,7 @@ regex_parser_start(Parser * parser)
 }
 
 
-// Pre scan the input regex looking for '\<n>' where <n> is the
+// Pre-scan the input regex looking for '\<n>' where <n> is the
 // number of the capture-group referenced by the backreference
 static void
 prescan_input(Parser * parser)
@@ -972,34 +845,7 @@ prescan_input(Parser * parser)
 
   char ** next = &(parser->scanner->readhead);
   int eol = parser->scanner->eol_symbol;
-
-  // FIXME: implement function to get scanner input length
-  unsigned int regex_length = parser->scanner->line_len - 2;
-
-///printf("regex length: %d\n", regex_length);
-
-
-
-  // A Complex-Interval is one that contains loops within the scope of the
-  // interval.
-  //
-  // Max number of possible interval expressions is length of (regex - 1)/3
-  // since simplest valid 'complex-interval' expression is: <expression>{,}
-  // for each 'complex-interval' expression store the capture-group it
-  // influences in the lower char and the index
-  char * complex_intervals = xmalloc(((regex_length - 1)/3) * 2);
-  int next_complex_interval = 0;
-
-
-  char barckrefs[CAPTURE_GROUP_MAX] = {0};
-  int next_backref = 0;
   
-  
-  unsigned int paren_count = 0;
-  unsigned int cgrp_count = 0;
-  unsigned int current_cgrp = 0;
-  unsigned int complex_interval_count = 0;
-
   if((*next)[0] != eol) {
     char c = next_char(parser->scanner);
     while(c != eol) {
@@ -1012,38 +858,14 @@ prescan_input(Parser * parser)
           c = next_char(parser->scanner);
           continue;
         } break;
-        case '(': {
-          ++paren_count;
-          ++cgrp_count;
-          current_cgrp = cgrp_count;
-          c = next_char(parser->scanner);
-        } break;
-        case ')': {
-          --paren_count;
-          c = next_char(parser->scanner);
-          if(c == '{') {
-            mark_closure_map_complex(parser->cgrp_map, current_cgrp);
-            c = next_char(parser->scanner);
-            ++complex_interval_count;
-            // record which interval affects the current cgrp
-          }
-          --current_cgrp;
-          continue;
-        } break;
         default: {
           c = next_char(parser->scanner);
         } break;
       }
     }
   }
-//printf("There are %d complex intervals\n", complex_interval_count);
-//printf("There are %d intervals\n", interval_count);
-  parser->interval_list_sz = complex_interval_count;
-  if(complex_interval_count) parser->requires_backtracking = 1;
-  parser->interval_list = malloc(sizeof(*(parser->interval_list)) * complex_interval_count);
   new_scanner_state->buffer = 0;
   new_scanner_state = scanner_pop_state(&(parser->scanner));
-// should be released to a pool
   free_scanner(new_scanner_state);
 
   return;
@@ -1128,28 +950,15 @@ parse_regex(Parser * parser)
   // FIXME: should only run this if the recognizer will be backtracking
   insert_progress_nfa(parser->loop_nfas);
 
-//printf("LEAVING PARSER\n");
   // code for converting from an NFA to a DFA would be called here
 
   return;
 }
 
 
-static inline void
-parser_free_interval_list(Parser * parser)
-{
-  for(int i = (parser->interval_list_sz - 1); i >= 0; --i) {
-    free((void *)&((parser->interval_list)[i]));
-  }
-}
-
-
 void
 parser_free(Parser * parser)
 {
-/*FIXME: 
-  free_nfa(pop(parser->symbol_stack));
-*/
   stack_delete(&(parser->symbol_stack), NULL);
   stack_delete(&(parser->branch_stack), NULL);
   free(parser->nfa_ctrl);

@@ -36,16 +36,16 @@ print_token(symbol_type s)
 {
   switch(s) {
     case ALPHA: printf("ALPHA\n"); break;
-    case CLOSEPAREN: printf(""); break;
-    case HYPHEN: printf(""); break;
+    case CLOSEPAREN: printf("CLOSEPAREN"); break;
+    case HYPHEN: printf("HYPHEN"); break;
     case KLEENE: printf("*"); break;
     case NEWLINE: printf("NEWLINE\n"); break;
-    case OPENPAREN: printf(""); break;
+    case OPENPAREN: printf("OPENPAREN"); break;
     case PIPE: printf("|"); break;
     case PLUS: printf("+"); break;
     case QMARK: printf("?"); break;
-    case SPACE: printf(""); break;
-    case TAB: printf(""); break;
+    case SPACE: printf("SPACE"); break;
+    case TAB: printf("TAB"); break;
     case __EOF: printf("EOF\n"); break;
     default: {
       printf("Unknown token type\n");
