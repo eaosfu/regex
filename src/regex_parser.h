@@ -102,12 +102,13 @@ typedef struct IntervalRecord {
 typedef struct Parser {
   Token lookahead;
   Scanner    * scanner;
-  Stack      * stack;
   Stack      * symbol_stack;
   Stack      * branch_stack;
   List       * loop_nfas;
   NFACtrl    * nfa_ctrl;
   ctrl_flags * ctrl_flags;
+
+  int loops_to_track;
 
   int requires_backtracking;
   
@@ -124,11 +125,6 @@ typedef struct Parser {
   // what is the capture group id of the last capture-group seen before
   // entering the current branch
   int branch_id;
-
-  // If branch was purged... then the closing paren was consumed
-  // this flag is set to avoid erroring out if a close-paren was
-  // expected
-  int ignore_missing_paren;
 
   // CGRP STUFF
   unsigned int cgrp_count;

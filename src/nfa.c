@@ -15,7 +15,8 @@ new_nfa_ctrl()
   nfa_ctrl->free_range = new_list();
   nfa_ctrl->ctrl_id = nfa_ctrl;
   nfa_ctrl->next_seq_id = 1;
-  nfa_ctrl->next_interval_seq_id = 1;
+  //nfa_ctrl->next_interval_seq_id = 1; // orig
+  nfa_ctrl->next_interval_seq_id = 0;
   return nfa_ctrl;
 }
 
@@ -539,9 +540,18 @@ release_nfa(NFA * nfa)
       nfa->out1 = nfa->out2 = NULL;
       (*(NFACtrl **)nfa)->last_free_nfa = nfa;
     }
+    nfa->value.type = NFA_LITERAL;
     (*(NFACtrl **)nfa)->free_nfa = nfa->parent;
   }
   return;
+}
+
+
+void *
+free_nfa_wrapper(void * arg)
+{
+  free(arg);
+  return NULL;
 }
 
 
@@ -554,18 +564,24 @@ free_nfa_helper(NFA * n, List * l, List * seen_states)
 
   if(!list_search(seen_states, n, nfa_compare_equal)) {
     list_push(seen_states, n);
-    //list_append(seen_states, n);
-    if(n->value.type & ~(NFA_SPLIT)) {
+    n->value.type &= ~NFA_PROGRESS;
+    if(n->value.type & ~(NFA_SPLIT|NFA_TREE)) {
       list_push(l, n);
       ++g_states_added;
     }
     else {
-      if((n->value.type & (NFA_SPLIT))) {
-        // n->out1 is not a loop
-        free_nfa_helper(n->out1, l, seen_states);
+      if(n->value.type & NFA_TREE) {
+        int branch_count = list_size(n->value.branches);
+        for(int i = 0; i <= branch_count; ++i) {
+          free_nfa_helper(list_shift(n->value.branches), l, seen_states);
+        }
+        list_free(&(n->value.branches), NULL);
       }
-      if(n->out2) {
-        free_nfa_helper(n->out2, l, seen_states);
+      else {
+        free_nfa_helper(n->out1, l, seen_states);
+        if(n->out2) {
+          free_nfa_helper(n->out2, l, seen_states);
+        }
       }
     }
   }
@@ -587,26 +603,21 @@ free_nfa(NFA * nfa)
   List * cur_state_set  = new_list(); 
   List * next_state_set = new_list();
   List * seen_states    = new_list();
-  NFACtrl * ctrl = (*(NFACtrl **)nfa)->ctrl_id;
+  NFACtrl * ctrl = nfa->ctrl;
   int total_states = 0;
   // step 1 - load the set of next states;
   // step 2 - delete NFAs in set of current states
   // step 3 - move NFA's in set of next states into set of current states
   // repeat until all states have been deleted
-//printf("nfa: 0x%x\n", nfa);
   g_states_added = 0;
   free_nfa_helper(nfa->parent, next_state_set, seen_states);
-//printf("FREE NFA\n");
   nfa->out2 = (*(NFACtrl **)nfa)->free_nfa;
   while(g_states_added > 0) {
-//printf("STATES ADDED: %d\n", g_states_added);
     total_states += g_states_added;
     g_states_added = 0;
     list_swap(cur_state_set, next_state_set);
     list_clear(next_state_set);
     while((nfa = list_shift(cur_state_set))) {
-    //for(int i = 0; i < cur_state_set->size; ++i) {
-      //nfa = list_get_at(cur_state_set, i);
       if((nfa = nfa->out2)){
         free_nfa_helper(nfa, next_state_set, seen_states);
       }
@@ -614,18 +625,15 @@ free_nfa(NFA * nfa)
   }
  
   NFA * del_nfa = NULL;
-//  for(int i = 0; i < seen_states->size; ++i) {
   while((del_nfa = list_shift(seen_states))) {
-    //del_nfa = list_get_at(seen_states, i);
-    if(del_nfa->value.type == NFA_RANGE) {
+    if(del_nfa->value.type & NFA_RANGE) {
       free(del_nfa->value.range);
     }
-//printf("FREEING NFA: 0x%x\n", del_nfa);
     free(del_nfa);
   }
 
   list_free(&cur_state_set, NULL);
   list_free(&next_state_set, NULL);
   list_free(&seen_states, NULL);
-  list_free(&(ctrl->free_range), (void *)free);
+  list_free(&(ctrl->free_range), &free_nfa_wrapper);
 }

@@ -178,14 +178,11 @@ parse_interval_expression(Parser * parser)
         // return unmodified target
         push(parser->symbol_stack, target);
       }
-      else if(min == 1 && max == 0) {
-        // <expression>{1,} ; equivalent to <expression>+
-        push(parser->symbol_stack, new_posclosure_nfa(target));
-      }
       else {
         if(min > 0 && max == 0) {
           // <expression>{Min,} ;match at least Min, at most Infinity
           interval_nfa = new_interval_nfa(target, min, max);
+//          ++(parser->loops_to_track);
         }
         else {
           // <expression>{,Max} ;match between 0 and Max
@@ -193,14 +190,20 @@ parse_interval_expression(Parser * parser)
           min = (min >= 0) ? min : 0;
           // handle case like 'a{min,MAX}'
           interval_nfa = new_interval_nfa(target, min, max);
+//          ++(parser->loops_to_track);
         }
         push(parser->symbol_stack, interval_nfa);
       }
     }
     else {
-      if(min > 0 && max == -1) {
+      if(min == 1 && max == -1) {
+        // <expression>{1,} ; equivalent to <expression>+
+        push(parser->symbol_stack, new_posclosure_nfa(target));
+      }
+      else if(min > 0 && max == -1) {
         // <expression>{M}
         interval_nfa = new_interval_nfa(target, min, max);
+//        ++(parser->loops_to_track);
 
         push(parser->symbol_stack,
           concatenate_nfa(pop(parser->symbol_stack), interval_nfa));
@@ -222,12 +225,16 @@ parse_interval_expression(Parser * parser)
           accept->parent = accept;
           push(parser->symbol_stack, accept);
         }
+        goto DONT_COUNT_LOOP;
       }
     }
   }
   else {
     fatal("Syntax error at interval expression. Expected '}'\n");
   }
+  ++(parser->loops_to_track);
+DONT_COUNT_LOOP:
+  return;
 #undef DISCARD_WHITESPACE
 #undef CONVERT_TO_UINT
 }
@@ -271,6 +278,7 @@ parse_quantifier_expression(Parser * parser)
       }
 */
       push(parser->symbol_stack, nfa);
+++(parser->loops_to_track);
       parse_quantifier_expression(parser);
     } break;
     case KLEENE: {
@@ -279,6 +287,7 @@ parse_quantifier_expression(Parser * parser)
       push(parser->loop_nfas, nfa);
       nfa = new_kleene_nfa(nfa);
       push(parser->symbol_stack, nfa);
+++(parser->loops_to_track);
       parse_quantifier_expression(parser);
     } break;
     case QMARK: {
@@ -286,6 +295,7 @@ parse_quantifier_expression(Parser * parser)
       nfa = pop(parser->symbol_stack);
       nfa = new_qmark_nfa(nfa);
       push(parser->symbol_stack, nfa);
+++(parser->loops_to_track);
       parse_quantifier_expression(parser);
     } break;
     case OPENBRACE: {
@@ -872,14 +882,15 @@ prescan_input(Parser * parser)
 }
 
 
-void
+int
 insert_progress_nfa(List * loop_nfas)
 {
   int sz = list_size(loop_nfas);
   if(sz < 1 ) {
-    return;
+    return 0;
   }
   int needs_progress = 0;
+  int count = 0;
   int stop = 0;
   NFA * looper = list_shift(loop_nfas);
   NFA * walker = NULL; 
@@ -919,10 +930,12 @@ insert_progress_nfa(List * loop_nfas)
       }
       if(needs_progress) {
         NFA_TRACK_PROGRESS(looper);
+        ++count;
       }
     }
     looper = list_shift(loop_nfas);
   }
+  return count;
 }
 
 
@@ -948,7 +961,7 @@ parse_regex(Parser * parser)
   }
 
   // FIXME: should only run this if the recognizer will be backtracking
-  insert_progress_nfa(parser->loop_nfas);
+  parser->loops_to_track += insert_progress_nfa(parser->loop_nfas);
 
   // code for converting from an NFA to a DFA would be called here
 
@@ -959,8 +972,10 @@ parse_regex(Parser * parser)
 void
 parser_free(Parser * parser)
 {
+  free_nfa(((NFA *)peek(parser->symbol_stack)));
   stack_delete(&(parser->symbol_stack), NULL);
   stack_delete(&(parser->branch_stack), NULL);
+  list_free(&(parser->loop_nfas), NULL);
   free(parser->nfa_ctrl);
   free(parser);
 }

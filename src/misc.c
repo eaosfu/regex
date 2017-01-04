@@ -19,9 +19,9 @@ warn(const char * msg)
 
 void *
 xmalloc(unsigned int sz) {
-  void * n = malloc(sz);
+  void * n = calloc(1, sz);
   if(n == NULL) {
     fatal("Out of memeory");
   }
-  return  memset(n, 0, sz);
+  return  n;
 }
