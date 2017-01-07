@@ -19,8 +19,7 @@
   #endif
 #endif
 
-#define MINIMUM_COMPLEX_REGEX_LENGTH 5
-
+//#define MINIMUM_COMPLEX_REGEX_LENGTH 5
 
 #if((((MAX_REGEX_LENGTH - 1)) % UINT_BITS) == 0)
   #define CGRP_MAP_SIZE                        \
@@ -45,11 +44,11 @@
   
 // Return 1 if capture group under the influence of an
 // interval expression and also contains loops
-#define cgrp_is_complex(cgrp, i)                                    \
+#define cgrp_is_complex(cgrp, i) \
   (cgrp[CGRP_MAP_BLOCK((i))] & (0x001 << CGRP_MAP_CHUNK((i))))
 
 // Return 1 if capture group i is backreferenced
-#define cgrp_has_backref(cgrp, i)                                    \
+#define cgrp_has_backref(cgrp, i) \
   (cgrp[CGRP_MAP_BLOCK((i))] & (0x001 << (CGRP_MAP_CHUNK((i)) + 1)))
 
 
@@ -81,21 +80,21 @@
     : NULL                                                             \
   : NULL)
 
-#define PARENT_INTERVAL(p)                                            \
-  ((p->is_complex)                                                    \
-  ? ((p)->next_interval_id <= (p->interval_list_sz))                  \
-    ? (&((p)->interval_list[(p)->next_interval_id - 1]))              \
-    : NULL                                                            \
+#define PARENT_INTERVAL(p)                                             \
+  ((p->is_complex)                                                     \
+  ? ((p)->next_interval_id <= (p->interval_list_sz))                   \
+    ? (&((p)->interval_list[(p)->next_interval_id - 1]))               \
+    : NULL                                                             \
   : NULL)
-
 
 #define NFA_TRACK_PROGRESS(nfa) ((nfa)->value.type |= NFA_PROGRESS)
 
+
 typedef struct IntervalRecord {
   NFA * node;
-  unsigned int min_rep;
-  unsigned int max_rep;
-  unsigned int count;
+  int min_rep;
+  int max_rep;
+  int count;
 } IntervalRecord;
 
 
@@ -126,26 +125,22 @@ typedef struct Parser {
   // entering the current branch
   int branch_id;
 
-  // CGRP STUFF
-  unsigned int cgrp_count;
+  // Capture-Group Stuff
+  int cgrp_count;
   int root_cgrp;
   int current_cgrp;
   int in_new_cgrp;
-  int in_alternation;
-  int in_complex_cgrp;
 
-  // INTERVAL STUFF
+  // Alternation Stuff
+  int in_alternation;
+  int total_branch_count;
+  int distinct_branch_points;
+
+  // Interval Stuff
   int interval_list_sz;
-  int in_cmplex_interval;
-  unsigned int next_interval_id;
+  int next_interval_id;
   int influencing_interval;
   NFA * interval_list;
-
-  // current tokens are 'complex'
-  int is_complex;
-
-  // Flag to indicate whether to use backtracking or not
-  int use_backtracking;
 
   int cgrp_map[CGRP_MAP_SIZE];
 } Parser;
@@ -153,6 +148,6 @@ typedef struct Parser {
 
 Parser * init_parser(Scanner *, ctrl_flags *);
 void parser_free(Parser *);
-void parse_regex(Parser *);
+int parse_regex(Parser *);
 
 #endif

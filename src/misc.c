@@ -17,6 +17,7 @@ warn(const char * msg)
   fprintf(stderr, "WARNING: %s", msg);
 }
 
+
 void *
 xmalloc(unsigned int sz) {
   void * n = calloc(1, sz);

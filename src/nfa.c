@@ -1,4 +1,3 @@
-// TODO: implement nfa_pool
 #include <stdlib.h>
 #include <string.h>
 #include "stack.h"
@@ -15,7 +14,6 @@ new_nfa_ctrl()
   nfa_ctrl->free_range = new_list();
   nfa_ctrl->ctrl_id = nfa_ctrl;
   nfa_ctrl->next_seq_id = 1;
-  //nfa_ctrl->next_interval_seq_id = 1; // orig
   nfa_ctrl->next_interval_seq_id = 0;
   return nfa_ctrl;
 }
@@ -174,9 +172,8 @@ new_range_nfa(NFACtrl * ctrl, NFA * interval, int negate, unsigned int branch_id
  
   if(interval) {
     start->parent = interval;
-    //start->value.type |= NFA_IN_INTERVAL;
   }
-//  start->branch_id = branch_id;
+
   start->value.range = xmalloc(sizeof *(start->value.range));
 
   if(negate) {
@@ -198,6 +195,7 @@ new_lliteral_nfa(NFACtrl * ctrl, char * src, unsigned int len)
 {
   NFA * start    = new_nfa(ctrl, NFA_EPSILON);
   NFA * lliteral = xmalloc(sizeof(*lliteral)+ len + 1);
+//  NFA * lliteral = malloc(sizeof(*lliteral)+ len + 1);
   NFA * accept   = new_nfa(ctrl, NFA_ACCEPTING);
 
   start->out1 = start->out2 = lliteral;
@@ -219,7 +217,6 @@ new_lliteral_nfa(NFACtrl * ctrl, char * src, unsigned int len)
 
 
 NFA *
-//new_literal_nfa(NFACtrl * ctrl, NFA * interval, unsigned int literal, unsigned int type, unsigned int branch_id)
 new_literal_nfa(NFACtrl * ctrl, unsigned int literal, unsigned int type)
 {
   NFA * start;
@@ -227,15 +224,7 @@ new_literal_nfa(NFACtrl * ctrl, unsigned int literal, unsigned int type)
 
   start = new_nfa(ctrl, type);
 
-//  start->branch_id = branch_id;
-
   mark_nfa(start);
- /* 
-  if(interval) {
-    start->parent = interval;
-//    start->value.type |= NFA_IN_INTERVAL;
-  }
-*/
   start->value.literal = literal;
   start->out1 = start->out2 = accept;
 
@@ -253,7 +242,6 @@ new_backreference_nfa(NFACtrl * ctrl, NFA * interval, unsigned int capture_group
 
   start->parent = interval;
   start->id = capture_group_id;
-//  start->branch_id = branch_id;
   start->out1 = start->out2 = accept;
 
   accept->parent = start;
@@ -280,7 +268,12 @@ new_kleene_nfa(NFA * body)
   body->value.literal = '*';
   body->out1 = body->parent;
   body->out2 = accept;
-
+  // tighten loop
+/*/
+  NFA * target = body->parent;
+  while((target->value.type == NFA_EPSILON) && (target = target->out2));
+  body->out1 = target;
+*/
   accept->parent = start;
 
   return accept;
@@ -325,8 +318,14 @@ new_posclosure_nfa(NFA * body)
   mark_interval_nfa(body);
   body->value.literal = '+';
   body->out1 = body->parent;
-  body->out2 = accept;
+  // tighten loop
+/*
+  NFA * target = body->parent;
+  while((target->value.type == NFA_EPSILON) && (target = target->out2));
+  body->out1 = target;
+*/
 
+  body->out2 = accept;
   accept->parent = start;
 
   return accept;
@@ -422,57 +421,6 @@ new_alternation_nfa(NFACtrl * ctrl, List * branches_list, unsigned int num_branc
 }
 
 
-NFA *
-nfa_tie_branches(NFA * target, List * branches_list, unsigned int num_branches)
-{
-#ifdef DEBUG_OR_TEST
-  if(target == 0 || branches_list == 0 || num_branches < 2) {
-    // should never hit this condiiton
-    fatal("No branches in alternation\n");
-  }
-#else
-#endif
-
-  return new_alternation_nfa(target->ctrl, branches_list, num_branches, target);
-}
-
-
-/*
-NFA *
-new_alternation_nfa(NFA * nfa1, NFA * nfa2)
-{
-
-  if(nfa1 == NULL) {
-    return nfa2;
-  }
-  if(nfa2 == NULL) {
-    return nfa1;
-  }
-
-  if(nfa1->ctrl != nfa2->ctrl) {
-    fatal("Alternation between different nfa families not allowed\n");
-  }
-  NFA * start  = new_nfa(nfa1->ctrl, NFA_SPLIT);
-  NFA * accept = new_nfa(nfa1->ctrl, NFA_ACCEPTING);
-//  accept->value.type |= NFA_MERGE_NODE;
-
-  // set the accepting states of nfa1 and nfa2 to type EPSILON so we
-  // don't confuse them for ACCEPTING states when we simulate the NFA
-  nfa1->value.type = nfa2->value.type = NFA_EPSILON;
-  nfa1->out1 = nfa1->out2 = nfa2->out1 = nfa2->out2 = accept;
-  accept->parent = start;
-
-  // nfa1->parent is the start state for nfa1; likewise for nfa2
-  start->value.literal = '|';
-  start->out1 = nfa1->parent;
-  start->out2 = nfa2->parent;
-
-  return accept;
-}
-*/
-
-
-// FIXME not doing this properly, so getting duplicates!!!
 //
 // FUNCTION: concatenate_nfa:
 // INPUT:
@@ -481,8 +429,6 @@ new_alternation_nfa(NFA * nfa1, NFA * nfa2)
 //  - finsih -- type: NFA *
 // SYNOPSIS:
 //  
-// TOOD: IMPLEMENT A MORE EFFICIENT USE OF MEMEORY MANAGEMENT
-//       SO WE DON'T HAVE TO CALL FREE.
 NFA *
 concatenate_nfa(NFA * prev, NFA * next)
 {

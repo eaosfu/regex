@@ -6,7 +6,6 @@
 #include "errmsg.h"
 #include "regex_parser.h"
 
-#include <stdio.h>
 
 static void parse_paren_expression(Parser * parser);
 static void parse_literal_expression(Parser * parser);
@@ -54,12 +53,7 @@ track_capture_group(Parser * parser, unsigned int type)
   if(cgrp_is_complex(parser->cgrp_map, parser->current_cgrp)) {
     ret = 2;
     if(type == NFA_CAPTUREGRP_BEGIN) {
-      ++(parser->in_complex_cgrp);
-      ++(parser->is_complex);
       ++(parser->next_interval_id);
-    }
-    else {
-      --(parser->in_complex_cgrp);
     }
   }
 
@@ -121,8 +115,6 @@ parse_interval_expression(Parser * parser)
 
   int braces_balance = 0;
   
-  --(parser->is_complex);
-
   // Loop over interval that are back to back like in:
   // <expression>{min,Max}{min,Max}...{min,Max}
   // NOTE: this does not handle cases like:
@@ -163,7 +155,7 @@ parse_interval_expression(Parser * parser)
       // the intention.
       break;
     }
-  } while(parser->lookahead.type == OPENBRACE);
+  } while(braces_balance && (parser->lookahead.type == OPENBRACE));
 
   if(braces_balance) {
     if(set_max) {
@@ -182,15 +174,12 @@ parse_interval_expression(Parser * parser)
         if(min > 0 && max == 0) {
           // <expression>{Min,} ;match at least Min, at most Infinity
           interval_nfa = new_interval_nfa(target, min, max);
-//          ++(parser->loops_to_track);
         }
         else {
           // <expression>{,Max} ;match between 0 and Max
           // <expression>{Min,Max} ;match between Min and Max
           min = (min >= 0) ? min : 0;
-          // handle case like 'a{min,MAX}'
           interval_nfa = new_interval_nfa(target, min, max);
-//          ++(parser->loops_to_track);
         }
         push(parser->symbol_stack, interval_nfa);
       }
@@ -203,7 +192,6 @@ parse_interval_expression(Parser * parser)
       else if(min > 0 && max == -1) {
         // <expression>{M}
         interval_nfa = new_interval_nfa(target, min, max);
-//        ++(parser->loops_to_track);
 
         push(parser->symbol_stack,
           concatenate_nfa(pop(parser->symbol_stack), interval_nfa));
@@ -278,7 +266,7 @@ parse_quantifier_expression(Parser * parser)
       }
 */
       push(parser->symbol_stack, nfa);
-++(parser->loops_to_track);
+      ++(parser->loops_to_track);
       parse_quantifier_expression(parser);
     } break;
     case KLEENE: {
@@ -287,7 +275,7 @@ parse_quantifier_expression(Parser * parser)
       push(parser->loop_nfas, nfa);
       nfa = new_kleene_nfa(nfa);
       push(parser->symbol_stack, nfa);
-++(parser->loops_to_track);
+      ++(parser->loops_to_track);
       parse_quantifier_expression(parser);
     } break;
     case QMARK: {
@@ -295,7 +283,7 @@ parse_quantifier_expression(Parser * parser)
       nfa = pop(parser->symbol_stack);
       nfa = new_qmark_nfa(nfa);
       push(parser->symbol_stack, nfa);
-++(parser->loops_to_track);
+      ++(parser->loops_to_track);
       parse_quantifier_expression(parser);
     } break;
     case OPENBRACE: {
@@ -303,8 +291,7 @@ parse_quantifier_expression(Parser * parser)
       parse_quantifier_expression(parser);
     } break;
     case PIPE: {
-      // Let the parser know it is processing an alternation, this allows us
-      // to properly handle backreferences
+      parser->total_branch_count += (parser->in_alternation != 0) ? 1 : 2;
       ++(parser->in_alternation);
       parser->branch_id = parser->current_cgrp - 1;
       parser_consume_token(parser);
@@ -360,7 +347,8 @@ parse_quantifier_expression(Parser * parser)
       }
     } break;
     case __EOF: // fallthrough
-    default: {  // epsilon production
+    default: {
+      // epsilon production
       break;
     }
   }
@@ -387,13 +375,11 @@ token_in_charclass(unsigned int element, int reset)
   for(; i < used_charclass_slots; ++i) {
     if(element == charclass[i]) {
       found = 1;
-//printf("\%c(t0x%x) FOUND IN CHARCLASS AT idx: %d = 0x%x\n", element, element, i, charclass[i]);
       break;
     }
   }
 
   if(found == 0) {
-//printf("\t\t%c(0x%x) INSERTED INTO CHARCLASS AT idx: %d = 0x%x\n", element, element, i, charclass[i]);
     charclass[i] = element;
     used_charclass_slots++;
   }
@@ -457,14 +443,12 @@ parse_matching_list(Parser * parser, NFA * range_nfa, int negate)
     if(coll_str_len <= 0) {
       return;
     }
-//printf("\t3 TESTING: %s\n", str_start);
     char * collation_string = strndup(str_start, coll_str_len);
  
     // We've successfully parsed a collation class
     switch(delim) {
       case COLON: {
         // handle expression like '[[:alpha:]]'
-//printf("COLON: HERE: prev_token: %c, lookahead: %c\n", prev_token.value, lookahead.value);
         if(update_range_w_collation(collation_string, coll_str_len, range_nfa, negate) == 0) {
           fatal(UNKNOWN_CHARCLASS_ERROR);
         }
@@ -484,9 +468,7 @@ parse_matching_list(Parser * parser, NFA * range_nfa, int negate)
     free(collation_string);
   }
   else if(prev_token.type == CLOSEBRACKET && matching_list_len > 0) {
-//printf("--HERE: prev_token: %c, lookahead: %c\n", prev_token.value, lookahead.value);
     parser_backtrack(parser);
-//printf("NOW: lookahead: %c\n", parser->lookahead.value);
     return;
   }
   else if(lookahead.type == __EOF) {
@@ -495,7 +477,6 @@ parse_matching_list(Parser * parser, NFA * range_nfa, int negate)
     return;
   }
   else {
-//printf("HERE: prev_token: %c, lookahead: %c\n", prev_token.value, lookahead.value);
     if(lookahead.type == HYPHEN) {
       // process a range expression like [a-z], [a-Z], [A-Z], etc.
       int range_invalid = 1;
@@ -551,17 +532,14 @@ parse_bracket_expression(Parser * parser)
   // use this as the new bottom of the stack
   void * open_delim_p = (void *)NULL;
   push(parser->symbol_stack, open_delim_p);
+  // disable scanning escape sequences
   CLEAR_ESCP_FLAG(&CTRL_FLAGS(parser));
   parser_consume_token(parser);
-//printf("PARSE BRACKET EXPRESSION\n");
   
-  // disable scanning escape sequences
   int negate_match = 0;
-//printf("\tTOKEN: %c\n", parser->lookahead.value);
   if(parser->lookahead.type == CIRCUMFLEX) {
     parser_consume_token(parser);
     negate_match = 1;
-//printf("NEGATE MATCH!\n");
   }
 
   NFA * range_nfa = new_range_nfa(parser->nfa_ctrl, INTERVAL(parser), negate_match, parser->branch_id);
@@ -577,11 +555,9 @@ parse_bracket_expression(Parser * parser)
     token_in_charclass(0, 1); 
     
     // re-enable scanning escape sequences
-   // parser->scanner->parse_escp_seq = 1;
     SET_ESCP_FLAG(parser->ctrl_flags);
 
     parser_consume_token(parser);
-//printf("HERE2: LOOKAHEAD NOW %c\n", parser->lookahead.value);
     NFA * right = pop(parser->symbol_stack);
 
     if(right == open_delim_p) {
@@ -595,11 +571,8 @@ parse_bracket_expression(Parser * parser)
     }
     
     push(parser->symbol_stack, right);
-//printf("PUSHED NFA BACK ONTO STACK: symbol stack top: 0x%x\n", peek(parser->symbol_stack));
     parse_quantifier_expression(parser);
   }
-
-//printf("done bracket expression: lookahead now: %c\n", parser->lookahead.value);
 }
 
 
@@ -688,7 +661,7 @@ update_open_paren_accounting(Parser * parser)
 {
   unsigned int subtree_branch_count;
   parser->in_new_cgrp = 1;
-  ++(parser->paren_count);// += 1;
+  ++(parser->paren_count);
   parser->current_cgrp = ++(parser->cgrp_count);
 
   if(parser->root_cgrp == 0) {
@@ -810,7 +783,9 @@ parse_sub_expression(Parser * parser)
       if(parser->paren_count == 0) {
         fatal("Unmatched ')'\n");
       }
-    default: /* epsilon production */ break;
+    default: {
+      // epsilon production
+    } break;
   }
   return;
 }
@@ -837,48 +812,52 @@ regex_parser_start(Parser * parser)
 
 // Pre-scan the input regex looking for '\<n>' where <n> is the
 // number of the capture-group referenced by the backreference
-static void
+static int
 prescan_input(Parser * parser)
 {
-  if(parser->scanner->line_len < MINIMUM_COMPLEX_REGEX_LENGTH) {
-    return;
+  int line_len = parser->scanner->line_len;
+
+  if(line_len > MAX_REGEX_LENGTH || line_len == 1) {
+    return 0;
   }
 
-  Scanner * new_scanner_state = init_scanner(
-    parser->scanner->buffer,
-    parser->scanner->buf_len,
-    parser->scanner->line_len,
-    parser->scanner->ctrl_flags
-  );
+  if(line_len > 0) {
+    Scanner * new_scanner_state = init_scanner(
+      parser->scanner->buffer,
+      parser->scanner->buf_len,
+      parser->scanner->line_len,
+      parser->scanner->ctrl_flags
+    );
 
-  scanner_push_state(&(parser->scanner), new_scanner_state);
+    scanner_push_state(&(parser->scanner), new_scanner_state);
 
-  char ** next = &(parser->scanner->readhead);
-  int eol = parser->scanner->eol_symbol;
-  
-  if((*next)[0] != eol) {
-    char c = next_char(parser->scanner);
-    while(c != eol) {
-      switch(c) {
-        case '\\': {
-          c = next_char(parser->scanner);
-          if(isdigit(c)) {
-            mark_closure_map_backref(parser->cgrp_map, c - '0');
-          }
-          c = next_char(parser->scanner);
-          continue;
-        } break;
-        default: {
-          c = next_char(parser->scanner);
-        } break;
+    char ** next = &(parser->scanner->readhead);
+    int eol = parser->scanner->eol_symbol;
+    
+    if((*next)[0] != eol) {
+      char c = next_char(parser->scanner);
+      while(c != eol) {
+        switch(c) {
+          case '\\': {
+            c = next_char(parser->scanner);
+            if(isdigit(c)) {
+              mark_closure_map_backref(parser->cgrp_map, c - '0');
+            }
+            c = next_char(parser->scanner);
+            continue;
+          } break;
+          default: {
+            c = next_char(parser->scanner);
+          } break;
+        }
       }
     }
+    new_scanner_state->buffer = 0;
+    new_scanner_state = scanner_pop_state(&(parser->scanner));
+    free_scanner(new_scanner_state);
   }
-  new_scanner_state->buffer = 0;
-  new_scanner_state = scanner_pop_state(&(parser->scanner));
-  free_scanner(new_scanner_state);
 
-  return;
+  return 1;
 }
 
 
@@ -939,33 +918,34 @@ insert_progress_nfa(List * loop_nfas)
 }
 
 
-void
+int
 parse_regex(Parser * parser)
 {
   if(parser == 0) {
     fatal("No parser provided\n");
   }
 
-  prescan_input(parser);
-  regex_parser_start(parser);
+  int ret = 0;
 
-  if(parser->symbol_stack->size > 1) {
-    NFA * right = pop(parser->symbol_stack);
-    NFA * left  = pop(parser->symbol_stack);
-    right = concatenate_nfa(left, right);
-    while(parser->symbol_stack->size > 0) {
-      left = pop(parser->symbol_stack);
+  if(prescan_input(parser)) {
+    regex_parser_start(parser);
+
+    if(parser->symbol_stack->size > 1) {
+      NFA * right = pop(parser->symbol_stack);
+      NFA * left  = pop(parser->symbol_stack);
       right = concatenate_nfa(left, right);
+      while(parser->symbol_stack->size > 0) {
+        left = pop(parser->symbol_stack);
+        right = concatenate_nfa(left, right);
+      }
+      push(parser->symbol_stack, right);
     }
-    push(parser->symbol_stack, right);
+
+    parser->loops_to_track += insert_progress_nfa(parser->loop_nfas);
+    ret = 1;
   }
 
-  // FIXME: should only run this if the recognizer will be backtracking
-  parser->loops_to_track += insert_progress_nfa(parser->loop_nfas);
-
-  // code for converting from an NFA to a DFA would be called here
-
-  return;
+  return ret;
 }
 
 
