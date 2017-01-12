@@ -466,7 +466,6 @@ list_chop(List * list, unsigned int sz)
   return chopped;
 }
 
-
 void
 list_iterate(List * list, VISIT_PROC_pt action)
 {
@@ -475,7 +474,8 @@ list_iterate(List * list, VISIT_PROC_pt action)
   }
 
   ListItem * li = list->head;
-  for(int i = 0; i < list->size; ++i) {
+  int upper_bound = list->size;
+  for(int i = 0; i < upper_bound; ++i) {
     action((void *)(li->data));
     li = li->next;
   }
