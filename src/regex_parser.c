@@ -328,7 +328,6 @@ parse_quantifier_expression(Parser * parser)
       parse_sub_expression(parser);
 
       if(peek(parser->symbol_stack) != 0) {
-//        push(parser->branch_stack, pop(parser->symbol_stack));
         NFA * right = pop(parser->symbol_stack);
         NFA * left  = pop(parser->symbol_stack);
         while(left != NULL) {
