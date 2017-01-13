@@ -3,14 +3,33 @@
 use strict;
 use warnings;
 
+my $diff_dir = "./diff";
+my $grep_output_dir = "./grep_output";
+my $regex_output_dir = "./regex_output";
+my $regex_input_dir = "./regex_input";
+
+
+# check that the requisite directories exist
+foreach (("$diff_dir", "$grep_output_dir", "$regex_output_dir", "$regex_input_dir")) {
+  if( -d $_ ) {
+    continue;
+  }
+  else {
+    mkdir($_) or die "Unable to create dir: $_\n";
+  }
+}
+
 my $regex = "./test_r2.txt";
 my $src = "./test_input";
 
 my $test_num = 0;
 my %tests;
 
+
 open(FH, "<", $regex) or die "Unable to open file $regex: $!\n";
+
 my $inputs = 0;
+
 while(<FH>) {
   chomp($_);
   if($_ =~ /^grep:\s+(.*)/) {
