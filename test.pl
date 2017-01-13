@@ -9,6 +9,20 @@ my $src = "./test_input";
 my $test_num = 0;
 my %tests;
 
+my $test_dir = "./tests";
+my $diff_dir = "$test_dir/diff";
+my $grep_output_dir = "$test_dir/grep_output";
+my $regex_output_dir = "$test_dir/regex_output";
+my $regex_input_dir = "$test_dir/regex_input";
+
+
+# check that the requisite directories exist
+foreach (("$diff_dir", "$grep_output_dir", "$regex_output_dir", "$regex_input_dir")) {
+  if( ! -d $_ ) {
+    mkdir($_) or die "Unable to create dir: $_\n";
+  }
+}
+
 open(FH, "<", $regex) or die "Unable to open file $regex: $!\n";
 my $inputs = 0;
 while(<FH>) {
