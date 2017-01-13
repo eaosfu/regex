@@ -44,8 +44,8 @@ print_token(symbol_type s)
     case PIPE: printf("|"); break;
     case PLUS: printf("+"); break;
     case QMARK: printf("?"); break;
-    case SPACE: printf("SPACE"); break;
-    case TAB: printf("TAB"); break;
+//    case SPACE: printf("SPACE"); break;
+//    case TAB: printf("TAB"); break;
     case __EOF: printf("EOF\n"); break;
     default: {
       printf("Unknown token type\n");

@@ -239,32 +239,6 @@ parse_quantifier_expression(Parser * parser)
       nfa = pop(parser->symbol_stack);
       push(parser->loop_nfas, nfa);
       nfa = new_posclosure_nfa(nfa);
-/*
-      int kleene = 0;
-      int stop = 0;
-      while(stop == 0) {
-        switch(parser->lookahead.value) {
-          case '+': {
-            kleene = 0;
-            parser_consume_token(parser);
-          } break;
-          case '*': {
-            parser_consume_token(parser);
-            kleene = 1;
-          } break;
-          default: {
-            stop = 1;
-          }
-        }
-      }
-
-      if(kleene) {
-        nfa->parent->value.type = NFA_SPLIT;
-        nfa->parent->value.literal = '?';
-        nfa->parent->greedy = 1;
-        nfa->parent->out1 = nfa;
-      }
-*/
       push(parser->symbol_stack, nfa);
       ++(parser->loops_to_track);
       parse_quantifier_expression(parser);

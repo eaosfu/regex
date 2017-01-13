@@ -12,7 +12,7 @@ typedef enum {
   COLON,
   DOT,
   DOLLAR,
-  EMPTY,
+//  EMPTY,
   EQUAL,
   HYPHEN,
   KLEENE,
@@ -23,8 +23,8 @@ typedef enum {
   PIPE,
   PLUS,
   QMARK,
-  SPACE,
-  TAB,
+//  SPACE,
+//  TAB,
   __EOF
 } symbol_type;
 
