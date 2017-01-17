@@ -221,7 +221,8 @@ regex_scan(Scanner * s)
   }
 // FOR TESTING DONE
 
-  while(ret != 1 && (c = next_char(s)) != s->eol_symbol) {
+  //while(ret != 1 && (c = next_char(s)) != s->eol_symbol) {
+  while(ret != 1 && (c = next_char(s)) != '\0') {
     switch(c) {
       case '0' : // fallthrough
       case '1' : // fallthrough

@@ -28,7 +28,6 @@ typedef struct Match {
 
 
 typedef struct BacktrackRecord {
-  int next_branch;
   int count;
   char * input;
   char * match;
@@ -47,6 +46,7 @@ typedef struct NFASim {
   int sp;
   int size;
   int tracked_loop_count;
+  int status;
   char * input_ptr;
   NFA * ip;
   NFA * start_state;
@@ -73,10 +73,11 @@ typedef struct NFASimCtrl {
 
 
 int  run_nfa(NFASim *);
-int  get_states(NFASim *, NFA *, List *, int, int, unsigned int);
-void new_matched_string(NFASim *, int, int);
 void free_nfa_sim(NFASim *);
 void * free_match_string(void *);
+void new_matched_string(NFASim *, int, int);
+void reset_nfa_sim(NFASim * sim, NFA * start_state);
 NFASim * new_nfa_sim(Parser *, Scanner *, ctrl_flags *);
+int  get_states(NFASim *, NFA *, List *, int, int, unsigned int);
 
 #endif

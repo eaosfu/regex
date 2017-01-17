@@ -21,3 +21,21 @@
 
 #define UNKNOWN_CHARCLASS_ERROR \
 "Unrecognized character-class\n"
+
+#define MISSING_OPEN_BRACE \
+"Missing opening brace pair"
+
+#define MISSING_CLOSE_PAREN \
+"Missing closing paren"
+
+#define MISSING_CLOSE_BRACKET \
+"Missing closing bracket"
+
+#define MISSING_CLOSE_BRACE \
+"Missing closing brace"
+
+#define INVALID_BACKREF \
+"Invalid back-reference"
+
+#define INVALID_PARSE_START \
+"Expected char or '('"

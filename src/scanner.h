@@ -65,7 +65,7 @@ typedef struct Scanner {
 Token * regex_scan(Scanner *);
 Scanner * init_scanner(char *, unsigned int, unsigned int, ctrl_flags *);
 void unput(Scanner *);
-void reset(Scanner *);
+//void reset(Scanner *);
 void free_scanner(Scanner *);
 void restart_from(Scanner *, char *);
 void reset_scanner(Scanner *);

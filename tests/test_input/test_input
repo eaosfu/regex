@@ -971,7 +971,7 @@ azzzzzxz
     printf("\n--> RUNNING NFA SIMULAITON\n\n");
 
     //NFA * nfa = pop(parser->symbol_stack);
-test    //NFASim * nfatestonetwo_sim = new_nfa_sim(nfa, target);133
+    //NFASim * nfa_sim = new_nfa_sim(nfa, target);
 
     nfa_sim = new_nfa_sim(peek(parser->symbol_stack), target);
     run_nfa(nfa_sim);

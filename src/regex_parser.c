@@ -6,6 +6,9 @@
 #include "errmsg.h"
 #include "regex_parser.h"
 
+#define REGEX (parser->scanner->buffer)
+#define READHEAD (parser->scanner->readhead)
+
 
 static void parse_paren_expression(Parser * parser);
 static void parse_literal_expression(Parser * parser);
@@ -218,7 +221,8 @@ parse_interval_expression(Parser * parser)
     }
   }
   else {
-    fatal("Syntax error at interval expression. Expected '}'\n");
+    //parser_fatal("Syntax error at interval expression. Expected '}'", REGEX, READHEAD, 0);
+    parser_fatal(MISSING_CLOSE_BRACE, REGEX, READHEAD, 0);
   }
   ++(parser->loops_to_track);
 DONT_COUNT_LOOP:
@@ -529,7 +533,8 @@ parse_bracket_expression(Parser * parser)
   parse_matching_list(parser, range_nfa->parent, negate_match);
 
   if(parser->lookahead.type != CLOSEBRACKET) {
-    fatal("Expected ]\n");
+    //fatal("Expected ]\n");
+    parser_fatal(MISSING_CLOSE_BRACKET, REGEX, READHEAD, 0);
   }
   else {
     // resets charclass array
@@ -680,7 +685,8 @@ parse_paren_expression(Parser * parser)
 
   if(parser->lookahead.type == CLOSEPAREN) {
     if(parser->paren_count == 0) {
-      fatal("Unmatched ')'\n");
+      //fatal("Unmatched ')'\n");
+      parser_fatal(MISSING_CLOSE_PAREN, REGEX, READHEAD, 0);
     }
     int has_backref = track_capture_group(parser, NFA_CAPTUREGRP_END);
     --(parser->paren_count);
@@ -707,7 +713,7 @@ parse_paren_expression(Parser * parser)
     parse_quantifier_expression(parser);
   }
   else {
-    fatal("--Expected ')'\n");
+    parser_fatal(MISSING_CLOSE_PAREN, REGEX, READHEAD, 0);
   }
 
   return;
@@ -748,7 +754,7 @@ parse_sub_expression(Parser * parser)
       || (parser->lookahead.value > parser->cgrp_count)
       || (parser->current_cgrp > 0 
          && parser->lookahead.value == parser->root_cgrp)) {
-        fatal("Invalid back-reference\n");
+        parser_fatal(INVALID_BACKREF, REGEX, (READHEAD), -1);
       }
       left = new_backreference_nfa(parser->nfa_ctrl, INTERVAL(parser),
         parser->lookahead.value, parser->branch_id);
@@ -760,9 +766,13 @@ parse_sub_expression(Parser * parser)
       left = pop(parser->symbol_stack);
       push(parser->symbol_stack, concatenate_nfa(left, right));
     } break;
+    case CLOSEBRACE: {
+      parser_fatal(MISSING_OPEN_BRACE, REGEX, READHEAD, 0);
+    } break;
     case CLOSEPAREN: // fallthrough
       if(parser->paren_count == 0) {
-        fatal("Unmatched ')'\n");
+        parser_fatal(MISSING_CLOSE_PAREN, REGEX, READHEAD, 0);
+        //fatal("Unmatched ')'\n");
       }
     default: {
       // epsilon production
@@ -786,7 +796,7 @@ regex_parser_start(Parser * parser)
     parse_sub_expression(parser);
   }
   else {
-    fatal("Expected char or '('\n");
+    fatal(INVALID_PARSE_START);
   }
 }
 
@@ -880,6 +890,7 @@ insert_progress_nfa(List * loop_nfas)
             }
           } break;
           case NFA_INTERVAL:
+          case NFA_CAPTUREGRP_END:
           case NFA_EPSILON: {
             walker = walker->out2;
           } break;

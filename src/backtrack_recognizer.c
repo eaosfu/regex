@@ -1,15 +1,15 @@
 #include <stdlib.h>
 #include <string.h>
+#include <stdio.h>
+
 #include "slist.h"
 #include "token.h"
 #include "misc.h"
 #include "nfa.h"
-#include "backtrack_recognizer.h"
 #include "scanner.h"
 #include <stddef.h>
+#include "backtrack_recognizer.h"
 
-#include <string.h>
-#include <stdio.h>
 
 #define INPUT(sim) (*((sim)->input_ptr))
 #define EOL(sim)  ((sim)->scanner->eol_symbol)
@@ -22,7 +22,6 @@
 #define RELEASE_ALL_THREADS(t) while((t)) { (t) = release_thread((t)); }
 
 
-void reset_nfa_sim(NFASim * sim, NFA * start_state);
 void push_backtrack_stack(NFASim * sim, NFA * nfa);
 int  pop_backtrack_stack(NFASim * sim);
 int  load_next(NFASim *, NFA *);
@@ -161,6 +160,7 @@ thread_clone(NFASim * sim, NFA * nfa)
     clone = malloc(sim->size);
   }
 
+  clone->status = 0;
   clone->ip = sim->ip;
   clone->size = sim->size;
   clone->input_ptr = sim->input_ptr;
@@ -199,6 +199,7 @@ release_thread(NFASim * sim)
   list_push(sim->ctrl->thread_pool, sim);
   sim->prev_thread->next_thread = sim->next_thread;
   sim->next_thread->prev_thread = sim->prev_thread;
+  sim->status = 0;
 
   return (sim->next_thread == sim) ? NULL: sim->next_thread;
 }
@@ -250,10 +251,9 @@ load_next(NFASim * sim, NFA * nfa)
 #define NFA_TREE_BRANCH(s, idx) list_get_at((*(NFA **)(s))->value.branches, (idx))
 #define BT_RECORD(s)            ((s)->backtrack_stack)[(s)->sp]
 
-  int found_accepting = 0;
   switch(nfa->value.type) {
     case NFA_ACCEPTING: {
-      found_accepting = 1;
+      sim->status = 1;
     } break;
     case NFA_SPLIT|NFA_PROGRESS: {
       sim->loop_record[nfa->id].last_match = get_cur_pos(sim->scanner);
@@ -278,22 +278,21 @@ load_next(NFASim * sim, NFA * nfa)
           fatal("Expected ?, * or +\n");
         }
       }
-      found_accepting += load_next(sim, nfa);
+      load_next(sim, nfa);
     } break;
     case NFA_INTERVAL: {
+      ++(sim->sp);
       if(sim->sp >= MAX_BACKTRACK_DEPTH) {
         fatal("Backtrack depth exceeds maximum\n");
       }
       unsigned int count = ++((sim->loop_record[nfa->id]).count);
       if(nfa->value.max_rep > 0) {
         if(count < nfa->value.max_rep) {
-          ++(sim->sp);
           push_backtrack_stack(sim, nfa);
           sim->backtrack_stack[sim->sp].count = count; 
           nfa = nfa->out1;
         }
         else {
-          ++(sim->sp);
           push_backtrack_stack(sim, nfa);
           sim->backtrack_stack[sim->sp].count = count; 
           sim->loop_record[nfa->id].count = 0;
@@ -302,12 +301,11 @@ load_next(NFASim * sim, NFA * nfa)
       }
       else {
         // unbounded upper limit
-        ++(sim->sp);
         push_backtrack_stack(sim, nfa);
         sim->backtrack_stack[sim->sp].count = count; 
         nfa = nfa->out1;
       }
-      found_accepting += load_next(sim, nfa);
+      load_next(sim, nfa);
     } break;
     case NFA_TREE: {
       // grab the first branch for the current thread
@@ -317,15 +315,15 @@ load_next(NFASim * sim, NFA * nfa)
       for(int i = 1; i < list_size(nfa->value.branches); ++i) {
         tmp_sim = thread_clone(tmp_sim, list_get_at(nfa->value.branches, i));
       }
-      found_accepting += load_next(sim, sim->ip);
+      load_next(sim, sim->ip);
     } break;
     case NFA_EPSILON: {
-      found_accepting += load_next(sim, nfa->out2);
+      load_next(sim, nfa->out2);
     } break;
     case NFA_CAPTUREGRP_BEGIN: {
       sim->backref_match[nfa->id].start = sim->input_ptr;
       sim->backref_match[nfa->id].end = NULL;
-      found_accepting += load_next(sim, nfa->out2);
+      load_next(sim, nfa->out2);
     } break;
     case NFA_CAPTUREGRP_END: {
       ++(sim->sp);
@@ -334,16 +332,16 @@ load_next(NFASim * sim, NFA * nfa)
       }
       push_backtrack_stack(sim, nfa);
       sim->backref_match[nfa->id].end = sim->input_ptr - 1;
-      found_accepting += load_next(sim, nfa->out2);
+      load_next(sim, nfa->out2);
     } break;
     default: {
       sim->ip = nfa;
-      found_accepting = 0;
+      sim->status = 0;
     } break;
   }
 #undef NFA_TREE_BRANCH
 #undef BT_RECORD
-  return found_accepting;
+  return sim->status;
 }
 
 
@@ -369,7 +367,6 @@ pop_backtrack_stack(NFASim * sim)
 #define STACK_INST(sim) (BACKTRACK_STACK((sim), (sim)->sp).restart_point)
 #define STACK_INST_AT(sim, i) (BACKTRACK_STACK((sim), (i)).restart_point)
 
-  int accept = 0;
   if(sim->sp > -1) {
     BacktrackRecord btrec = sim->backtrack_stack[sim->sp];
     NFA * bt_inst = btrec.restart_point;
@@ -396,10 +393,10 @@ pop_backtrack_stack(NFASim * sim)
             }
             int cur_sp = sim->sp;
             --(sim->sp);
-            accept = load_next(sim, next_inst);
+            load_next(sim, next_inst);
             while(STACK_INST(sim) == bt_inst) {
               sim->sp = cur_sp - 1;
-              accept = load_next(sim, STACK_INST_AT(sim, cur_sp)->out2);
+              load_next(sim, STACK_INST_AT(sim, cur_sp)->out2);
             }
           } break;
           case '*': // fallthrough
@@ -413,34 +410,35 @@ pop_backtrack_stack(NFASim * sim)
               next_inst = next_inst->out2;
             }
             --(sim->sp);
-            accept = load_next(sim, next_inst);
+            load_next(sim, next_inst);
           } break;
         }
       } break;
       case NFA_CAPTUREGRP_END: {
         sim->backref_match[CUR_INST(sim)->id - 1].end = NULL;
         --(sim->sp);
-        accept = pop_backtrack_stack(sim);
+        pop_backtrack_stack(sim);
       } break;
       case NFA_INTERVAL: {
         // give up the match and let the next token try to match it
         sim->loop_record[bt_inst->id].count = 0;
         --(sim->sp);
         if(bt_inst->value.max_rep > 0 && btrec.count == bt_inst->value.max_rep) {
-          accept = pop_backtrack_stack(sim);
+          pop_backtrack_stack(sim);
         }
         else if(btrec.count >= bt_inst->value.min_rep) {
-          accept = load_next(sim, bt_inst->out2);
+          load_next(sim, bt_inst->out2);
         }
         else {
-          accept = pop_backtrack_stack(sim);
+          pop_backtrack_stack(sim);
         }
-        return accept;
+        return sim->status;
       } break;
     }
-    return accept;
+    return sim->status;
   }
   else {
+    sim->status = -1;
     return -1;
   }
 #undef LOOP_INST
@@ -456,26 +454,25 @@ thread_step(NFASim * sim)
   if(INPUT(sim) == '\0')
     return -1;
 
-  int accept = 0;
   switch(INST_TYPE(sim)) {
     case NFA_ANY: {
       if(INPUT(sim) != EOL(sim)) {
         update_match(sim);
         ++(sim->input_ptr);
-        accept = load_next(sim, NEXT_INST(sim));
+        load_next(sim, NEXT_INST(sim));
       }
       else {
-        accept = pop_backtrack_stack(sim);
+        pop_backtrack_stack(sim);
       }
     } break;
     case NFA_LITERAL: {
       if(INPUT(sim) == INST_TOKEN(sim)) {
         update_match(sim);
         ++(sim->input_ptr);
-        accept = load_next(sim, NEXT_INST(sim));
+        load_next(sim, NEXT_INST(sim));
       }
       else {
-        accept = pop_backtrack_stack(sim);
+        pop_backtrack_stack(sim);
       }
     } break;
     case NFA_LONG_LITERAL: {
@@ -491,11 +488,11 @@ thread_step(NFASim * sim)
         }
       }
       if(match && sim->ip->value.idx == 0) {
-        accept = load_next(sim, NEXT_INST(sim));
+        load_next(sim, NEXT_INST(sim));
       }
       else {
         sim->ip->value.idx = 0;
-        accept = pop_backtrack_stack(sim);
+        pop_backtrack_stack(sim);
       }
     } break;
     case NFA_RANGE: {
@@ -503,14 +500,14 @@ thread_step(NFASim * sim)
         if(is_literal_in_range(RANGE(sim), INPUT(sim))) {
           update_match(sim);
           ++(sim->input_ptr);
-          accept = load_next(sim, NEXT_INST(sim));
+          load_next(sim, NEXT_INST(sim));
         }
         else {
-          accept = pop_backtrack_stack(sim);
+          pop_backtrack_stack(sim);
         }
         break;
       }
-      accept = pop_backtrack_stack(sim);
+      pop_backtrack_stack(sim);
     } break;
     case NFA_BACKREFERENCE: {
       // FIXME: id - 1 should just be id
@@ -531,40 +528,40 @@ thread_step(NFASim * sim)
           }
         }
         if(fail) {
-          accept = pop_backtrack_stack(sim);
+          pop_backtrack_stack(sim);
         }
         else {
           sim->input_ptr = tmp_input - 1;
           update_match(sim);
           ++(sim->input_ptr);
-          accept = load_next(sim, NEXT_INST(sim));
+          load_next(sim, NEXT_INST(sim));
         }
       }
       else {
-        accept = pop_backtrack_stack(sim);
+        pop_backtrack_stack(sim);
       }
       #undef BACKREF_START
       #undef BACKREF_END
     } break;
     case NFA_BOL_ANCHOR: {
       if(sim->input_ptr == sim->scanner->buffer) {
-        accept = load_next(sim, NEXT_INST(sim));
+        load_next(sim, NEXT_INST(sim));
       }
       else {
-        accept = pop_backtrack_stack(sim);
+        pop_backtrack_stack(sim);
       }
     } break;
     case NFA_EOL_ANCHOR: {
       if(INPUT(sim) == EOL(sim)) {
-        accept = load_next(sim, NEXT_INST(sim));
+        load_next(sim, NEXT_INST(sim));
       }
       else {
-        accept = pop_backtrack_stack(sim);
+        pop_backtrack_stack(sim);
       }
     } break;
   }
 
-  return accept;
+  return sim->status;
 }
 
 
@@ -594,8 +591,8 @@ run_nfa(NFASim * thread)
   if(INST_TYPE(thread) != NFA_ACCEPTING) {
     while((*input_pointer) != '\0') {
       while(thread) {
-        int res = thread_step(thread);
-        switch(res) {
+        thread_step(thread);
+        switch(thread->status) {
           case 1: {
             match_found = 1;
             update_longest_match(&(ctrl->match), &(thread->match));
@@ -644,98 +641,4 @@ free_nfa_sim(NFASim * nfa_sim)
 
   free(nfa_sim->ctrl);
   free(nfa_sim);
-}
-
-
-// Move this out of this file once done testing
-int
-main(int argc, char ** argv)
-{
-  ctrl_flags cfl;
-  Scanner * scanner = NULL;
-  Parser  * parser  = NULL;
-  NFASim  * nfa_sim = NULL;
-  FILE    * file    = NULL;
-
-  char * buffer = NULL;
-  size_t buf_len = 0;
-  unsigned int line_len = 0;
-
-  if(argc >= 2) {
-    file = fopen(argv[1], "r");
-    if(file == NULL) {
-      fatal("UNABLE OPEN REGEX FILE\n");
-    }
-    line_len = getline(&buffer, &buf_len, file);
-    scanner  = init_scanner(buffer, buf_len, line_len, &cfl);
-
-    if(scanner->line_len < 0) {
-      fatal("UNABLE READ REGEX FILE\n");
-    }
-    parser = init_parser(scanner, &cfl);
-  }
-  else {
-    fatal("NO INPUT FILE PROVIDED\n");
-  }
-
-//printf("--> PHASE1: PARSING/COMPILING regex\n\n");
-//printf("EOL_FAG %s\n", (scanner->ctrl_flags & EOL_FLAG) ? "SET" : "NOT SET");
-
-  int run = parse_regex(parser);
-  fclose(file);
-
-  if(run &&  (argc > 2)) {
-    FILE * search_input = fopen(argv[2], "r");
-    if(search_input == NULL) {
-      fatal("Unable to open file\n");
-    }
-//printf("\n--> RUNNING NFA SIMULAITON\n\n");
-
-    int line = 0;
-    nfa_sim = new_nfa_sim(parser, scanner, &cfl);
-    /*
-     * Create and initialize nfa_sim object.
-     * Load the epsilon closure for the start state of the nfa;
-     * freeze the initial states in sim->ctrl->freeze_states... this will allow
-     * faster sim resets. Returns a handle to the static sim->ctrl.
-     *
-     * NFASimCtrl * thread_ctrl = init_nfa_sim(parser, scanner, &cfl);
-     *
-     * This call should replace the above call to new_nfa_sim and the following
-     * assignment of thread_ctrl.
-     */
-    NFASimCtrl * thread_ctrl = nfa_sim->ctrl;
-    SET_MGLOBAL_FLAG(&CTRL_FLAGS(scanner));
-    while((scanner->line_len = getline(&scanner->buffer, &scanner->buf_len, search_input)) > 0) {
-      reset_scanner(scanner);
-      reset_nfa_sim(nfa_sim, ((NFA *)peek(parser->symbol_stack))->parent);
-      run_nfa(nfa_sim);
-      /*
-       * Load the states from the (*(NFASimCtrl **)sim)->freeze_states
-       * return nfa_sim loaded with all initial links to nfas that form part
-       * of the epsilon closure of the nfa's start state.
-       *
-       * nfa_sim = reset_nfa_sim(thread_ctrl);
-       *
-       * The above call should replace the following two calls.
-       */
-      nfa_sim = list_shift(thread_ctrl->thread_pool);
-      nfa_sim->prev_thread = nfa_sim->next_thread = nfa_sim;
-    }
-
-    if(thread_ctrl->match_idx) {
-      printf("%s", thread_ctrl->matches);
-    }
-
-    fclose(search_input);
-  }
-
-  parser_free(parser);
-  free_scanner(scanner);
-
-  if(nfa_sim) {
-    free_nfa_sim(nfa_sim);
-  }
-
-  return 0;
 }

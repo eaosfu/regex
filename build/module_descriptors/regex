@@ -1,0 +1,9 @@
+DEPENDS+=slist token nfa scanner regex_parser misc backtrack_recognizer
+REGEX_CFLAGS:=
+REGEX_DFLAGS:=#try using -finline and -O3
+REGEX_SRC_DIR:= ${TOP_DIR}/src
+REGEX_SRC:=${REGEX_SRC_DIR}/main.c
+REGEX_TARGET:=${BIN_DIR}/recognizer
+REGEX_LD_FLAGS:=
+REGEX_INCLUDE_FLAGS:=
+REGEX_LINK_OBJS:=

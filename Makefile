@@ -5,9 +5,8 @@ TEST_DRIVER_DIR := .
 DEPENDS +=
 
 PERL := /usr/bin/perl
-PERL_TEST := ./test.pl
+PERL_TEST := ./tests//test.pl
 BASH := /bin/bash
-BASH_SCRIPT := ./tests/result_summary
 RUN_SLIST_TEST := ./bin/test_slist
 
 MODULE_DESCRIPTORS:=${TOP_DIR}/build/module_descriptors
@@ -99,6 +98,11 @@ define make_backtrack_recognizer
   $(call make_goal,backtrack_recognizer)
 endef
 
+define make_regex
+  $(call make_deps,regex)
+  $(call make_goal,regex)
+endef
+
 define make_test_slist
   $(eval CFLAGS += -g)
   $(call make_deps,test_slist)
@@ -112,17 +116,15 @@ define make_test_all
   test_all: recognizer test_slist
 		${RUN_SLIST_TEST}
 		${PERL} ${PERL_TEST}
-		${BASH} ${BASH_SCRIPT}
 endef
 
 define make_test_btrec
   $(eval CFLAGS += -g)
-  $(call make_backtrack_recognizer)
+  $(call make_regex)
   $(call make_test_slist)
-  test_btrec: backtrack_recognizer test_slist
+  test_btrec: regex test_slist
 		${RUN_SLIST_TEST}
 		${PERL} ${PERL_TEST}
-		${BASH} ${BASH_SCRIPT}
 endef
 
 define make_clean
