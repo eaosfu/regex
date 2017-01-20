@@ -13,14 +13,14 @@ parser_fatal(const char * msg, const char * regex, const char * here, int adjust
     fprintf(stderr, " ");
   }
   fprintf(stderr, "^\n");
-  exit(1);
+  exit(EXIT_FAILURE);
 }
 
 void
 fatal(const char * msg)
 {
   fprintf(stderr, "ERROR: %s", msg);
-  exit(1);
+  exit(EXIT_FAILURE);
 }
 
 

@@ -1,11 +1,8 @@
 #ifndef NFA_H_
 #define NFA_H_
 #include <limits.h>
+#include "bits.h"
 #include "slist.h"
-
-#define MAX_NFA_STATES 512
-#define SIZE_OF_LOCALE 128
-#define SIZE_OF_RANGE SIZE_OF_LOCALE/(sizeof(unsigned int) * CHAR_BIT)
 
 #define NFA_ANY              0x00001
 #define NFA_LITERAL          0x00002
@@ -24,6 +21,13 @@
 #define NFA_IN_INTERVAL      0x04000
 #define NFA_LONG_LITERAL     0x10000
 #define NFA_PROGRESS         0x20000
+
+
+#define MAX_NFA_STATES 512
+#define SIZE_OF_LOCALE 128
+
+#define RANGE_BITVEC_WIDTH REGULAR_BITVEC_WIDTH
+#define SIZE_OF_RANGE (SIZE_OF_LOCALE/RANGE_BITVEC_WIDTH)
 
 
 typedef unsigned int nfa_range[SIZE_OF_RANGE];

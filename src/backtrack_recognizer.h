@@ -1,17 +1,6 @@
 #ifndef NFA_SIM_H_
 #define NFA_SIM_H_
 
-#include <limits.h>
-
-#ifndef UINT_BITS
-  #ifdef __linux__
-    #ifdef __x86_64__
-      #define UINT_BITS (4 * CHAR_BIT)
-    #endif
-  #endif
-#endif
-
-
 #define THREAD_LIMIT          20
 #define MAX_BACKREF_COUNT     20
 #define MATCH_BUCKET_SIZE   1024
@@ -67,8 +56,6 @@ typedef struct NFASimCtrl {
   List * thread_pool;
   ctrl_flags * ctrl_flags;
   char matches[MATCH_BUCKET_SIZE];
-  int num_cacned_states;
-  NFASim cached_states[];
 } NFASimCtrl;
 
 

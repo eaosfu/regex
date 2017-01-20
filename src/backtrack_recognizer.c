@@ -2,6 +2,7 @@
 #include <string.h>
 #include <stdio.h>
 
+#include "bits.h"
 #include "slist.h"
 #include "token.h"
 #include "misc.h"
@@ -99,15 +100,11 @@ print_and_release_match(void * match)
 static inline int
 is_literal_in_range(nfa_range range, unsigned int c)
 {
-#define index(c)  ((c) / 32)
-#define offset(c) ((c) % 32)
-  unsigned int mask = 0x01 << (offset(c));
   int ret = 0;
-  if(range[index(c)] & mask) {
+  unsigned int mask = set_bit(RANGE_BITVEC_WIDTH, c)|0;
+  if(range[get_bit_array_idx(c, RANGE_BITVEC_WIDTH)] & mask) {
     ret = 1;
   }
-#undef index
-#undef offset
   return ret;
 }
 
@@ -248,9 +245,11 @@ reset_nfa_sim(NFASim * sim, NFA * start_state)
 int
 load_next(NFASim * sim, NFA * nfa)
 {
-#define NFA_TREE_BRANCH(s, idx) list_get_at((*(NFA **)(s))->value.branches, (idx))
 #define BT_RECORD(s)            ((s)->backtrack_stack)[(s)->sp]
+#define NFA_TREE_BRANCH(s, idx) list_get_at((*(NFA **)(s))->value.branches, (idx))
+#define SKIP_EPSILONS(nfa)      ({while((nfa->value.type == NFA_EPSILON)) { (nfa) = (nfa)->out2;}})
 
+  SKIP_EPSILONS(nfa);
   switch(nfa->value.type) {
     case NFA_ACCEPTING: {
       sim->status = 1;
@@ -271,7 +270,7 @@ load_next(NFASim * sim, NFA * nfa)
           nfa = (nfa->greedy) ? nfa->out1 : nfa->out2;
         } break;
         case '?': {
-            nfa = (nfa->greedy) ? nfa->out2 : nfa->out1;
+          nfa = (nfa->greedy) ? nfa->out2 : nfa->out1;
         } break;
         default: {
           // should never hit this condition
@@ -317,9 +316,6 @@ load_next(NFASim * sim, NFA * nfa)
       }
       load_next(sim, sim->ip);
     } break;
-    case NFA_EPSILON: {
-      load_next(sim, nfa->out2);
-    } break;
     case NFA_CAPTUREGRP_BEGIN: {
       sim->backref_match[nfa->id].start = sim->input_ptr;
       sim->backref_match[nfa->id].end = NULL;
@@ -340,6 +336,7 @@ load_next(NFASim * sim, NFA * nfa)
     } break;
   }
 #undef NFA_TREE_BRANCH
+#undef SKIP_EPSILONS
 #undef BT_RECORD
   return sim->status;
 }

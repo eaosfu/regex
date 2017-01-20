@@ -4,7 +4,6 @@
 #include <stdlib.h>
 #include <ctype.h>
 #include "scanner.h"
-#include "misc.h"
 
 // Need to modify how we declare this if we want to
 // be able to use this in a parallel environment
@@ -113,7 +112,6 @@ void
 reset_scanner(Scanner * s)
 {
   s->last_newline = 0;
-  //s->str_begin = s->bol = s->readhead = s->buffer;
   s->str_begin = s->readhead = s->buffer;
   if(s->buffer[s->line_len - 1] == '\n') {
     // replace newline with special EOL symbol

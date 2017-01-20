@@ -3,14 +3,16 @@
 use strict;
 use warnings;
 
+use FindBin;
 use IO::Dir;
 use IO::Handle;
-use FindBin;
+use Getopt::Long;
 use Term::ANSIColor;
 FindBin::again();
 
 # options
-my $verbose = 1;
+my $verbose = 0;
+my $memcheck = 0;
 
 # directories
 my $cwd                 = $FindBin::Bin;
@@ -29,6 +31,24 @@ my $combined_input_file = "$test_cases_dir/test_r2.txt";
 my $bin_dir = "$cwd/../bin";
 my $regex_bin = "$bin_dir/recognizer";
 
+
+sub handle_options {
+  GetOptions(
+    "verbose"  => sub { $verbose++; },
+    "memcheck" => \$memcheck,
+    "bindir"   => \$bin_dir,
+  );
+=comment come back to this later
+  if(!defined($bin_dir)) {
+    # Are we in a git project?
+    my $top_dir;
+    eval {
+      $top_dir = `git rev-parse --show-toplevel`;
+    };
+  }
+=cut
+
+}
 
 sub separate_combined_input {
   my ($combined_input, $test_input_dir) = @_;
@@ -88,7 +108,7 @@ sub separate_combined_input {
 sub gen_grep_output {
   my $args = shift;
   my ($cmd, $input, $output);
-  print "Generating grep output files for comparison\n" if($verbose);
+  print "Generating grep output files for comparison\n";
   foreach (sort {$a <=> $b} keys %{$args}) {
     $input  = $args->{$_}{"grep_input"};
     $output = $args->{$_}{"grep_output"};
@@ -104,7 +124,7 @@ sub gen_regex_input {
   # run the regex binary
   my ($input_dir, $args) = @_;
   my ($cmd, $regex, $generated_input_file);
-  print "Generating regex input files\n" if($verbose);
+  print "Generating regex input files\n";
   foreach (sort {$a <=> $b} keys %{$args}) {
     $regex = $args->{$_}{"regex"};
     $generated_input_file = "$input_dir/regex_" . $args->{$_}{"inout_file_suffix"};
@@ -119,12 +139,12 @@ sub gen_regex_output {
   my ($cmd, $exp_file, $target, $out_file);
   my ($regex_bin, $output_dir, $regex_input, $args) = @_;
   my $total = scalar (keys %{$args});
-  print "Running the regex executable against $total test cases\n" if($verbose);
+  print "Running the regex executable against $total test cases\n";
   foreach (sort {$a <=> $b} keys %{$args}) {
     $target   = "$args->{$_}{regex_input}";
     $exp_file = "$regex_input/regex_$args->{$_}{inout_file_suffix}";
     $out_file = "$output_dir/regex_$args->{$_}{inout_file_suffix}";
-    $cmd      = "$regex_bin $exp_file $target > $out_file";
+    $cmd      = "$regex_bin -g -f $exp_file $target > $out_file";
     eval{`$cmd 2> /dev/null`};
     die "Error running grep command: $cmd: $!\n" if($@);
   }
@@ -164,7 +184,7 @@ sub check_dirs_and_files {
 sub diff_results {
   my $args = shift;
   my ($cmd, $grep_out, $regex_out, $diff_out, $result, $fail_count, $total, $result_msg);
-  print color ('red') ;
+  print color ('red');
   foreach (sort {$a <=> $b} keys %{$args}) {
     $regex_out = "$args->{$_}{regex_output}";
     $grep_out  = "$args->{$_}{grep_output}";
@@ -177,7 +197,7 @@ sub diff_results {
 
     if($result != 0) {
       $fail_count++;
-      print "Failed test $_: $args->{$_}{regex}\n" if($verbose);
+      print "Failed test $_: $args->{$_}{regex}\n";
     }
   }
   $total = scalar (keys %{$args});
@@ -186,7 +206,62 @@ sub diff_results {
 }
 
 
+sub run_memcheck {
+  my $regex_bin = shift;
+  my $regex_input = shift;
+  my $args = shift;
+  my ($cmd, $pattern, $target, $result, $exp_file, $total, $valgrind_bin);
+  my $fail_count = 0;
+
+  # options to pass to valgrind
+  my $leak_check_opt     = "--leak-check=full";
+  my $error_exitcode     = 20;
+  my $error_exitcode_opt = "--error-exitcode=$error_exitcode";
+
+  # first check if valgrind is available on the system
+  eval {
+    $valgrind_bin = `which valgrind`
+  }; die "Error calling: which($valgrind_bin): $!\n" if($@);
+
+  if($valgrind_bin !~ m/valgrind/) {
+    die "Valgrind doesn't seem to be available on your system\n";
+  }
+
+  chomp($valgrind_bin);
+
+  # build the valgrind command
+  my $valgrind_cmd   = "$valgrind_bin $leak_check_opt $error_exitcode_opt";
+
+  print "Running memcheck\n";
+
+
+  foreach (sort {$a <=> $b} keys %{$args}) {
+    $target   = "$args->{$_}{regex_input}";
+    $exp_file = "$regex_input/regex_$args->{$_}{inout_file_suffix}";
+    $cmd      = "$valgrind_cmd $regex_bin -g -f $exp_file $target";
+
+    print "$cmd\n" if($verbose);
+
+    eval{
+      $result = `$cmd 1> /dev/null 2>&1; echo \$?`
+    }; die "Error running grep command: $cmd: $!\n" if($@);
+
+    if($result == $error_exitcode) {
+      $fail_count++;
+      print color ('red');
+      print "Failed test $_: $args->{$_}{regex}\n";
+      print color ('reset');
+    }
+  }
+  $total = scalar (keys %{$args});
+  print color('reset');
+  print "Failed $fail_count/". $total . "\n";
+
+}
+
+
 sub main {
+  &handle_options();
   my @args = ();
 
   @args = ($test_input_dir , $test_cases_dir , $regex_output_dir   , $regex_output_dir,
@@ -194,12 +269,18 @@ sub main {
           $regex_bin);
 
   check_dirs_and_files(@args);
+
   @args = ($combined_input_file, $test_input_dir);
+
   my %input = separate_combined_input($combined_input_file, $test_input_dir);
   gen_regex_input($regex_input_dir, \%input);
   gen_grep_output(\%input);
   gen_regex_output($regex_bin, $regex_output_dir, $regex_input_dir, \%input);
   diff_results(\%input);
+
+  if($memcheck) {
+    run_memcheck($regex_bin, $regex_input_dir, \%input);
+  }
 }
 
 

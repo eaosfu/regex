@@ -143,22 +143,16 @@ update_range_w_collation(char * collation_string, int coll_name_len, NFA * range
 void
 update_range_nfa(unsigned int low, unsigned int high, NFA * range_nfa, int negate)
 {
-#define index(i)  ((i) / 32)
-#define offset(i) ((i) % 32)
-#define set_bit(r, i)   (*(r))[index(i)] |= 0x01 << offset(i)
-#define unset_bit(r, i) (*(r))[index(i)] &= (0xFFFFFFFF ^ (0x01 << offset(i)))
   if(negate) {
     for(int i = low; i <= high; ++i) {
-      unset_bit(range_nfa->value.range, i);
+      clear_bit_array(*(range_nfa->value.range), RANGE_BITVEC_WIDTH, i);
     }
   }
   else {
     for(int i = low; i <= high; ++i) {
-      set_bit(range_nfa->value.range, i);
+      set_bit_array(*(range_nfa->value.range), RANGE_BITVEC_WIDTH, i);
     }
   }
-#undef set_bit
-#undef unset_bit
 }
 
 

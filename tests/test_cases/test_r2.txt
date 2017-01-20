@@ -592,6 +592,12 @@ regex: '([a-z][^a-z]?)[a-z]+' test_input
 grep: grep -o --color=no '\([a-z][^a-z]\?\)[a-z]\+' test_input
 ##################################### TEST QMARK RANGE + KLEENE-CLOSURE ##############################################
 
+regex: '([A-Z]+(_)*)+' test_input
+grep: grep -o --color=no '\([A-Z]\+\(_\)*\)\+' test_input
+
+regex: '([A-Z]+(_)?)+' test_input
+grep: grep -o --color=no '\([A-Z]\+\(_\)\?\)\+' test_input
+
 regex: '[^a-z]?*' test_input
 grep: grep -o --color=no '[^a-z]\?*' test_input
 
