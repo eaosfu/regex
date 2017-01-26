@@ -145,6 +145,7 @@ sub gen_regex_output {
     $exp_file = "$regex_input/regex_$args->{$_}{inout_file_suffix}";
     $out_file = "$output_dir/regex_$args->{$_}{inout_file_suffix}";
     $cmd      = "$regex_bin -g -f $exp_file $target > $out_file";
+print "$cmd\n";
     eval{`$cmd 2> /dev/null`};
     die "Error running grep command: $cmd: $!\n" if($@);
   }
@@ -183,7 +184,8 @@ sub check_dirs_and_files {
 
 sub diff_results {
   my $args = shift;
-  my ($cmd, $grep_out, $regex_out, $diff_out, $result, $fail_count, $total, $result_msg);
+  my ($cmd, $grep_out, $regex_out, $diff_out, $result, $total, $result_msg);
+  my $fail_count = 0;
   print color ('red');
   foreach (sort {$a <=> $b} keys %{$args}) {
     $regex_out = "$args->{$_}{regex_output}";
@@ -240,7 +242,8 @@ sub run_memcheck {
     $exp_file = "$regex_input/regex_$args->{$_}{inout_file_suffix}";
     $cmd      = "$valgrind_cmd $regex_bin -g -f $exp_file $target";
 
-    print "$cmd\n" if($verbose);
+    #print "$cmd\n" if($verbose);
+    print "$cmd\n";
 
     eval{
       $result = `$cmd 1> /dev/null 2>&1; echo \$?`
@@ -278,9 +281,9 @@ sub main {
   gen_regex_output($regex_bin, $regex_output_dir, $regex_input_dir, \%input);
   diff_results(\%input);
 
-  if($memcheck) {
+#  if($memcheck) {
     run_memcheck($regex_bin, $regex_input_dir, \%input);
-  }
+#  }
 }
 
 
