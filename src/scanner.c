@@ -11,6 +11,45 @@ static List G_STATE_STACK = {.head = NULL, .size = 0, .pool = NULL, .pool_size =
 static Stack * g_state_stack = &G_STATE_STACK;
 
 
+const char *
+get_buffer_end(Scanner * s)
+{
+  if(s) {
+    return (s->buffer + s->line_len);
+  }
+  return NULL;
+}
+
+
+const char *
+get_buffer_start(Scanner * s)
+{
+  if(s) {
+    return s->buffer;
+  }
+  return NULL;
+}
+
+
+const char *
+get_filename(Scanner * s)
+{
+  if(s && s->filename) {
+    return s->filename;
+  }
+  return NULL;
+}
+
+
+int
+get_line_no(Scanner * s)
+{
+  if(s) {
+    return s->line_no;
+  }
+  return 0;
+}
+
 static inline void
 update_flags(Scanner * s)
 {
@@ -93,26 +132,26 @@ scanner_push_state(Scanner ** old_state, Scanner * new_state)
 
 
 Scanner *
-init_scanner(char * buffer, unsigned int buffer_len, unsigned int line_len, ctrl_flags * cfl)
+init_scanner(const char * filename, char * buffer, unsigned int buffer_len, unsigned int line_len, ctrl_flags * cfl)
 {
   struct Scanner * s = xmalloc(sizeof * s);
   s->curtoken    = new_token();
   buffer[buffer_len - 1] = '\0';
+  s->filename   = filename;
   s->buf_len    = buffer_len;
   s->buffer     = buffer;
   s->line_len   = line_len; 
   s->ctrl_flags = cfl;
   s->eol_symbol = (EOF < -1) ? -1 : -2;
-  reset_scanner(s);
+  reset_scanner(s, filename);
   return s;
 }
 
 
 void
-reset_scanner(Scanner * s)
+reset_scanner(Scanner * s, const char * filename)
 {
   s->last_newline = 0;
-  s->str_begin = s->readhead = s->buffer;
   if(s->buffer[s->line_len - 1] == '\n') {
     // replace newline with special EOL symbol
     s->buffer[s->line_len - 1] = s->eol_symbol;
@@ -128,8 +167,10 @@ reset_scanner(Scanner * s)
     s->buffer[s->line_len + 1] = '\0';
     s->line_len++;
   }
+  s->str_begin = s->readhead = s->buffer;
   SET_ESCP_FLAG(s->ctrl_flags);
   update_flags(s);
+  s->filename = filename;
 }
 
 char *

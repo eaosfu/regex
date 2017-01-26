@@ -143,6 +143,8 @@ typedef struct Parser {
   NFA * interval_list;
 
   int cgrp_map[CGRP_MAP_SIZE];
+// TEST
+  int total_nfa_ids;
 } Parser;
 
 

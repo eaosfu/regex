@@ -1,6 +1,9 @@
 #ifndef S_LIST_H_
 #define S_LIST_H_
 
+typedef void * VISIT_PROC2(void *, void *);
+typedef VISIT_PROC2 * VISIT_PROC2_pt;
+
 typedef void * VISIT_PROC(void *);
 typedef VISIT_PROC * VISIT_PROC_pt;
 
@@ -38,6 +41,7 @@ void * list_get_at(List *, int);
 void * list_extend(List *, void *);
 void list_clear(List *);
 void list_iterate(List *, VISIT_PROC_pt);
+void list_iterate2(List *, VISIT_PROC2_pt, void *, void **);
 void list_free(List **, VISIT_PROC_pt);
 
 

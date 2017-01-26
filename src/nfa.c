@@ -32,7 +32,7 @@ mark_interval_nfa(NFA * nfa)
 }
 
 
-static inline void
+void
 mark_nfa(NFA * nfa)
 {
   if(nfa->id == 0) {
@@ -189,7 +189,6 @@ new_lliteral_nfa(NFACtrl * ctrl, char * src, unsigned int len)
 {
   NFA * start    = new_nfa(ctrl, NFA_EPSILON);
   NFA * lliteral = xmalloc(sizeof(*lliteral)+ len + 1);
-//  NFA * lliteral = malloc(sizeof(*lliteral)+ len + 1);
   NFA * accept   = new_nfa(ctrl, NFA_ACCEPTING);
 
   start->out1 = start->out2 = lliteral;
@@ -260,14 +259,14 @@ new_kleene_nfa(NFA * body)
   body->value.type = NFA_SPLIT;
   body->greedy = 1;
   body->value.literal = '*';
-  body->out1 = body->parent;
+//  body->out1 = body->parent;
   body->out2 = accept;
   // tighten loop
-/*/
+
   NFA * target = body->parent;
   while((target->value.type == NFA_EPSILON) && (target = target->out2));
   body->out1 = target;
-*/
+
   accept->parent = start;
 
   return accept;
@@ -278,6 +277,7 @@ NFA *
 new_qmark_nfa(NFA * body)
 {
   NFA * start  = new_nfa(body->ctrl, NFA_SPLIT);
+//  NFA * start  = new_nfa(body->ctrl, NFA_QMARK);
   NFA * accept = new_nfa(body->ctrl, NFA_ACCEPTING);
   
   
@@ -311,13 +311,12 @@ new_posclosure_nfa(NFA * body)
   body->greedy = 1;
   mark_interval_nfa(body);
   body->value.literal = '+';
-  body->out1 = body->parent;
+//  body->out1 = body->parent;
   // tighten loop
-/*
+
   NFA * target = body->parent;
   while((target->value.type == NFA_EPSILON) && (target = target->out2));
   body->out1 = target;
-*/
 
   body->out2 = accept;
   accept->parent = start;
@@ -341,12 +340,14 @@ new_interval_nfa(NFA * target, unsigned int min, unsigned int max)
 
   if(min == 0) {
     start->value.type = NFA_SPLIT;
-    start->value.literal = '*';
+    start->value.literal = '?';
     start->greedy = 1;
     start->out1 = target->parent;
     start->out2 = accept;
+    ++min;
   }
   else {
+
     start->out1 = start->out2 = target->parent;
   }
 

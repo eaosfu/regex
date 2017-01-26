@@ -808,13 +808,20 @@ prescan_input(Parser * parser)
 {
   int line_len = parser->scanner->line_len;
 
-  if(line_len > MAX_REGEX_LENGTH || line_len == 1) {
+  if(line_len > MAX_REGEX_LENGTH || line_len <=1) {
     return 0;
   }
 
-  if(line_len > 0) {
+  // FIXME don't alway use alloc... have the scanner keep a large enough buffer
+  // to hold several scanner's buffers ?
+  char * tmp_buffer = malloc(parser->scanner->buf_len);
+  memcpy(tmp_buffer, parser->scanner->buffer, parser->scanner->buf_len);
+
+
+//  if(line_len > 0) {
     Scanner * new_scanner_state = init_scanner(
-      parser->scanner->buffer,
+      get_filename(parser->scanner), // TEST
+      tmp_buffer,
       parser->scanner->buf_len,
       parser->scanner->line_len,
       parser->scanner->ctrl_flags
@@ -843,10 +850,9 @@ prescan_input(Parser * parser)
         }
       }
     }
-    new_scanner_state->buffer = 0;
     new_scanner_state = scanner_pop_state(&(parser->scanner));
     free_scanner(new_scanner_state);
-  }
+//  }
 
   return 1;
 }
@@ -933,7 +939,14 @@ parse_regex(Parser * parser)
       push(parser->symbol_stack, right);
     }
 
+    // give the last accepting state an id
+    mark_nfa(peek(parser->symbol_stack));
+
     parser->loops_to_track += insert_progress_nfa(parser->loop_nfas);
+
+// TEST FIXME -- define an interface for this in nfa(.c/.h)
+    parser->total_nfa_ids = ((NFA *)peek(parser->symbol_stack))->ctrl->next_seq_id - 1;
+// END TEST
     ret = 1;
   }
 

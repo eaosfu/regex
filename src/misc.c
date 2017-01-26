@@ -31,7 +31,7 @@ warn(const char * msg)
 }
 
 
-void *
+inline void *
 xmalloc(unsigned int sz) {
   void * n = calloc(1, sz);
   if(n == NULL) {

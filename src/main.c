@@ -4,26 +4,27 @@
 #include <string.h>
 #include <stdio.h>
 #include <libgen.h>
+#include <limits.h>
 
 #include "misc.h"
 #include "scanner.h"
 #include "backtrack_recognizer.h"
 
-// If you name your program with anywhere near this many bytes...
-// seek help.
-char program_name[120];
 
-static const char short_options [] = {"Flf:ghiqv"};
+// This should be long enough.
+char program_name[NAME_MAX];
+
+static const char short_options [] = {"Ff:ghilqv"};
 
 static struct option const long_options[] = {
   {"help"           , no_argument      , NULL, 'h'},
   {"global_match"   , no_argument      , NULL, 'g'},
   {"pattern-file"   , required_argument, NULL, 'f'},
   {"show-file-name" , no_argument      , NULL, 'F'}, // not implemented
-  {"invert-match"   , no_argument      , NULL, 'v'}, // not implemented
+  {"invert-match"   , no_argument      , NULL, 'v'}, // FIXME: issue with showing eol symbol
   {"show-match-line", no_argument      , NULL, 'l'}, // not implemented
-  {"quiet"          , no_argument      , NULL, 'q'}, // not implemented
-  {"silent"         , no_argument      , NULL, 'q'}, // not implemented
+  {"quiet"          , no_argument      , NULL, 'q'},
+  {"silent"         , no_argument      , NULL, 'q'},
   {"ignore-case"    , no_argument      , NULL, 'i'}, // not implemented
   {0                , 0                , 0   , 0}
 };
@@ -44,15 +45,15 @@ print_usage(int exit_code)
   printf("       %s [options] -f <pattern_file> file [file]...\n", program_name);
   printf("\n");
   printf("options:\n"
-"  -h, --help               display this help message\n"
+"  -F, --show-file-name     display line number for the match, starts at 1\n"
+"  -f, --pattern-file       read regex pattern from a file\n"
 "  -g, --global-match       find all matches on the input line\n"
 "                           by default only the first match stops the search\n"
-"  -f, --pattern-file       read regex pattern from a file\n"
-"  -F, --show-file-name     display line number for the match, starts at 1\n"
-"  -v, --invert-match       display lines where no matches are found\n"
+"  -h, --help               display this help message\n"
+"  -i, --ignore-case        treat all input, including pattern, as lowercase\n"
 "  -l, --show-match-line    display line where matches are found\n"
 "  -q, --quiet, --silent    suppress all output to stdout\n"
-"  -i, --ignore-case        treat all input, including pattern, as lowercase\n"
+"  -v, --invert-match       display lines where no matches are found\n"
 "\n"
 "Exit status is 1 if a match is found anywhere, 0 otherwise; unless an error\n"
 "occurs, in which case the exit status will be set to 1.\n");
@@ -90,7 +91,7 @@ set_program_name(char * name)
   char * nm = basename(name);
   int len  = strlen(nm);
   memcpy(program_name, nm, len);
-  program_name[len - 1] = '\0';
+  program_name[len] = '\0';
 }
 
 
@@ -101,12 +102,12 @@ main(int argc, char ** argv)
   int opt = -1;
   int read_pattern_file = 0;
 
-  ctrl_flags cfl;
+  ctrl_flags cfl = 0;
   Scanner * scanner = NULL;
   Parser  * parser  = NULL;
   NFASim  * nfa_sim = NULL;
   FILE    * fh    = NULL;
-
+  char * filename = NULL;
   char * buffer = NULL;
   size_t buf_len = 0;
   unsigned int line_len = 0;
@@ -153,6 +154,7 @@ main(int argc, char ** argv)
     if(fh == NULL) {
       fatal("Failed to open pattern file\n");
     }
+    filename = argv[pattern_file_idx];
     line_len = getline(&buffer, &buf_len, fh);
   }
   else if(cmd_regex_idx) {
@@ -166,11 +168,11 @@ main(int argc, char ** argv)
     fatal("No regex pattern provided\n");
   }
 
-  scanner  = init_scanner(buffer, buf_len, line_len, &cfl);
-
-  if(scanner->line_len < 0) {
+  if(line_len < 0) {
     fatal("UNABLE READ REGEX FILE\n");
   }
+
+  scanner  = init_scanner(filename, buffer, buf_len, line_len, &cfl);
 
   parser = init_parser(scanner, &cfl);
 
@@ -187,19 +189,25 @@ main(int argc, char ** argv)
     if(fh == NULL) {
       fatal("Unable to open file\n");
     }
+    filename = argv[target_idx];
     int line = 0;
     nfa_sim = new_nfa_sim(parser, scanner, &cfl);
     NFASimCtrl * thread_ctrl = nfa_sim->ctrl;
     while((scanner->line_len = getline(&scanner->buffer, &scanner->buf_len, fh)) > 0) {
-      reset_scanner(scanner);
+      reset_scanner(scanner, filename);
       reset_nfa_sim(nfa_sim, ((NFA *)peek(parser->symbol_stack))->parent);
+// TEST: FIXME: NEED A BETTER INTERFACE FOR THIS... THE SCANNER SHOULD PROBABLY HANDLE
+//              MOST/ALL INTERACTION WITH FILE/INPUT?
+      ++line;
+      scanner->line_no = line;
+// TEST
       run_nfa(nfa_sim);
       nfa_sim = list_shift(thread_ctrl->thread_pool);
       nfa_sim->prev_thread = nfa_sim->next_thread = nfa_sim;
     }
 
     if(thread_ctrl->match_idx) {
-      printf("%s", thread_ctrl->matches);
+      flush_matches(thread_ctrl);
     }
     ++target_idx;
   }

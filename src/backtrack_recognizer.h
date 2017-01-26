@@ -11,15 +11,16 @@
 
 typedef struct Match {
   struct NFASimCtrl * ctrl;
-  char * start;
-  char * end;
+  const char * start;
+  const char * end;
+  const char * last_match_end;
 } Match;
 
 
 typedef struct BacktrackRecord {
   int count;
-  char * input;
-  char * match;
+  const char * input;
+  const char * match;
   NFA  * restart_point;;
 } BacktrackRecord;
 
@@ -33,10 +34,13 @@ typedef struct LoopRecord {
 typedef struct NFASim {
   struct NFASimCtrl * ctrl;
   int sp;
+  int id;
+  int tracking_intervals;
+  int tracking_backrefs;
   int size;
-  int tracked_loop_count;
+  int tracked_loop_count; // may not be necessary anymore
   int status;
-  char * input_ptr;
+  const char * input_ptr;
   NFA * ip;
   NFA * start_state;
   Scanner * scanner;
@@ -50,10 +54,13 @@ typedef struct NFASim {
 
 
 typedef struct NFASimCtrl {
+  int next_thread_id;
   int match_idx;
+  int loop_record_cap;
   Match match;
   List * match_pool;
   List * thread_pool;
+  List * active_threads;
   ctrl_flags * ctrl_flags;
   char matches[MATCH_BUCKET_SIZE];
 } NFASimCtrl;
@@ -62,8 +69,8 @@ typedef struct NFASimCtrl {
 int  run_nfa(NFASim *);
 void free_nfa_sim(NFASim *);
 void * free_match_string(void *);
-void new_matched_string(NFASim *, int, int);
-void reset_nfa_sim(NFASim * sim, NFA * start_state);
+void flush_matches(NFASimCtrl *);
+void reset_nfa_sim(NFASim *, NFA *);
 NFASim * new_nfa_sim(Parser *, Scanner *, ctrl_flags *);
 int  get_states(NFASim *, NFA *, List *, int, int, unsigned int);
 

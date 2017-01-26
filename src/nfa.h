@@ -21,6 +21,7 @@
 #define NFA_IN_INTERVAL      0x04000
 #define NFA_LONG_LITERAL     0x10000
 #define NFA_PROGRESS         0x20000
+//#define NFA_QMARK            0x40000
 
 
 #define MAX_NFA_STATES 512
@@ -92,6 +93,7 @@ NFA * finalize_nfa(NFA *);
 
 NFA * nfa_tie_branches(NFA *, List *, unsigned int);
 
+void mark_nfa(NFA *);
 void free_nfa(NFA *);
 void release_nfa(NFA *);
 void update_range_nfa(unsigned int, unsigned int, NFA *, int);
