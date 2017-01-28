@@ -164,14 +164,15 @@ sub check_dirs_and_files {
 
   die "No 'input dir' provided \n"       if(!defined($test_cases_dir));
   die "No 'test cases dir' provided \n"  if(!defined($input_dir));
-  die "No 'regex input dir' provided\n"  if(!defined($regex_input_dir));
   die "No 'regex output dir' provided\n" if(!defined($regex_output_dir));
+  die "No 'regex input dir' provided\n"  if(!defined($regex_input_dir));
+  die "No 'diff results dir' provided\n"  if(!defined($diff_output_dir));
   die "No 'grep output file' provided\n" if(!defined($grep_output_dir));
   die "No 'regex input file' provided'\n"if(!defined($test_input_file));
   die "No 'executable' provided'\n"      if(!defined($regex_bin));
 
   # test directories exist, if they don't, create them
-  my @dirs = ($test_cases_dir , $input_dir, $regex_output_dir, 
+  my @dirs = ($test_cases_dir , $input_dir, $regex_output_dir, $regex_input_dir,
               $grep_output_dir, $diff_output_dir);
 
   foreach(@dirs) {
@@ -267,9 +268,9 @@ sub main {
   &handle_options();
   my @args = ();
 
-  @args = ($test_input_dir , $test_cases_dir , $regex_output_dir   , $regex_output_dir,
-          $grep_output_dir, $diff_output_dir, $combined_input_file,
-          $regex_bin);
+  @args = ($test_input_dir , $test_cases_dir , $regex_output_dir,
+           $regex_input_dir, $grep_output_dir, $diff_output_dir ,
+           $combined_input_file, $regex_bin);
 
   check_dirs_and_files(@args);
 
