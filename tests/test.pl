@@ -171,7 +171,7 @@ sub check_dirs_and_files {
   die "No 'executable' provided'\n"      if(!defined($regex_bin));
 
   # test directories exist, if they don't, create them
-  my @dirs = ($test_cases_dir , $input_dir, $regex_output_dir, 
+  my @dirs = ($test_cases_dir , $input_dir, $regex_output_dir, $regex_input_dir,
               $grep_output_dir, $diff_output_dir);
 
   foreach(@dirs) {
@@ -267,7 +267,7 @@ sub main {
   &handle_options();
   my @args = ();
 
-  @args = ($test_input_dir , $test_cases_dir , $regex_output_dir   , $regex_output_dir,
+  @args = ($test_input_dir , $test_cases_dir , $regex_output_dir   , $regex_input_dir,
           $grep_output_dir, $diff_output_dir, $combined_input_file,
           $regex_bin);
 

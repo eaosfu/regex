@@ -1132,5 +1132,5 @@ grep: grep -o --color=no '\(b\{2,4\}\|a\{2,6\}b\+\)\{2,3\}' test_input_interval
 regex: '(a(b{,12}|z{4,5})x?)+' test_input_interval
 grep: grep -o --color=no '\(a\(b\{,12\}\|z\{4,5\}\)x\?\)\+' test_input_interval
 
-#regex: '((a?b{2,4}|(a{2,6}b?)+){2,3}|az+xz?){1,4}' test_input_interval
-#grep: grep -o --color=no '\(\(a\?b\{2,4\}\|\(a\{2,6\}b\?\)\+\)\{2,3\}\|az\+xz\?\)\{1,4\}' test_input_interval
+regex: '((a?b{2,4}|(a{2,6}b?)+){2,3}|az+xz?){1,4}' test_input_interval
+grep: grep -o --color=no '\(\(a\?b\{2,4\}\|\(a\{2,6\}b\?\)\+\)\{2,3\}\|az\+xz\?\)\{1,4\}' test_input_interval

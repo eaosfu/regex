@@ -249,7 +249,7 @@ new_kleene_nfa(NFA * body)
   NFA * start  = new_nfa(body->ctrl, NFA_SPLIT);
   NFA * accept = new_nfa(body->ctrl, NFA_ACCEPTING);
 
-  mark_interval_nfa(start);
+  //mark_interval_nfa(start);
 
   start->value.literal = '?';
   start->greedy = 1;
@@ -281,7 +281,7 @@ new_qmark_nfa(NFA * body)
   NFA * accept = new_nfa(body->ctrl, NFA_ACCEPTING);
   
   
-  mark_interval_nfa(start);
+  //mark_interval_nfa(start);
 
   start->greedy = 1;
   start->out1 = accept;
@@ -309,7 +309,7 @@ new_posclosure_nfa(NFA * body)
 
   body->value.type = NFA_SPLIT;
   body->greedy = 1;
-  mark_interval_nfa(body);
+  //mark_interval_nfa(body);
   body->value.literal = '+';
 //  body->out1 = body->parent;
   // tighten loop

@@ -69,6 +69,7 @@ typedef struct NFA {
       };
     };
   } value;
+  List reachable;
 } NFA;
 
 NFACtrl * new_nfa_ctrl(void);

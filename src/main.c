@@ -203,7 +203,7 @@ main(int argc, char ** argv)
 // TEST
       run_nfa(nfa_sim);
       nfa_sim = list_shift(thread_ctrl->thread_pool);
-      nfa_sim->prev_thread = nfa_sim->next_thread = nfa_sim;
+//      nfa_sim->prev_thread = nfa_sim->next_thread = nfa_sim;
     }
 
     if(thread_ctrl->match_idx) {
