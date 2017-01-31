@@ -958,9 +958,9 @@ void
 parser_free(Parser * parser)
 {
   free_nfa(((NFA *)peek(parser->symbol_stack)));
-  stack_delete(&(parser->symbol_stack), NULL);
-  stack_delete(&(parser->branch_stack), NULL);
-  list_free(&(parser->loop_nfas), NULL);
+  stack_delete((parser->symbol_stack), NULL);
+  stack_delete((parser->branch_stack), NULL);
+  list_free((parser->loop_nfas), NULL);
   free(parser->nfa_ctrl);
   free(parser);
 }

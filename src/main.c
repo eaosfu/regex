@@ -45,13 +45,13 @@ print_usage(int exit_code)
   printf("       %s [options] -f <pattern_file> file [file]...\n", program_name);
   printf("\n");
   printf("options:\n"
-"  -F, --show-file-name     display line number for the match, starts at 1\n"
+"  -F, --show-file-name     display filename where match was found\n"
 "  -f, --pattern-file       read regex pattern from a file\n"
 "  -g, --global-match       find all matches on the input line\n"
-"                           by default only the first match stops the search\n"
+"                           by default the first match stops the search\n"
 "  -h, --help               display this help message\n"
 "  -i, --ignore-case        treat all input, including pattern, as lowercase\n"
-"  -l, --show-match-line    display line where matches are found\n"
+"  -l, --show-match-line    display line number for the match, starts at 1\n"
 "  -q, --quiet, --silent    suppress all output to stdout\n"
 "  -v, --invert-match       display lines where no matches are found\n"
 "\n"

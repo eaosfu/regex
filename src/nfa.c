@@ -516,7 +516,8 @@ free_nfa_helper(NFA * n, List * l, List * seen_states)
         for(int i = 0; i <= branch_count; ++i) {
           free_nfa_helper(list_shift(n->value.branches), l, seen_states);
         }
-        list_free(&(n->value.branches), NULL);
+        //list_free(&(n->value.branches), NULL);
+        list_free((n->value.branches), NULL);
       }
       else {
         free_nfa_helper(n->out1, l, seen_states);
@@ -570,11 +571,12 @@ free_nfa(NFA * nfa)
     if(del_nfa->value.type & NFA_RANGE) {
       free(del_nfa->value.range);
     }
+    list_free_items(&(del_nfa->reachable), NULL);
+
     free(del_nfa);
   }
-
-  list_free(&cur_state_set, NULL);
-  list_free(&next_state_set, NULL);
-  list_free(&seen_states, NULL);
-  list_free(&(ctrl->free_range), &free_nfa_wrapper);
+  list_free(cur_state_set, NULL);
+  list_free(next_state_set, NULL);
+  list_free(seen_states, NULL);
+  list_free((ctrl->free_range), &free_nfa_wrapper);
 }

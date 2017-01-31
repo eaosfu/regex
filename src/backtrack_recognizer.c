@@ -634,7 +634,7 @@ run_nfa(NFASim * thread)
               goto RELEASE_ALL_THREADS;
             }
           }
-          else if((CTRL_FLAGS(ctrl) & MGLOBAL_FLAG) == 0){
+          else if((CTRL_FLAGS(ctrl) & INVERT_MATCH_FLAG) || (CTRL_FLAGS(ctrl) & MGLOBAL_FLAG) == 0) {
             goto RELEASE_ALL_THREADS;
           }
         } // fall through
@@ -686,9 +686,11 @@ void
 free_nfa_sim(NFASim * nfa_sim)
 {
   list_iterate(((*(NFASimCtrl **)nfa_sim)->active_threads), (void *)&free);
-  list_free(&((*(NFASimCtrl **)nfa_sim)->active_threads), NULL);
+  list_free(((*(NFASimCtrl **)nfa_sim)->active_threads), NULL);
+
   list_iterate(((*(NFASimCtrl **)nfa_sim)->thread_pool), (void *)&free);
-  list_free(&((*(NFASimCtrl **)nfa_sim)->thread_pool), NULL);
+  list_free(((*(NFASimCtrl **)nfa_sim)->thread_pool), NULL);
+
   free(nfa_sim->ctrl);
   free(nfa_sim);
 }

@@ -786,7 +786,7 @@ test_list_free(void)
   int fail_set = 0;
   List * list = new_list();
   
-  list_free(&list, NULL);
+  list_free(list, NULL);
   if(list_assert(list == NULL) == FAIL) {
     report_test_status(test_name, "Failed to free list", FAIL);
     fail_set = 1;
@@ -881,5 +881,5 @@ main(void)
   // test_list_chop
 
 // ACTUALLY FREE THE LIST... ASSUMING THE ABOVE CASE WORKED
-  list_free(&list, NULL);
+  list_free(list, NULL);
 } // main

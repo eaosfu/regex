@@ -314,15 +314,15 @@ list_clear(List * list)
 
 
 void
-list_free(List ** list, VISIT_PROC_pt delete_data)
+list_free_items(List * list, VISIT_PROC_pt delete_data)
 {
-  if(*list == NULL) {
+  if(list == NULL) {
     return;
   }
 
-  list_clear(*list);
+  list_clear(list);
 
-  ListItem * cur_item = (*list)->pool;
+  ListItem * cur_item = list->pool;
   ListItem * tmp = NULL;
 
   while(cur_item && cur_item->next) {
@@ -332,7 +332,7 @@ list_free(List ** list, VISIT_PROC_pt delete_data)
       delete_data(cur_item->data);
     }
 
-    --((*list)->pool_size);
+    --(list->pool_size);
     free(cur_item);
     cur_item = tmp;
   }
@@ -345,11 +345,24 @@ list_free(List ** list, VISIT_PROC_pt delete_data)
     free(cur_item);
   }
 
-  (*list)->head = NULL;
-  (*list)->pool = NULL;
-  (*list)->tail = NULL;
-  free(*list);
-  *list = NULL;
+  return;
+}
+
+
+void
+list_free(List * list, VISIT_PROC_pt delete_data)
+{
+  if(list == NULL) {
+    return;
+  }
+  
+  list_free_items(list, delete_data);
+
+  (list)->head = NULL;
+  (list)->pool = NULL;
+  (list)->tail = NULL;
+  free(list);
+  list = NULL;
 
   return;
 }

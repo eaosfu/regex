@@ -42,7 +42,8 @@ void * list_extend(List *, void *);
 void list_clear(List *);
 void list_iterate(List *, VISIT_PROC_pt);
 void list_iterate2(List *, VISIT_PROC2_pt, void *, void **);
-void list_free(List **, VISIT_PROC_pt);
+void list_free(List *, VISIT_PROC_pt);
+void list_free_items(List *, VISIT_PROC_pt);
 
 
 #define list_swap(l1, l2)  \
