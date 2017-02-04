@@ -3,6 +3,7 @@
 
 #define MAX_BACKREF_COUNT     20
 #define MATCH_BUCKET_SIZE   1024
+#define MAX_BACKTRACK_DEPTH 1024
 
 #include "regex_parser.h"
 
@@ -16,14 +17,24 @@ typedef struct Match {
 
 typedef struct LoopRecord {
   int count;
-  char * last_match;
 } LoopRecord;
+
+/*
+typedef struct BacktrackRecord {
+  int next_branch;
+  int count;
+  const char * input;
+  const char * match;
+  NFA  * restart_point;;
+} BacktrackRecord;
+*/
 
 
 typedef struct NFASim {
   struct NFASimCtrl * ctrl;
   int size; // size of this struct plus size of loop_record
   int status;
+  int interval_count;
   int tracking_intervals;
   int tracking_backrefs;
   const char * input_ptr;

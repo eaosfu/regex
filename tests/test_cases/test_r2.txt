@@ -1134,3 +1134,1143 @@ grep: grep -o --color=no '\(a\(b\{,12\}\|z\{4,5\}\)x\?\)\+' test_input_interval
 
 regex: '((a?b{2,4}|(a{2,6}b?)+){2,3}|az+xz?){1,4}' test_input_interval
 grep: grep -o --color=no '\(\(a\?b\{2,4\}\|\(a\{2,6\}b\?\)\+\)\{2,3\}\|az\+xz\?\)\{1,4\}' test_input_interval
+
+regex: '((a?b{2,4}|(a{2,6}b?)+){2,3}|az+xz?){1,4}' test_input
+grep: grep -o --color=no '\(\(a\?b\{2,4\}\|\(a\{2,6\}b\?\)\+\)\{2,3\}\|az\+xz\?\)\{1,4\}' test_input
+
+
+
+##
+######################################## TEST SIMPLE RANGE ###########################################################
+
+regex: '[a]' test_input_interval
+grep: grep -o --color=no '[a]' test_input_interval
+
+regex: '[^a]' test_input_interval
+grep: grep -o --color=no '[^a]' test_input_interval
+
+regex: '[z]' test_input_interval
+grep: grep -o --color=no '[z]' test_input_interval
+
+regex: '[^z]' test_input_interval
+grep: grep -o --color=no '[^z]' test_input_interval
+
+regex: '[A]' test_input_interval
+grep: grep -o --color=no '[A]' test_input_interval
+
+regex: '[^A]' test_input_interval
+grep: grep -o --color=no '[^A]' test_input_interval
+
+regex: '[Z]' test_input_interval
+grep: grep -o --color=no '[Z]' test_input_interval
+
+regex: '[^Z]' test_input_interval
+grep: grep -o --color=no '[^Z]' test_input_interval
+
+regex: '[0]' test_input_interval
+grep: grep -o --color=no '[0]' test_input_interval
+
+regex: '[^0]' test_input_interval
+grep: grep -o --color=no '[^0]' test_input_interval
+
+regex: '[9]' test_input_interval
+grep: grep -o --color=no '[9]' test_input_interval
+
+regex: '[^9]' test_input_interval
+grep: grep -o --color=no '[^9]' test_input_interval
+
+regex: '[a-z]' test_input_interval
+grep: grep -o --color=no '[a-z]' test_input_interval
+
+regex: '[^a-z]' test_input_interval
+grep: grep -o --color=no '[^a-z]' test_input_interval
+
+regex: '[abc]' test_input_interval
+grep: grep -o --color=no '[abc]' test_input_interval
+
+regex: '[^abc]' test_input_interval
+grep: grep -o --color=no '[^abc]' test_input_interval
+
+regex: '[0-9]' test_input_interval
+grep: grep -o --color=no '[0-9]' test_input_interval
+
+regex: '[^0-9]' test_input_interval
+grep: grep -o --color=no '[^0-9]' test_input_interval
+
+regex: '[012389]' test_input_interval
+grep: grep -o --color=no '[012389]' test_input_interval
+
+regex: '[^012389]' test_input_interval
+grep: grep -o --color=no '[^012389]' test_input_interval
+
+regex: '[a-z012389]' test_input_interval
+grep: grep -o --color=no '[a-z012389]' test_input_interval
+
+regex: '[^a-z012389]' test_input_interval
+grep: grep -o --color=no '[^a-z012389]' test_input_interval
+
+regex: '[a-z0-9]' test_input_interval
+grep: grep -o --color=no '[a-z0-9]' test_input_interval
+
+regex: '[^a-z0-9]' test_input_interval
+grep: grep -o --color=no '[^a-z0-9]' test_input_interval
+
+regex: '[ABcDEfxZy0-9]' test_input_interval
+grep: grep -o --color=no '[ABcDEfxZy0-9]' test_input_interval
+
+regex: '[^ABcDEfxZy0-9]' test_input_interval
+grep: grep -o --color=no '[^ABcDEfxZy0-9]' test_input_interval
+
+
+######################################## TEST POS-CLOSURE RANGE ######################################################
+
+regex: '[^a-z]+' test_input_interval
+grep: grep -o --color=no '[^a-z]\+' test_input_interval
+
+regex: '[^abc]+' test_input_interval
+grep: grep -o --color=no '[^abc]\+' test_input_interval
+
+regex: '[0-9]+' test_input_interval
+grep: grep -o --color=no '[0-9]\+' test_input_interval
+
+regex: '[^0-9]+' test_input_interval
+grep: grep -o --color=no '[^0-9]\+' test_input_interval
+
+regex: '[012389]+' test_input_interval
+grep: grep -o --color=no '[012389]\+' test_input_interval
+
+regex: '[^012389]+' test_input_interval
+grep: grep -o --color=no '[^012389]\+' test_input_interval
+
+regex: '[a-z012389]+' test_input_interval
+grep: grep -o --color=no '[a-z012389]\+' test_input_interval
+
+regex: '[^a-z012389]+' test_input_interval
+grep: grep -o --color=no '[^a-z012389]\+' test_input_interval
+
+regex: '[a-z0-9]+' test_input_interval
+grep: grep -o --color=no '[a-z0-9]\+' test_input_interval
+
+regex: '[ABcDEfxZy0-9]+' test_input_interval
+grep: grep -o --color=no '[ABcDEfxZy0-9]\+' test_input_interval
+
+
+############################################ TEST KLEENE RANGE #######################################################
+
+regex: '[^a-z]*' test_input_interval
+grep: grep -o --color=no '[^a-z]*' test_input_interval
+
+regex: '[^abc]*' test_input_interval
+grep: grep -o --color=no '[^abc]*' test_input_interval
+
+regex: '[0-9]*' test_input_interval
+grep: grep -o --color=no '[0-9]*' test_input_interval
+
+regex: '[^0-9]*' test_input_interval
+grep: grep -o --color=no '[^0-9]*' test_input_interval
+
+regex: '[012389]*' test_input_interval
+grep: grep -o --color=no '[012389]*' test_input_interval
+
+regex: '[^012389]*' test_input_interval
+grep: grep -o --color=no '[^012389]*' test_input_interval
+
+regex: '[a-z012389]*' test_input_interval
+grep: grep -o --color=no '[a-z012389]*' test_input_interval
+
+regex: '[^a-z012389]*' test_input_interval
+grep: grep -o --color=no '[^a-z012389]*' test_input_interval
+
+regex: '[a-z0-9]*' test_input_interval
+grep: grep -o --color=no '[a-z0-9]*' test_input_interval
+
+regex: '[ABcDEfxZy0-9]*' test_input_interval
+grep: grep -o --color=no '[ABcDEfxZy0-9]*' test_input_interval
+
+
+############################################# TEST QMARK RANGE #######################################################
+
+regex: '[^a-z]?' test_input_interval
+grep: grep -o --color=no '[^a-z]\?' test_input_interval
+
+regex: '[^abc]?' test_input_interval
+grep: grep -o --color=no '[^abc]\?' test_input_interval
+
+regex: '[0-9]?' test_input_interval
+grep: grep -o --color=no '[0-9]\?' test_input_interval
+
+regex: '[^0-9]?' test_input_interval
+grep: grep -o --color=no '[^0-9]\?' test_input_interval
+
+regex: '[012389]?' test_input_interval
+grep: grep -o --color=no '[012389]\?' test_input_interval
+
+regex: '[^012389]?' test_input_interval
+grep: grep -o --color=no '[^012389]\?' test_input_interval
+
+regex: '[a-z012389]?' test_input_interval
+grep: grep -o --color=no '[a-z012389]\?' test_input_interval
+
+regex: '[^a-z012389]?' test_input_interval
+grep: grep -o --color=no '[^a-z012389]\?' test_input_interval
+
+regex: '[a-z0-9]?' test_input_interval
+grep: grep -o --color=no '[a-z0-9]\?' test_input_interval
+
+regex: '[ABcDEfxZy0-9]?' test_input_interval
+grep: grep -o --color=no '[ABcDEfxZy0-9]\?' test_input_interval
+
+
+regex: '[a-z][^a-z]?' test_input_interval
+grep: grep -o --color=no '[a-z][^a-z]\?' test_input_interval
+
+regex: '[a-z][^abc]?' test_input_interval
+grep: grep -o --color=no '[a-z][^abc]\?' test_input_interval
+
+regex: '[a-z][0-9]?' test_input_interval
+grep: grep -o --color=no '[a-z][0-9]\?' test_input_interval
+
+regex: '[a-z][^0-9]?' test_input_interval
+grep: grep -o --color=no '[a-z][^0-9]\?' test_input_interval
+
+regex: '[a-z][012389]?' test_input_interval
+grep: grep -o --color=no '[a-z][012389]\?' test_input_interval
+
+regex: '[a-z][^012389]?' test_input_interval
+grep: grep -o --color=no '[a-z][^012389]\?' test_input_interval
+
+regex: '[a-z][a-z012389]?' test_input_interval
+grep: grep -o --color=no '[a-z][a-z012389]\?' test_input_interval
+
+regex: '[a-z][^a-z012389]?' test_input_interval
+grep: grep -o --color=no '[a-z][^a-z012389]\?' test_input_interval
+
+regex: '[a-z][a-z0-9]?' test_input_interval
+grep: grep -o --color=no '[a-z][a-z0-9]\?' test_input_interval
+
+regex: '[a-z][ABcDEfxZy0-9]?' test_input_interval
+grep: grep -o --color=no '[a-z][ABcDEfxZy0-9]\?' test_input_interval
+
+
+regex: '[^a-z]?[a-z]' test_input_interval
+grep: grep -o --color=no '[^a-z]\?[a-z]' test_input_interval
+
+regex: '[^abc]?[a-z]' test_input_interval
+grep: grep -o --color=no '[^abc]\?[a-z]' test_input_interval
+
+regex: '[0-9]?[a-z]' test_input_interval
+grep: grep -o --color=no '[0-9]\?[a-z]' test_input_interval
+
+regex: '[^0-9]?[a-z]' test_input_interval
+grep: grep -o --color=no '[^0-9]\?[a-z]' test_input_interval
+
+regex: '[012389]?[a-z]' test_input_interval
+grep: grep -o --color=no '[012389]\?[a-z]' test_input_interval
+
+regex: '[^012389]?[a-z]' test_input_interval
+grep: grep -o --color=no '[^012389]\?[a-z]' test_input_interval
+
+regex: '[a-z012389]?[a-z]' test_input_interval
+grep: grep -o --color=no '[a-z012389]\?[a-z]' test_input_interval
+
+regex: '[^a-z012389]?[a-z]' test_input_interval
+grep: grep -o --color=no '[^a-z012389]\?[a-z]' test_input_interval
+
+regex: '[a-z0-9]?[a-z]' test_input_interval
+grep: grep -o --color=no '[a-z0-9]\?[a-z]' test_input_interval
+
+regex: '[^a-z0-9]?[a-z]' test_input_interval
+grep: grep -o --color=no '[^a-z0-9]\?[a-z]' test_input_interval
+
+regex: '[ABcDEfxZy0-9]?[a-z]' test_input_interval
+grep: grep -o --color=no '[ABcDEfxZy0-9]\?[a-z]' test_input_interval
+
+regex: '[^ABcDEfxZy0-9]?[a-z]' test_input_interval
+grep: grep -o --color=no '[^ABcDEfxZy0-9]\?[a-z]' test_input_interval
+
+
+regex: '[a-z][a-z]?[a-z]' test_input_interval
+grep: grep -o --color=no '[a-z][a-z]\?[a-z]' test_input_interval
+
+regex: '[a-z][^a-z]?[a-z]' test_input_interval
+grep: grep -o --color=no '[a-z][^a-z]\?[a-z]' test_input_interval
+
+regex: '[a-z][abc]?[a-z]' test_input_interval
+grep: grep -o --color=no '[a-z][abc]\?[a-z]' test_input_interval
+
+regex: '[a-z][^abc]?[a-z]' test_input_interval
+grep: grep -o --color=no '[a-z][^abc]\?[a-z]' test_input_interval
+
+regex: '[a-z][0-9]?[a-z]' test_input_interval
+grep: grep -o --color=no '[a-z][0-9]\?[a-z]' test_input_interval
+
+regex: '[a-z][^0-9]?[a-z]' test_input_interval
+grep: grep -o --color=no '[a-z][^0-9]\?[a-z]' test_input_interval
+
+regex: '[a-z][012389]?[a-z]' test_input_interval
+grep: grep -o --color=no '[a-z][012389]\?[a-z]' test_input_interval
+
+regex: '[a-z][^012389]?[a-z]' test_input_interval
+grep: grep -o --color=no '[a-z][^012389]\?[a-z]' test_input_interval
+
+regex: '[a-z][a-z012389]?[a-z]' test_input_interval
+grep: grep -o --color=no '[a-z][a-z012389]\?[a-z]' test_input_interval
+
+regex: '[a-z][^a-z012389]?[a-z]' test_input_interval
+grep: grep -o --color=no '[a-z][^a-z012389]\?[a-z]' test_input_interval
+
+regex: '[a-z][a-z0-9]?[a-z]' test_input_interval
+grep: grep -o --color=no '[a-z][a-z0-9]\?[a-z]' test_input_interval
+
+regex: '[a-z][^a-z0-9]?[a-z]' test_input_interval
+grep: grep -o --color=no '[a-z][^a-z0-9]\?[a-z]' test_input_interval
+
+regex: '[a-z][ABcDEfxZy0-9]?[a-z]' test_input_interval
+grep: grep -o --color=no '[a-z][ABcDEfxZy0-9]\?[a-z]' test_input_interval
+
+regex: '[a-z][ABcDEfxZy0-9]?[a-z]' test_input_interval
+grep: grep -o --color=no '[a-z][ABcDEfxZy0-9]\?[a-z]' test_input_interval
+
+
+##################################### TEST QMARK RANGE + POS-CLOSURE #################################################
+
+regex: '[^a-z]?+' test_input_interval
+grep: grep -o --color=no '[^a-z]\?\+' test_input_interval
+
+regex: '[^abc]?+' test_input_interval
+grep: grep -o --color=no '[^abc]\?\+' test_input_interval
+
+regex: '[0-9]?+' test_input_interval
+grep: grep -o --color=no '[0-9]\?\+' test_input_interval
+
+regex: '[^0-9]?+' test_input_interval
+grep: grep -o --color=no '[^0-9]\?\+' test_input_interval
+
+regex: '[012389]?+' test_input_interval
+grep: grep -o --color=no '[012389]\?\+' test_input_interval
+
+regex: '[^012389]?+' test_input_interval
+grep: grep -o --color=no '[^012389]\?\+' test_input_interval
+
+regex: '[a-z012389]?+' test_input_interval
+grep: grep -o --color=no '[a-z012389]\?\+' test_input_interval
+
+regex: '[^a-z012389]?+' test_input_interval
+grep: grep -o --color=no '[^a-z012389]\?\+' test_input_interval
+
+regex: '[a-z0-9]?+' test_input_interval
+grep: grep -o --color=no '[a-z0-9]\?\+' test_input_interval
+
+regex: '[ABcDEfxZy0-9]?+' test_input_interval
+grep: grep -o --color=no '[ABcDEfxZy0-9]\?\+' test_input_interval
+
+
+regex: '[a-z][^a-z]?+' test_input_interval
+grep: grep -o --color=no '[a-z][^a-z]\?\+' test_input_interval
+
+regex: '[a-z][^abc]?+' test_input_interval
+grep: grep -o --color=no '[a-z][^abc]\?\+' test_input_interval
+
+regex: '[a-z][0-9]?+' test_input_interval
+grep: grep -o --color=no '[a-z][0-9]\?\+' test_input_interval
+
+regex: '[a-z][^0-9]?+' test_input_interval
+grep: grep -o --color=no '[a-z][^0-9]\?\+' test_input_interval
+
+regex: '[a-z][012389]?+' test_input_interval
+grep: grep -o --color=no '[a-z][012389]\?\+' test_input_interval
+
+regex: '[a-z][^012389]?+' test_input_interval
+grep: grep -o --color=no '[a-z][^012389]\?\+' test_input_interval
+
+regex: '[a-z][a-z012389]?+' test_input_interval
+grep: grep -o --color=no '[a-z][a-z012389]\?\+' test_input_interval
+
+regex: '[a-z][^a-z012389]?+' test_input_interval
+grep: grep -o --color=no '[a-z][^a-z012389]\?\+' test_input_interval
+
+regex: '[a-z][a-z0-9]?+' test_input_interval
+grep: grep -o --color=no '[a-z][a-z0-9]\?\+' test_input_interval
+
+regex: '[a-z][ABcDEfxZy0-9]?+' test_input_interval
+grep: grep -o --color=no '[a-z][ABcDEfxZy0-9]\?\+' test_input_interval
+
+
+regex: '[^a-z]?+[a-z]' test_input_interval
+grep: grep -o --color=no '[^a-z]\?\+[a-z]' test_input_interval
+
+regex: '[^abc]?+[a-z]' test_input_interval
+grep: grep -o --color=no '[^abc]\?\+[a-z]' test_input_interval
+
+regex: '[0-9]?+[a-z]' test_input_interval
+grep: grep -o --color=no '[0-9]\?\+[a-z]' test_input_interval
+
+regex: '[^0-9]?+[a-z]' test_input_interval
+grep: grep -o --color=no '[^0-9]\?\+[a-z]' test_input_interval
+
+regex: '[012389]?+[a-z]' test_input_interval
+grep: grep -o --color=no '[012389]\?\+[a-z]' test_input_interval
+
+regex: '[^012389]?+[a-z]' test_input_interval
+grep: grep -o --color=no '[^012389]\?\+[a-z]' test_input_interval
+
+regex: '[a-z012389]?+[a-z]' test_input_interval
+grep: grep -o --color=no '[a-z012389]\?\+[a-z]' test_input_interval
+
+regex: '[^a-z012389]?+[a-z]' test_input_interval
+grep: grep -o --color=no '[^a-z012389]\?\+[a-z]' test_input_interval
+
+regex: '[a-z0-9]?+[a-z]' test_input_interval
+grep: grep -o --color=no '[a-z0-9]\?\+[a-z]' test_input_interval
+
+regex: '[^a-z0-9]?+[a-z]' test_input_interval
+grep: grep -o --color=no '[^a-z0-9]\?\+[a-z]' test_input_interval
+
+regex: '[ABcDEfxZy0-9]?+[a-z]' test_input_interval
+grep: grep -o --color=no '[ABcDEfxZy0-9]\?\+[a-z]' test_input_interval
+
+regex: '[^ABcDEfxZy0-9]?+[a-z]' test_input_interval
+grep: grep -o --color=no '[^ABcDEfxZy0-9]\?\+[a-z]' test_input_interval
+
+
+regex: '[a-z][a-z]?+[a-z]' test_input_interval
+grep: grep -o --color=no '[a-z][a-z]\?\+[a-z]' test_input_interval
+
+regex: '[a-z][^a-z]?+[a-z]' test_input_interval
+grep: grep -o --color=no '[a-z][^a-z]\?\+[a-z]' test_input_interval
+
+regex: '[a-z][abc]?+[a-z]' test_input_interval
+grep: grep -o --color=no '[a-z][abc]\?\+[a-z]' test_input_interval
+
+regex: '[a-z][^abc]?+[a-z]' test_input_interval
+grep: grep -o --color=no '[a-z][^abc]\?\+[a-z]' test_input_interval
+
+regex: '[a-z][0-9]?+[a-z]' test_input_interval
+grep: grep -o --color=no '[a-z][0-9]\?\+[a-z]' test_input_interval
+
+regex: '[a-z][^0-9]?+[a-z]' test_input_interval
+grep: grep -o --color=no '[a-z][^0-9]\?\+[a-z]' test_input_interval
+
+regex: '[a-z][012389]?+[a-z]' test_input_interval
+grep: grep -o --color=no '[a-z][012389]\?\+[a-z]' test_input_interval
+
+regex: '[a-z][^012389]?+[a-z]' test_input_interval
+grep: grep -o --color=no '[a-z][^012389]\?\+[a-z]' test_input_interval
+
+regex: '[a-z][a-z012389]?+[a-z]' test_input_interval
+grep: grep -o --color=no '[a-z][a-z012389]\?\+[a-z]' test_input_interval
+
+regex: '[a-z][^a-z012389]?+[a-z]' test_input_interval
+grep: grep -o --color=no '[a-z][^a-z012389]\?\+[a-z]' test_input_interval
+
+regex: '[a-z][a-z0-9]?+[a-z]' test_input_interval
+grep: grep -o --color=no '[a-z][a-z0-9]\?\+[a-z]' test_input_interval
+
+regex: '[a-z][^a-z0-9]?+[a-z]' test_input_interval
+grep: grep -o --color=no '[a-z][^a-z0-9]\?\+[a-z]' test_input_interval
+
+regex: '[a-z][ABcDEfxZy0-9]?+[a-z]' test_input_interval
+grep: grep -o --color=no '[a-z][ABcDEfxZy0-9]\?\+[a-z]' test_input_interval
+
+regex: '[a-z][ABcDEfxZy0-9]?+[a-z]' test_input_interval
+grep: grep -o --color=no '[a-z][ABcDEfxZy0-9]\?\+[a-z]' test_input_interval
+
+
+regex: '[a-z][a-z]?[a-z]+' test_input_interval
+grep: grep -o --color=no '[a-z][a-z]\?[a-z]\+' test_input_interval
+
+regex: '[a-z][^a-z]?[a-z]+' test_input_interval
+grep: grep -o --color=no '[a-z][^a-z]\?[a-z]\+' test_input_interval
+
+
+regex: '([^a-z]?)+' test_input_interval
+grep: grep -o --color=no '\([^a-z]\?\)\+' test_input_interval
+
+regex: '([^abc]?)+' test_input_interval
+grep: grep -o --color=no '\([^abc]\?\)\+' test_input_interval
+
+regex: '([0-9]?)+' test_input_interval
+grep: grep -o --color=no '\([0-9]\?\)\+' test_input_interval
+
+regex: '([^0-9]?)+' test_input_interval
+grep: grep -o --color=no '\([^0-9]\?\)\+' test_input_interval
+
+regex: '([012389]?)+' test_input_interval
+grep: grep -o --color=no '\([012389]\?\)\+' test_input_interval
+
+regex: '([^012389]?)+' test_input_interval
+grep: grep -o --color=no '\([^012389]\?\)\+' test_input_interval
+
+regex: '([a-z012389]?)+' test_input_interval
+grep: grep -o --color=no '\([a-z012389]\?\)\+' test_input_interval
+
+regex: '([^a-z012389]?)+' test_input_interval
+grep: grep -o --color=no '\([^a-z012389]\?\)\+' test_input_interval
+
+regex: '([a-z0-9]?)+' test_input_interval
+grep: grep -o --color=no '\([a-z0-9]\?\)\+' test_input_interval
+
+regex: '([ABcDEfxZy0-9]?)+' test_input_interval
+grep: grep -o --color=no '\([ABcDEfxZy0-9]\?\)\+' test_input_interval
+
+
+regex: '([a-z][^a-z]?)+' test_input_interval
+grep: grep -o --color=no '\([a-z][^a-z]\?\)\+' test_input_interval
+
+regex: '([a-z][^abc]{0,1})+' test_input_interval
+grep: grep -o --color=no '\([a-z][^abc]\{0,1\}\)\+' test_input_interval
+
+regex: '([a-z][^abc]?)+' test_input_interval
+grep: grep -o --color=no '\([a-z][^abc]\?\)\+' test_input_interval
+
+regex: '([a-z][0-9]?)+' test_input_interval
+grep: grep -o --color=no '\([a-z][0-9]\?\)\+' test_input_interval
+
+regex: '([a-z][^0-9]?)+' test_input_interval
+grep: grep -o --color=no '\([a-z][^0-9]\?\)\+' test_input_interval
+
+regex: '([a-z][012389]?)+' test_input_interval
+grep: grep -o --color=no '\([a-z][012389]\?\)\+' test_input_interval
+
+regex: '([a-z][^012389]?)+' test_input_interval
+grep: grep -o --color=no '\([a-z][^012389]\?\)\+' test_input_interval
+
+regex: '([a-z][a-z012389]?)+' test_input_interval
+grep: grep -o --color=no '\([a-z][a-z012389]\?\)\+' test_input_interval
+
+regex: '([a-z][^a-z012389]?)+' test_input_interval
+grep: grep -o --color=no '\([a-z][^a-z012389]\?\)\+' test_input_interval
+
+regex: '([a-z][a-z0-9]?)+' test_input_interval
+grep: grep -o --color=no '\([a-z][a-z0-9]\?\)\+' test_input_interval
+
+regex: '([a-z][ABcDEfxZy0-9]?)+' test_input_interval
+grep: grep -o --color=no '\([a-z][ABcDEfxZy0-9]\?\)\+' test_input_interval
+
+
+regex: '([^a-z]?)+[a-z]' test_input_interval
+grep: grep -o --color=no '\([^a-z]\?\)\+[a-z]' test_input_interval
+
+regex: '([^abc]?)+[a-z]' test_input_interval
+grep: grep -o --color=no '\([^abc]\?\)\+[a-z]' test_input_interval
+
+regex: '([0-9]?)+[a-z]' test_input_interval
+grep: grep -o --color=no '\([0-9]\?\)\+[a-z]' test_input_interval
+
+regex: '([^0-9]?)+[a-z]' test_input_interval
+grep: grep -o --color=no '\([^0-9]\?\)\+[a-z]' test_input_interval
+
+regex: '([012389]?)+[a-z]' test_input_interval
+grep: grep -o --color=no '\([012389]\?\)\+[a-z]' test_input_interval
+
+regex: '([^012389]?)+[a-z]' test_input_interval
+grep: grep -o --color=no '\([^012389]\?\)\+[a-z]' test_input_interval
+
+regex: '([a-z012389]?)+[a-z]' test_input_interval
+grep: grep -o --color=no '\([a-z012389]\?\)\+[a-z]' test_input_interval
+
+regex: '([^a-z012389]?)+[a-z]' test_input_interval
+grep: grep -o --color=no '\([^a-z012389]\?\)\+[a-z]' test_input_interval
+
+regex: '([a-z0-9]?)+[a-z]' test_input_interval
+grep: grep -o --color=no '\([a-z0-9]\?\)\+[a-z]' test_input_interval
+
+regex: '([^a-z0-9]?)+[a-z]' test_input_interval
+grep: grep -o --color=no '\([^a-z0-9]\?\)\+[a-z]' test_input_interval
+
+regex: '([ABcDEfxZy0-9]?)+[a-z]' test_input_interval
+grep: grep -o --color=no '\([ABcDEfxZy0-9]\?\)\+[a-z]' test_input_interval
+
+regex: '([^ABcDEfxZy0-9]?)+[a-z]' test_input_interval
+grep: grep -o --color=no '\([^ABcDEfxZy0-9]\?\)\+[a-z]' test_input_interval
+
+
+regex: '([a-z][a-z]?)+[a-z]' test_input_interval
+grep: grep -o --color=no '\([a-z][a-z]\?\)\+[a-z]' test_input_interval
+
+regex: '([a-z][^a-z]?)+[a-z]' test_input_interval
+grep: grep -o --color=no '\([a-z][^a-z]\?\)\+[a-z]' test_input_interval
+
+regex: '([a-z][abc]?)+[a-z]' test_input_interval
+grep: grep -o --color=no '\([a-z][abc]\?\)\+[a-z]' test_input_interval
+
+regex: '([a-z][^abc]?)+[a-z]' test_input_interval
+grep: grep -o --color=no '\([a-z][^abc]\?\)\+[a-z]' test_input_interval
+
+regex: '([a-z][0-9]?)+[a-z]' test_input_interval
+grep: grep -o --color=no '\([a-z][0-9]\?\)\+[a-z]' test_input_interval
+
+regex: '([a-z][^0-9]?)+[a-z]' test_input_interval
+grep: grep -o --color=no '\([a-z][^0-9]\?\)\+[a-z]' test_input_interval
+
+regex: '([a-z][012389]?)+[a-z]' test_input_interval
+grep: grep -o --color=no '\([a-z][012389]\?\)\+[a-z]' test_input_interval
+
+regex: '([a-z][^012389]?)+[a-z]' test_input_interval
+grep: grep -o --color=no '\([a-z][^012389]\?\)\+[a-z]' test_input_interval
+
+regex: '([a-z][a-z012389]?)+[a-z]' test_input_interval
+grep: grep -o --color=no '\([a-z][a-z012389]\?\)\+[a-z]' test_input_interval
+
+regex: '([a-z][^a-z012389]?)+[a-z]' test_input_interval
+grep: grep -o --color=no '\([a-z][^a-z012389]\?\)\+[a-z]' test_input_interval
+
+regex: '([a-z][a-z0-9]?)+[a-z]' test_input_interval
+grep: grep -o --color=no '\([a-z][a-z0-9]\?\)\+[a-z]' test_input_interval
+
+regex: '([a-z][^a-z0-9]?)+[a-z]' test_input_interval
+grep: grep -o --color=no '\([a-z][^a-z0-9]\?\)\+[a-z]' test_input_interval
+
+regex: '([a-z][ABcDEfxZy0-9]?)+[a-z]' test_input_interval
+grep: grep -o --color=no '\([a-z][ABcDEfxZy0-9]\?\)\+[a-z]' test_input_interval
+
+regex: '([a-z][ABcDEfxZy0-9]?)+[a-z]' test_input_interval
+grep: grep -o --color=no '\([a-z][ABcDEfxZy0-9]\?\)\+[a-z]' test_input_interval
+
+
+regex: '([a-z][a-z]?)[a-z]+' test_input_interval
+grep: grep -o --color=no '\([a-z][a-z]\?\)[a-z]\+' test_input_interval
+
+regex: '([a-z][^a-z]?)[a-z]+' test_input_interval
+grep: grep -o --color=no '\([a-z][^a-z]\?\)[a-z]\+' test_input_interval
+
+##################################### TEST QMARK RANGE + KLEENE-CLOSURE ##############################################
+
+regex: '([A-Z]+(_)*)+' test_input_interval
+grep: grep -o --color=no '\([A-Z]\+\(_\)*\)\+' test_input_interval
+
+regex: '([A-Z]+(_)?)+' test_input_interval
+grep: grep -o --color=no '\([A-Z]\+\(_\)\?\)\+' test_input_interval
+
+regex: '[^a-z]?*' test_input_interval
+grep: grep -o --color=no '[^a-z]\?*' test_input_interval
+
+regex: '[^abc]?*' test_input_interval
+grep: grep -o --color=no '[^abc]\?*' test_input_interval
+
+regex: '[0-9]?*' test_input_interval
+grep: grep -o --color=no '[0-9]\?*' test_input_interval
+
+regex: '[^0-9]?*' test_input_interval
+grep: grep -o --color=no '[^0-9]\?*' test_input_interval
+
+regex: '[012389]?*' test_input_interval
+grep: grep -o --color=no '[012389]\?*' test_input_interval
+
+regex: '[^012389]?*' test_input_interval
+grep: grep -o --color=no '[^012389]\?*' test_input_interval
+
+regex: '[a-z012389]?*' test_input_interval
+grep: grep -o --color=no '[a-z012389]\?*' test_input_interval
+
+regex: '[^a-z012389]?*' test_input_interval
+grep: grep -o --color=no '[^a-z012389]\?*' test_input_interval
+
+regex: '[a-z0-9]?*' test_input_interval
+grep: grep -o --color=no '[a-z0-9]\?*' test_input_interval
+
+regex: '[ABcDEfxZy0-9]?*' test_input_interval
+grep: grep -o --color=no '[ABcDEfxZy0-9]\?*' test_input_interval
+
+
+regex: '[a-z][^a-z]?*' test_input_interval
+grep: grep -o --color=no '[a-z][^a-z]\?*' test_input_interval
+
+regex: '[a-z][^abc]?*' test_input_interval
+grep: grep -o --color=no '[a-z][^abc]\?*' test_input_interval
+
+regex: '[a-z][0-9]?*' test_input_interval
+grep: grep -o --color=no '[a-z][0-9]\?*' test_input_interval
+
+regex: '[a-z][^0-9]?*' test_input_interval
+grep: grep -o --color=no '[a-z][^0-9]\?*' test_input_interval
+
+regex: '[a-z][012389]?*' test_input_interval
+grep: grep -o --color=no '[a-z][012389]\?*' test_input_interval
+
+regex: '[a-z][^012389]?*' test_input_interval
+grep: grep -o --color=no '[a-z][^012389]\?*' test_input_interval
+
+regex: '[a-z][a-z012389]?*' test_input_interval
+grep: grep -o --color=no '[a-z][a-z012389]\?*' test_input_interval
+
+regex: '[a-z][^a-z012389]?*' test_input_interval
+grep: grep -o --color=no '[a-z][^a-z012389]\?*' test_input_interval
+
+regex: '[a-z][a-z0-9]?*' test_input_interval
+grep: grep -o --color=no '[a-z][a-z0-9]\?*' test_input_interval
+
+regex: '[a-z][ABcDEfxZy0-9]?*' test_input_interval
+grep: grep -o --color=no '[a-z][ABcDEfxZy0-9]\?*' test_input_interval
+
+
+regex: '[^a-z]?*[a-z]' test_input_interval
+grep: grep -o --color=no '[^a-z]\?*[a-z]' test_input_interval
+
+regex: '[^abc]?*[a-z]' test_input_interval
+grep: grep -o --color=no '[^abc]\?*[a-z]' test_input_interval
+
+regex: '[0-9]?*[a-z]' test_input_interval
+grep: grep -o --color=no '[0-9]\?*[a-z]' test_input_interval
+
+regex: '[^0-9]?*[a-z]' test_input_interval
+grep: grep -o --color=no '[^0-9]\?*[a-z]' test_input_interval
+
+regex: '[012389]?*[a-z]' test_input_interval
+grep: grep -o --color=no '[012389]\?*[a-z]' test_input_interval
+
+regex: '[^012389]?*[a-z]' test_input_interval
+grep: grep -o --color=no '[^012389]\?*[a-z]' test_input_interval
+
+regex: '[a-z012389]?*[a-z]' test_input_interval
+grep: grep -o --color=no '[a-z012389]\?*[a-z]' test_input_interval
+
+regex: '[^a-z012389]?*[a-z]' test_input_interval
+grep: grep -o --color=no '[^a-z012389]\?*[a-z]' test_input_interval
+
+regex: '[a-z0-9]?*[a-z]' test_input_interval
+grep: grep -o --color=no '[a-z0-9]\?*[a-z]' test_input_interval
+
+regex: '[^a-z0-9]?*[a-z]' test_input_interval
+grep: grep -o --color=no '[^a-z0-9]\?*[a-z]' test_input_interval
+
+regex: '[ABcDEfxZy0-9]?*[a-z]' test_input_interval
+grep: grep -o --color=no '[ABcDEfxZy0-9]\?*[a-z]' test_input_interval
+
+regex: '[^ABcDEfxZy0-9]?*[a-z]' test_input_interval
+grep: grep -o --color=no '[^ABcDEfxZy0-9]\?*[a-z]' test_input_interval
+
+
+regex: '[a-z][a-z]?*[a-z]' test_input_interval
+grep: grep -o --color=no '[a-z][a-z]\?*[a-z]' test_input_interval
+
+regex: '[a-z][^a-z]?*[a-z]' test_input_interval
+grep: grep -o --color=no '[a-z][^a-z]\?*[a-z]' test_input_interval
+
+regex: '[a-z][abc]?*[a-z]' test_input_interval
+grep: grep -o --color=no '[a-z][abc]\?*[a-z]' test_input_interval
+
+regex: '[a-z][^abc]?*[a-z]' test_input_interval
+grep: grep -o --color=no '[a-z][^abc]\?*[a-z]' test_input_interval
+
+regex: '[a-z][0-9]?*[a-z]' test_input_interval
+grep: grep -o --color=no '[a-z][0-9]\?*[a-z]' test_input_interval
+
+regex: '[a-z][^0-9]?*[a-z]' test_input_interval
+grep: grep -o --color=no '[a-z][^0-9]\?*[a-z]' test_input_interval
+
+regex: '[a-z][012389]?*[a-z]' test_input_interval
+grep: grep -o --color=no '[a-z][012389]\?*[a-z]' test_input_interval
+
+regex: '[a-z][^012389]?*[a-z]' test_input_interval
+grep: grep -o --color=no '[a-z][^012389]\?*[a-z]' test_input_interval
+
+regex: '[a-z][a-z012389]?*[a-z]' test_input_interval
+grep: grep -o --color=no '[a-z][a-z012389]\?*[a-z]' test_input_interval
+
+regex: '[a-z][^a-z012389]?*[a-z]' test_input_interval
+grep: grep -o --color=no '[a-z][^a-z012389]\?*[a-z]' test_input_interval
+
+regex: '[a-z][a-z0-9]?*[a-z]' test_input_interval
+grep: grep -o --color=no '[a-z][a-z0-9]\?*[a-z]' test_input_interval
+
+regex: '[a-z][^a-z0-9]?*[a-z]' test_input_interval
+grep: grep -o --color=no '[a-z][^a-z0-9]\?*[a-z]' test_input_interval
+
+regex: '[a-z][ABcDEfxZy0-9]?*[a-z]' test_input_interval
+grep: grep -o --color=no '[a-z][ABcDEfxZy0-9]\?*[a-z]' test_input_interval
+
+regex: '[a-z][ABcDEfxZy0-9]?*[a-z]' test_input_interval
+grep: grep -o --color=no '[a-z][ABcDEfxZy0-9]\?*[a-z]' test_input_interval
+
+regex: '(ap?)*ke' test_input_interval
+grep: grep -o --color=no '\(ap\?\)*ke' test_input_interval
+
+regex: '(p?)*ke' test_input_interval
+grep: grep -o --color=no '\(p\?\)*ke' test_input_interval
+
+
+############################################# TEST ALTERNATIONS ######################################################
+
+regex: '((((ab_)((a|c)(a|c)|x))_)+)+' test_input_interval
+grep: grep -o --color=no '\(\(\(\(ab_\)\(\(a\|c\)\(a\|c\)\|x\)\)_\)\+\)\+' test_input_interval
+
+regex: 'ab_(a|c)(a|c)' test_input_interval
+grep: grep -o --color=no 'ab_\(a\|c\)\(a\|c\)' test_input_interval
+
+regex: 'ab_((a|c)(a|c))' test_input_interval
+grep: grep -o --color=no 'ab_\(\(a\|c\)\(a\|c\)\)' test_input_interval
+
+regex: '(ab_(a|c)(a|c))' test_input_interval
+grep: grep -o --color=no '\(ab_\(a\|c\)\(a\|c\)\)' test_input_interval
+
+regex: '(a(b_(a|c)(a|c)))' test_input_interval
+grep: grep -o --color=no '\(a\(b_\(a\|c\)\(a\|c\)\)\)' test_input_interval
+
+regex: '((a(b_(a|c)(a|c))))' test_input_interval
+grep: grep -o --color=no '\(\(a\(b_\(a\|c\)\(a\|c\)\)\)\)' test_input_interval
+
+regex: '((a(b)_((a|c)(a|c))))' test_input_interval
+grep: grep -o --color=no '\(\(a\(b\)_\(\(a\|c\)\(a\|c\)\)\)\)' test_input_interval
+
+regex: '((a(b)_((a|((c)(a))|(c)))))' test_input_interval
+grep: grep -o --color=no '\(\(a\(b\)_\(\(a\|\(\(c\)\(a\)\)\|\(c\)\)\)\)\)' test_input_interval
+
+regex: 'ab_(Xy|((a|b|(c|d|e)+)*c))' test_input_interval
+grep: grep -o --color=no 'ab_\(Xy\|\(\(a\|b\|\(c\|d\|e\)\+\)*c\)\)' test_input_interval
+
+regex: 'ab_(Xy|((a|b|(c|d|e)+)+c))' test_input_interval
+grep: grep -o --color=no 'ab_\(Xy\|\(\(a\|b\|\(c\|d\|e\)\+\)\+c\)\)' test_input_interval
+
+regex: 'ab_(a(b|(c|d|e)))' test_input_interval
+grep: grep -o --color=no 'ab_\(a\(b\|\(c\|d\|e\)\)\)' test_input_interval
+
+regex: 'ab_(Xy|((a|b|(c|d|e))c))' test_input_interval
+grep: grep -o --color=no 'ab_\(Xy\|\(\(a\|b\|\(c\|d\|e\)\)c\)\)' test_input_interval
+
+regex: 'ab_(a(b|(c|d|e)))' test_input_interval
+grep: grep -o --color=no 'ab_\(a\(b\|\(c\|d\|e\)\)\)' test_input_interval
+
+regex: 'ab_((ab|a(c|x(e|n)d))_)+' test_input_interval
+grep: grep -o --color=no 'ab_\(\(ab\|a\(c\|x\(e\|n\)d\)\)\_\)\+' test_input_interval
+
+regex: 'ab_((a(c|x(e|n)d)|ab)_)+' test_input_interval
+grep: grep -o --color=no 'ab_\(\(a\(c\|x\(e\|n\)d\)\|ab\)_\)\+' test_input_interval
+
+regex: 'ab_((a(c|x(en)d)|ab)_)+' test_input_interval
+grep: grep -o --color=no 'ab_\(\(a\(c\|x\(en\)d\)\|ab\)_\)\+' test_input_interval
+
+regex: 'ab_((ab|a(c|x(en)d))_)+' test_input_interval
+grep: grep -o --color=no 'ab_\(\(ab\|a\(c\|x\(en\)d\)\)_\)\+' test_input_interval
+
+regex: 'ab_((ab|a(c|d))_)+' test_input_interval
+grep: grep -o --color=no 'ab_\(\(ab\|a\(c\|d\)\)_\)\+' test_input_interval
+
+regex: 'ab_((ab|a(c|d))_)+\\1' test_input_interval
+grep: grep -o --color=no 'ab_\(\(ab\|a\(c\|d\)\)_\)\+\1' test_input_interval
+
+regex: '((ab|ac)_)+ac' test_input_interval
+grep: grep -o --color=no '\(\(ab\|ac\)_\)\+ac' test_input_interval
+
+regex: '((ab|ac)_)+' test_input_interval
+grep: grep -o --color=no '\(\(ab\|ac\)_\)\+' test_input_interval
+
+regex: 'parse(_paren|_bracket)' test_input_interval
+grep: grep -o --color=no 'parse\(_paren\|_bracket\)' test_input_interval
+
+regex: 'parse((_paren)|_bracket)' test_input_interval
+grep: grep -o --color=no 'parse\(\(_paren\)\|_bracket\)' test_input_interval
+
+regex: '#include <([a-z.])+>|[a-Z_.]+|^([a-z],)+|([a-z]+,)+$' test_input_interval
+grep: grep -o --color=no '#include <\([a-z.]\)\+>\|[a-Z_.]\+\|^\([a-z],\)\+\|\([a-z]\+,\)\+$' test_input_interval
+
+regex: '([a-z]+,)+$|[a-Z_.]+' test_input_interval
+grep: grep -o --color=no '\([a-z]\+,\)\+$\|[a-Z_.]\+' test_input_interval
+
+regex: '#include <([a-z.])+>|[a-Z_.]+|^([a-z],)+|([a-z]+,)+$|[0-9[:alnum:]]+' test_input_interval
+grep: grep -o --color=no '#include <\([a-z.]\)\+>\|[a-Z_.]\+\|^\([a-z],\)\+\|\([a-z]\+,\)\+$\|[0-9[:alnum:]]\+' test_input_interval
+
+regex: '#include (<([[:alnum:]._])+>)$|([a-z_.]+)' test_input_interval
+grep: grep -o --color=no '#include \(<\([[:alnum:]._]\)\+>\)$\|\([a-z_.]\+\)' test_input_interval
+
+regex: '[a-z],$' test_input_interval
+grep: grep -o --color=no '[a-z],$' test_input_interval
+
+regex: '#include (<([a-z.])+>)$|([a-z_.]+)' test_input_interval
+grep: grep -o --color=no '#include \(<\([a-z.]\)\+>\)$\|\([a-z_.]\+\)' test_input_interval
+
+regex: '#include <([a-z.])+>|[a-Z_.]+' test_input_interval
+grep: grep -o --color=no '#include <\([a-z.]\)\+>\|[a-Z_.]\+' test_input_interval
+
+regex: '#include <([a-z.])+>|[a-Z_.]+|^([a-z],)+|([a-z]+,)+$|[0-9[:alnum:]]+|d[a-Z]e' test_input_interval
+grep: grep -o --color=no '#include <\([a-z.]\)\+>\|[a-Z_.]\+\|^\([a-z],\)\+\|\([a-z]\+,\)\+$\|[0-9[:alnum:]]\+\|d[a-Z]e' test_input_interval
+ 
+regex: '#include <([a-z.])+>|[a-Z_.]+|^([a-z],)+$|([a-z]+,)+$' test_input_interval
+grep: grep -o --color=no '#include <\([a-z.]\)\+>\|[a-Z_.]\+\|^\([a-z],\)\+$\|\([a-z]\+,\)\+$' test_input_interval
+
+regex: '^#include <([a-z.])+>|[a-Z_.]+|^([a-z],)+$|([a-z]+,)+$' test_input_interval
+grep: grep -o --color=no '^#include <\([a-z.]\)\+>\|[a-Z_.]\+\|^\([a-z],\)\+$\|\([a-z]\+,\)\+$' test_input_interval
+
+regex: '^[a-z],$' test_input_interval
+grep: grep -o --color=no '^[a-z],$' test_input_interval
+
+regex: '[a-z],$' test_input_interval
+grep: grep -o --color=no '[a-z],$' test_input_interval
+
+regex: '^#include <([a-z.])+>|[a-Z_.]+' test_input_interval
+grep: grep -o --color=no '^#include <\([a-z.]\)\+>\|[a-Z_.]\+' test_input_interval
+
+regex: '[a-Z_.]+|^#include <([a-z.])+>' test_input_interval
+grep: grep -o --color=no '[a-Z_.]\+\|^#include <\([a-z.]\)\+>' test_input_interval
+
+regex: '#include (<([a-z.])+>)' test_input_interval
+grep: grep -o --color=no '#include \(<\([a-z.]\)\+>\)' test_input_interval
+
+regex: '#include (<([a-z.])+>)$' test_input_interval
+grep: grep -o --color=no '#include \(<\([a-z.]\)\+>\)$' test_input_interval
+
+regex: '#include <([a-z.])+> $' test_input_interval
+grep: grep -o --color=no '#include <\([a-z.]\)\+> $' test_input_interval
+
+regex: '#include <([a-z.])+>$' test_input_interval
+grep: grep -o --color=no '#include <\([a-z.]\)\+>$' test_input_interval
+
+regex: '^#include <([a-z.])+>$' test_input_interval
+grep: grep -o --color=no '^#include <\([a-z.]\)\+>$' test_input_interval
+
+regex: '^#include <([a-z.])+>' test_input_interval
+grep: grep -o --color=no '^#include <\([a-z.]\)\+>' test_input_interval
+
+regex: '#include <([a-z.])+>' test_input_interval
+grep: grep -o --color=no '#include <\([a-z.]\)\+>' test_input_interval
+
+regex: '^([a-z],)' test_input_interval
+grep: grep -o --color=no '^\([a-z],\)' test_input_interval
+
+regex: '([a-z],)+' test_input_interval
+grep: grep -o --color=no '\([a-z],\)\+' test_input_interval
+
+regex: '([A-Z]+(_)?)+\(' test_input_interval
+grep: grep -o --color=no '\([A-Z]\+\(_\)\?\)\+(' test_input_interval
+
+regex: '((p?(ar|se)?)(_bracket|_paren)s?)' test_input
+grep: grep -o --color=no '\(\(p\?\(ar\|se\)\?\)\(_bracket\|_paren\)s\?\)' test_input
+
+regex: 'p?(arse)?(_bracket|_paren)s?' test_input
+grep: grep -o --color=no 'p\?\(arse\)\?\(_bracket\|_paren\)s\?' test_input
+
+regex: '(p?(arse)?(_bracket|_paren)s?)|aa' test_input
+grep: grep -o --color=no '\(p\?\(arse\)\?\(_bracket\|_paren\)s\?\)\|aa' test_input
+
+regex: '(p(arse)?(_bracket|_paren)s?)|aa' test_input
+grep: grep -o --color=no '\(p\(arse\)\?\(_bracket\|_paren\)s\?\)\|aa' test_input
+
+############################################ TEST BACKREFERENCES #####################################################
+
+# reference at edges
+regex: '(e)[a-z_].+\\1' test_input
+grep: grep -o --color=no '\(e\)[a-z_].\+\1' test_input
+
+regex: '(nfa).\\1' test_input
+grep: grep -o --color=no '\(nfa\).\1' test_input
+
+regex: 'a(z+)zx\\1' test_input
+grep: grep -o --color=no 'a\(z\+\)zx\1' test_input
+
+# Nested siblings
+regex: '(new_([a-z]+)_(nfa)).\\3' test_input
+grep: grep -o --color=no '\(new_\([a-z]\+\)_\(nfa\)\).\3' test_input
+
+# Siblings with nested siblings
+
+# nested sibling with alternation
+regex: '((symbol).(stack))|([a-z]+_\\3)' test_input_interval
+grep: grep -o --color=no '\(\(symbol\).\(stack\)\)\|\([a-z]\+_\3\)' test_input_interval
+
+# nested sibling with alternation
+regex: '((symbol).(stack))|([a-z]+_)' test_input_interval
+grep: grep -o --color=no '\(\(symbol\).\(stack\)\)\|\([a-z]\+_\)' test_input_interval
+
+regex: '(stack)|(((symbol).(stack))|([a-z]+_\\3)|interval_\\3|parser_|expression_\\1)' test_input_interval
+grep: grep -o --color=no '\(stack\)\|\(\(\(symbol\).\(stack\)\)\|[a-z]\+_\3\|interval_\3\|parser_\|expression_\1\)' test_input_interval
+
+regex: '((stack)|(((symbol).(stack))|([a-z]+_\\3)|interval_\\3|parser_|expression_\\1))' test_input_interval
+grep: grep -o --color=no '\(\(stack\)\|\(\(\(symbol\).\(stack\)\)\|\([a-z]\+_\3\)\|interval_\3\|parser_\|expression_\1\)\)' test_input_interval
+
+regex: '(yy|(symbol|aa))(b\\1|_stack|z\\1|b\\1)' test_input_interval
+grep: grep -o --color=no '\(yy\|\(symbol\|aa\)\)\(b\1\|_stack\|z\1\|b\1\)' test_input_interval
+
+regex: '(void ((parse)(_bracket|_paren)(s)?_[a-z]*_)\\3)' test_input
+grep: grep -o --color=no '\(void \(\(parse\)\(_bracket\|_paren\)\(s\)\?_[a-z]*_\)\3\)' test_input
+
+regex: '(void ((parse)(_bracket|_paren)(s)?_expression_)\\3)' test_input
+grep: grep -o --color=no '\(void \(\(parse\)\(_bracket\|_paren\)\(s\)\?_expression_\)\3\)' test_input
+
+regex: '(void (parse)(_bracket|_paren)(s)?_expression_\\2)' test_input
+grep: grep -o --color=no '\(void \(parse\)\(_bracket\|_paren\)\(s\)\?_expression_\2\)' test_input
+
+regex: '(void (parse)(_bracket|_paren)(s)?_[a-z]*_\\2)' test_input
+grep: grep -o --color=no '\(void \(parse\)\(_bracket\|_paren\)\(s\)\?_[a-z]*_\2\)' test_input
+
+regex: 'ab_((ab|ac)_)\\1' test_input
+grep: grep -o --color=no 'ab_\(\(ab\|ac\)_\)\1' test_input
+
+
+########################################### TEST INTERVAL ############################################################
+
+regex: 'a{,}' test_input
+grep: grep -o --color=no 'a\{,\}' test_input
+
+regex: 'a{1,}' test_input
+grep: grep -o --color=no 'a\{1,\}' test_input
+
+regex: 'a{,1}' test_input
+grep: grep -o --color=no 'a\{,1\}' test_input
+
+regex: 'a{0,0}' test_input
+grep: grep -o --color=no 'a\{0,0\}' test_input
+
+regex: 'a{1,1}' test_input
+grep: grep -o --color=no 'a\{1,1\}' test_input
+
+regex: 'a{2,2}' test_input
+grep: grep -o --color=no 'a\{2,2\}' test_input
+
+regex: 'a{2,3}' test_input
+grep: grep -o --color=no 'a\{2,3\}' test_input
+
+regex: 'a{2,15}' test_input
+grep: grep -o --color=no 'a\{2,15\}' test_input
+
+regex: 'a{5,}' test_input
+grep: grep -o --color=no 'a\{5,\}' test_input
+
+regex: 'a{,5}' test_input
+grep: grep -o --color=no 'a\{,5\}' test_input
+
+regex: 'a{15,}' test_input
+grep: grep -o --color=no 'a\{15,\}' test_input
+
+regex: 'a{,15}' test_input
+grep: grep -o --color=no 'a\{,15\}' test_input
+
+regex: 'b{,}' test_input
+grep: grep -o --color=no 'b\{,\}' test_input
+
+regex: 'b{1,}' test_input
+grep: grep -o --color=no 'b\{1,\}' test_input
+
+regex: 'b{,1}' test_input
+grep: grep -o --color=no 'b\{,1\}' test_input
+
+regex: 'b{0,0}' test_input
+grep: grep -o --color=no 'b\{0,0\}' test_input
+
+regex: 'b{1,1}' test_input
+grep: grep -o --color=no 'b\{1,1\}' test_input
+
+regex: 'b{2,2}' test_input
+grep: grep -o --color=no 'b\{2,2\}' test_input
+
+regex: 'b{2,3}' test_input
+grep: grep -o --color=no 'b\{2,3\}' test_input
+
+regex: 'b{2,15}' test_input
+grep: grep -o --color=no 'b\{2,15\}' test_input
+
+regex: 'b{5,}' test_input
+grep: grep -o --color=no 'b\{5,\}' test_input
+
+regex: 'b{,5}' test_input
+grep: grep -o --color=no 'b\{,5\}' test_input
+
+regex: 'b{15,}' test_input
+grep: grep -o --color=no 'b\{15,\}' test_input
+
+regex: 'b{,15}' test_input
+grep: grep -o --color=no 'b\{,15\}' test_input
+
+regex: 'a{,}b' test_input
+grep: grep -o --color=no 'a\{,\}b' test_input
+
+regex: 'a{1,}b' test_input
+grep: grep -o --color=no 'a\{1,\}b' test_input
+
+regex: 'a{,1}b' test_input
+grep: grep -o --color=no 'a\{,1\}b' test_input
+
+regex: 'a{0,0}b' test_input
+grep: grep -o --color=no 'a\{0,0\}b' test_input
+
+regex: 'a{1,1}b' test_input
+grep: grep -o --color=no 'a\{1,1\}b' test_input
+
+regex: 'a{2,2}b' test_input
+grep: grep -o --color=no 'a\{2,2\}b' test_input
+
+regex: 'a{2,3}b' test_input
+grep: grep -o --color=no 'a\{2,3\}b' test_input
+
+regex: 'a{2,15}b' test_input
+grep: grep -o --color=no 'a\{2,15\}b' test_input
+
+regex: 'a{5,}b' test_input
+grep: grep -o --color=no 'a\{5,\}b' test_input
+
+regex: 'a{,5}b' test_input
+grep: grep -o --color=no 'a\{,5\}b' test_input
+
+regex: 'a{15,}b' test_input
+grep: grep -o --color=no 'a\{15,\}b' test_input
+
+regex: 'a{,15}b' test_input
+grep: grep -o --color=no 'a\{,15\}b' test_input
+
+regex: 'b{,}b' test_input
+grep: grep -o --color=no 'b\{,\}b' test_input
+
+regex: 'b{1,}b' test_input
+grep: grep -o --color=no 'b\{1,\}b' test_input
+
+regex: 'b{,1}b' test_input
+grep: grep -o --color=no 'b\{,1\}b' test_input
+
+regex: 'b{0,0}b' test_input
+grep: grep -o --color=no 'b\{0,0\}b' test_input
+
+regex: 'b{1,1}b' test_input
+grep: grep -o --color=no 'b\{1,1\}b' test_input
+
+regex: 'b{2,2}b' test_input
+grep: grep -o --color=no 'b\{2,2\}b' test_input
+
+regex: 'b{2,3}b' test_input
+grep: grep -o --color=no 'b\{2,3\}b' test_input
+
+regex: 'b{2,15}b' test_input
+grep: grep -o --color=no 'b\{2,15\}b' test_input
+
+regex: 'b{5,}b' test_input
+grep: grep -o --color=no 'b\{5,\}b' test_input
+
+regex: 'b{,5}b' test_input
+grep: grep -o --color=no 'b\{,5\}b' test_input
+
+regex: 'b{15,}b' test_input
+grep: grep -o --color=no 'b\{15,\}b' test_input
+
+regex: 'b{,15}b' test_input
+grep: grep -o --color=no 'b\{,15\}b' test_input
+
+regex: 'a{1,2}b{1,2}' test_input
+grep: grep -o --color=no 'a\{1,2\}b\{1,2\}' test_input
+
+regex: '((a{1,2}){1,2})' test_input
+grep: grep -o --color=no '\(\(a\{1,2\}\)\{1,2\}\)' test_input
+
+regex: '((a{1,2}b{1,2}){1,2})' test_input
+grep: grep -o --color=no '\(\(a\{1,2\}b\{1,2\}\)\{1,2\}\)' test_input
+
+regex: '((a{1,2}b{1,2}){1,2})b' test_input
+grep: grep -o --color=no '\(\(a\{1,2\}b\{1,2\}\)\{1,2\}\)b' test_input
+
+regex: '(a{2,6}b)+' test_input
+grep: grep -o --color=no '\(a\{2,6\}b\)\+' test_input
+
+regex: '((a{2,6}b){2,3})+' test_input
+grep: grep -o --color=no '\(\(a\{2,6\}b\)\{2,3\}\)\+' test_input
+
+regex: '((a{1,2}b{1,2}){1,2})+' test_input
+grep: grep -o --color=no '\(\(a\{1,2\}b\{1,2\}\)\{1,2\}\)\+' test_input
+
+regex: 'aaa{,6}b+|bbb{,4}' test_input
+grep: grep -o --color=no 'aaa\{,6\}b\+\|bbb\{,4\}' test_input
+
+regex: 'a{2,6}b+|b{2,4}' test_input
+grep: grep -o --color=no 'a\{2,6\}b\+\|b\{2,4\}' test_input
+
+regex: '(b{2,4}|a{2,6}b+){2,3}' test_input
+grep: grep -o --color=no '\(b\{2,4\}\|a\{2,6\}b\+\)\{2,3\}' test_input
+
+regex: '(a(b{,12}|z{4,5})x?)+' test_input
+grep: grep -o --color=no '\(a\(b\{,12\}\|z\{4,5\}\)x\?\)\+' test_input

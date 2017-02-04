@@ -218,6 +218,7 @@ new_literal_nfa(NFACtrl * ctrl, unsigned int literal, unsigned int type)
   start = new_nfa(ctrl, type);
 
   mark_nfa(start);
+
   start->value.literal = literal;
   start->out1 = start->out2 = accept;
 
@@ -358,7 +359,7 @@ new_interval_nfa(NFA * target, unsigned int min, unsigned int max)
 
   new_interval->value.min_rep = min;
   new_interval->value.max_rep = max;
-  new_interval->value.count = 0;
+  new_interval->value.split_idx = 0;
 
   new_interval->out1 = target->parent;
   new_interval->out2 = accept;

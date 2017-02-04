@@ -33,6 +33,7 @@
 
 typedef unsigned int nfa_range[SIZE_OF_RANGE];
 
+
 typedef struct NFACtrl {
   struct NFACtrl * ctrl_id;
   unsigned int next_seq_id;
@@ -42,20 +43,25 @@ typedef struct NFACtrl {
   struct NFA * last_free_nfa;
 } NFACtrl;
 
+
 typedef struct NFA {
   struct NFACtrl * ctrl;
   struct NFA * parent;
   struct NFA * out1;
   struct NFA * out2;
   int greedy;
+  int visited;
+  int done;
+  int reaches_accept;
+  List reachable;
   unsigned int id;
   struct {
     unsigned int type;
     union {
       struct {
-        unsigned int min_rep;
-        unsigned int max_rep;
-        unsigned int count;
+        int min_rep;
+        int max_rep;
+        int split_idx;
       };
       nfa_range * range;
       List * branches;
@@ -69,8 +75,8 @@ typedef struct NFA {
       };
     };
   } value;
-  List reachable;
 } NFA;
+
 
 NFACtrl * new_nfa_ctrl(void);
 NFA * concatenate_nfa(NFA *, NFA *);

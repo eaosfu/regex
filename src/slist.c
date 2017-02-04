@@ -471,7 +471,6 @@ list_chop(List * list, unsigned int sz)
     }
     list->head = (*new_head);
     list->size -= sz;
-//    chopped->tail = (*new_head) - offsetof(ListItem, next);
     chopped->tail = chop_tail;
     (*new_head) = NULL;
   }

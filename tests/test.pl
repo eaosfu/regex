@@ -199,7 +199,7 @@ sub diff_results {
 
     if($result != 0) {
       $fail_count++;
-      print "Failed test $_: $args->{$_}{regex}\n";
+      print "Failed test $_: $args->{$_}{regex} $args->{$_}{regex_input}\n";
     }
   }
   $total = scalar (keys %{$args});
