@@ -157,16 +157,12 @@ update_range_nfa(unsigned int low, unsigned int high, NFA * range_nfa, int negat
 
 
 NFA *
-new_range_nfa(NFACtrl * ctrl, NFA * interval, int negate, unsigned int branch_id)
+new_range_nfa(NFACtrl * ctrl, int negate)
 {
   NFA * start  = new_nfa(ctrl, NFA_RANGE);
   NFA * accept = new_nfa(ctrl, NFA_ACCEPTING);
   
   mark_nfa(start);
- 
-  if(interval) {
-    start->parent = interval;
-  }
 
   start->value.range = xmalloc(sizeof *(start->value.range));
 
@@ -229,12 +225,11 @@ new_literal_nfa(NFACtrl * ctrl, unsigned int literal, unsigned int type)
 
 
 NFA *
-new_backreference_nfa(NFACtrl * ctrl, NFA * interval, unsigned int capture_group_id, unsigned int branch_id)
+new_backreference_nfa(NFACtrl * ctrl, unsigned int capture_group_id)
 {
   NFA * start  = new_nfa(ctrl, NFA_BACKREFERENCE);
   NFA * accept = new_nfa(ctrl, NFA_ACCEPTING);
 
-  start->parent = interval;
   start->id = capture_group_id;
   start->out1 = start->out2 = accept;
 

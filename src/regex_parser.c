@@ -52,15 +52,8 @@ track_capture_group(Parser * parser, unsigned int type)
     ret = 1;
     NFA * right = new_literal_nfa(parser->nfa_ctrl, NFA_LITERAL, type);
     NFA * left  = pop(parser->symbol_stack);
-    right->parent->id = parser->cgrp_count - 1;
+    right->parent->id = parser->paren_stack[parser->paren_idx - 1] - 1;
     push(parser->symbol_stack, concatenate_nfa(left, right));
-  }
-
-  if(cgrp_is_complex(parser->cgrp_map, parser->current_cgrp)) {
-    ret = 2;
-    if(type == NFA_CAPTUREGRP_BEGIN) {
-      ++(parser->next_interval_id);
-    }
   }
 
   if(type == NFA_CAPTUREGRP_END) {
@@ -533,13 +526,12 @@ parse_bracket_expression(Parser * parser)
     negate_match = 1;
   }
 
-  NFA * range_nfa = new_range_nfa(parser->nfa_ctrl, INTERVAL(parser), negate_match, parser->branch_id);
+  NFA * range_nfa = new_range_nfa(parser->nfa_ctrl, negate_match);
   push(parser->symbol_stack, range_nfa);
 
   parse_matching_list(parser, range_nfa->parent, negate_match);
 
   if(parser->lookahead.type != CLOSEBRACKET) {
-    //fatal("Expected ]\n");
     parser_fatal(MISSING_CLOSE_BRACKET, REGEX, READHEAD, 0);
   }
   else {
@@ -656,6 +648,9 @@ update_open_paren_accounting(Parser * parser)
   ++(parser->paren_count);
   parser->current_cgrp = ++(parser->cgrp_count);
 
+  parser->paren_stack[parser->paren_idx] = parser->cgrp_count;
+  ++(parser->paren_idx);
+
   if(parser->root_cgrp == 0) {
     parser->root_cgrp = parser->current_cgrp;
   }
@@ -671,6 +666,7 @@ void
 update_close_paren_accounting(Parser * parser, unsigned int subtree_br_cnt)
 {
   parser->subtree_branch_count = subtree_br_cnt;
+  --(parser->paren_idx);
 }
 
 
@@ -756,14 +752,16 @@ parse_sub_expression(Parser * parser)
       push(parser->symbol_stack, concatenate_nfa(left, right));
     } break;
     case BACKREFERENCE: {
+/*
+      // FIXME: NEED A BETTER/MORE EFFICIENT/CORRECT WAY OF DETECTING INVALID BACKREFERNCES!
       if(parser->lookahead.value == 0
       || (parser->lookahead.value > parser->cgrp_count)
       || (parser->current_cgrp > 0
          && parser->lookahead.value == parser->root_cgrp)) {
         parser_fatal(INVALID_BACKREF, REGEX, (READHEAD), -1);
       }
-      left = new_backreference_nfa(parser->nfa_ctrl, INTERVAL(parser),
-        parser->lookahead.value, parser->branch_id);
+*/
+      left = new_backreference_nfa(parser->nfa_ctrl, parser->lookahead.value - 1);
       push(parser->symbol_stack, left);
       parser_consume_token(parser);
       parse_quantifier_expression(parser);
@@ -1021,7 +1019,7 @@ __collect_adjacencies_helper(NFA * current, NFA * visiting)
 
 
 void
-collect_adjacencies(NFA * start, int total_collectables)
+collect_adjacencies(Parser * parser, NFA * start, int total_collectables)
 {
   if(start == NULL) {
     return;
@@ -1030,14 +1028,13 @@ collect_adjacencies(NFA * start, int total_collectables)
   NFA * current = start;
   NFA * visiting = start;
 
-  // FIXME: resuse parser->branch_stack as a list
-  List * l = new_list();
+  // branch_stack no longer contains useful data so reuse it as a list
+  List * l = parser->branch_stack;;
 
   __collect_adjacencies_helper(current, visiting);
   list_append(l, current);
   for(int i = 0; i < list_size(l); ++i) {
     if(i > total_collectables) {
-printf("i: %d/%d\n", i, total_collectables);
       break; // should never hit this condition
     }
     current = list_get_at(l, i);
@@ -1051,18 +1048,18 @@ printf("i: %d/%d\n", i, total_collectables);
         if(visiting->value.type == NFA_INTERVAL) {
           __collect_adjacencies_helper(visiting, visiting->out1);
           visiting->value.split_idx = list_size(&(visiting->reachable));
-// OMG WHAT A FUCKING KLUGE!
+// KLUDGE!
           ListItem * old_head = visiting->reachable.head;
           ListItem * old_tail = visiting->reachable.tail;
           visiting->reachable.size = 0;
           visiting->reachable.head = visiting->reachable.tail = NULL;
-// END KLUGE
+// END KLUDGE
           __collect_adjacencies_helper(visiting, visiting->out2);
-// OMG WHAT A FUCKING KLUGE!
+// KLUDGE!
           old_tail->next = visiting->reachable.head;
           visiting->reachable.size += visiting->value.split_idx;
           visiting->reachable.head = old_head;
-// OMG WHAT A FUCKING KLUGE!
+// KLUDGE!
           visiting->done = 1;
 //debug_print_collected(current, NULL);
         }
@@ -1081,8 +1078,6 @@ printf("i: %d/%d\n", i, total_collectables);
       }
     }
   }
-//printf("\n");
-  list_free(l, NULL);
 }
 
 
@@ -1112,7 +1107,7 @@ parse_regex(Parser * parser)
     // give the last accepting state an id
     mark_nfa(peek(parser->symbol_stack));
 
-    parser->loops_to_track += insert_progress_nfa(parser->loop_nfas);
+//    parser->loops_to_track += insert_progress_nfa(parser->loop_nfas);
 
 // TEST FIXME -- define an interface for this in nfa(.c/.h)
     //parser->total_nfa_ids = ((NFA *)peek(parser->symbol_stack))->ctrl->next_seq_id - 1;
@@ -1124,7 +1119,7 @@ parse_regex(Parser * parser)
       right->parent = start_node;
       push(parser->symbol_stack, right);
     }
-    collect_adjacencies((((NFA *)peek(parser->symbol_stack))->parent),
+    collect_adjacencies(parser, (((NFA *)peek(parser->symbol_stack))->parent),
       (parser->total_nfa_ids + parser->interval_count));
 //printf("HERE\n");
 //exit(1);

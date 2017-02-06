@@ -19,7 +19,6 @@
   #endif
 #endif
 
-//#define MINIMUM_COMPLEX_REGEX_LENGTH 5
 
 #if((((MAX_REGEX_LENGTH - 1)) % UINT_BITS) == 0)
   #define CGRP_MAP_SIZE                        \
@@ -28,6 +27,8 @@
   #define CGRP_MAP_SIZE                        \
     ((MAX_REGEX_LENGTH)/UINT_BITS + 1)
 #endif
+
+#define MAX_CGRP (MAX_REGEX_LENGTH/2 - 1)
 
 #define CGRP_MAP_CHUNK_BITS 2
 
@@ -41,24 +42,11 @@
 
 #define CGRP_MAP_CHUNK(i) \
   (((i) - 1) * 2)
-  
-// Return 1 if capture group under the influence of an
-// interval expression and also contains loops
-#define cgrp_is_complex(cgrp, i) \
-  (cgrp[CGRP_MAP_BLOCK((i))] & (0x001 << CGRP_MAP_CHUNK((i))))
-
+ 
 // Return 1 if capture group i is backreferenced
 #define cgrp_has_backref(cgrp, i) \
   (cgrp[CGRP_MAP_BLOCK((i))] & (0x001 << (CGRP_MAP_CHUNK((i)) + 1)))
 
-
-#define mark_closure_map_complex(cgrp, i)                              \
-  ({do {                                                               \
-    if((i) > 0) {                                                      \
-      cgrp[CGRP_MAP_BLOCK(i)] |= (0x001 << CGRP_MAP_CHUNK((i)));       \
-     }                                                                 \
-  } while(0);})
-  
   
 #define mark_closure_map_backref(cgrp, i)                              \
   ({do {                                                               \
@@ -67,25 +55,6 @@
      }                                                                 \
   } while(0);})
 
-
-#define INTERVAL(p)                                                    \
-  (((p)->interval_list_sz)                                             \
-  ? &((p)->interval_list[(p)->influencing_interval])                   \
-  : 0)
-
-#define PROVISIONED_INTERVAL(p)                                        \
-  (((p)->interval_list_sz)                                             \
-  ? ((p)->next_interval_id <= (p->interval_list_sz))                   \
-    ? &((p)->interval_list[(p)->next_interval_id - 1])                 \
-    : NULL                                                             \
-  : NULL)
-
-#define PARENT_INTERVAL(p)                                             \
-  ((p->is_complex)                                                     \
-  ? ((p)->next_interval_id <= (p->interval_list_sz))                   \
-    ? (&((p)->interval_list[(p)->next_interval_id - 1]))               \
-    : NULL                                                             \
-  : NULL)
 
 #define NFA_TRACK_PROGRESS(nfa) ((nfa)->value.type |= NFA_PROGRESS)
 
@@ -96,7 +65,6 @@ typedef struct IntervalRecord {
   int max_rep;
   int count;
 } IntervalRecord;
-
 
 typedef struct Parser {
   Token lookahead;
@@ -130,6 +98,8 @@ typedef struct Parser {
   int root_cgrp;
   int current_cgrp;
   int in_new_cgrp;
+  int paren_idx;
+  int paren_stack[MAX_CGRP];
 
   // Alternation Stuff
   int in_alternation;
@@ -144,9 +114,10 @@ typedef struct Parser {
 
   int interval_count;
 
-  int cgrp_map[CGRP_MAP_SIZE];
 // TEST
   int total_nfa_ids;
+// TEST END
+  int cgrp_map[CGRP_MAP_SIZE];
 } Parser;
 
 

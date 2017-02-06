@@ -172,6 +172,67 @@ reset_thread(NFASimCtrl * ctrl, NFA * start_node, char * start_pos)
   return sim;
 }
 
+/*
+static inline NFASim *
+thread_clone(NFASim * sim, NFA * nfa, int id)
+{
+  NFASim * clone;
+  NFASimCtrl * ctrl = sim->ctrl;
+
+//if(nfa->value.type == NFA_SPLIT) {
+//  printf("SPLIT SHIT!\n");
+//}
+//if( nfa->value.type == NFA_TREE) {
+//  printf("TREE SHIT!\n");
+//}
+//if(nfa->value.type == NFA_INTERVAL) {
+//  printf("INTERVAL SHIT!\n");
+//}
+
+
+  if(list_size(ctrl->thread_pool)) {
+    clone = list_shift(ctrl->thread_pool);
+  }
+  else {
+    clone = xmalloc(sim->size);
+  }
+
+  clone->status             = 0;
+  clone->ip                 = nfa;
+  clone->size               = sim->size;
+  clone->input_ptr          = sim->input_ptr;
+  clone->ctrl               = sim->ctrl;
+  clone->scanner            = sim->scanner;
+  clone->match              = sim->match;
+  clone->tracking_backrefs  = sim->tracking_backrefs;
+
+  clone->interval_count = sim->interval_count;
+
+  if(sim->tracking_intervals) {
+    memcpy(clone->loop_record, sim->loop_record, sizeof(LoopRecord) * sim->ctrl->loop_record_cap);
+    clone->tracking_intervals = sim->tracking_intervals;
+  }
+  else {
+    memset(clone->loop_record, 0, sizeof(LoopRecord) * sim->ctrl->loop_record_cap);
+  }
+
+  if(clone->tracking_backrefs > 0) {
+    memcpy(clone->backref_match, sim->backref_match, sizeof(Match) * MAX_BACKREF_COUNT);
+  }
+
+  load_next(clone, nfa);
+
+  if(clone->status == -1) {
+    list_append(ctrl->thread_pool, clone);
+    clone = NULL;
+  }
+  else {
+    list_append(ctrl->active_threads, clone);
+  }
+
+  return clone;
+}
+*/
 
 static inline NFASim *
 thread_clone(NFASim * sim, NFA * nfa, int id)
@@ -211,10 +272,6 @@ if(nfa->value.type == NFA_INTERVAL) {
   if(sim->tracking_intervals) {
     memcpy(clone->loop_record, sim->loop_record, sizeof(LoopRecord) * sim->ctrl->loop_record_cap);
     clone->tracking_intervals = sim->tracking_intervals;
-    if(id >= 0 && id < ctrl->loop_record_cap) {
-///      clone->loop_record[id].count = 0;
-      --(clone->tracking_intervals);
-    }
   }
   else {
     memset(clone->loop_record, 0, sizeof(LoopRecord) * sim->ctrl->loop_record_cap);
@@ -236,7 +293,6 @@ if(nfa->value.type == NFA_INTERVAL) {
 
   return clone;
 }
-
 
 static inline NFASim *
 release_thread(NFASim * sim, NFA * start_state)
@@ -292,23 +348,20 @@ load_next(NFASim * sim, NFA * nfa)
 //printf("load_next(): nfa->value.type: %d\n", nfa->value.type);
   switch(nfa->value.type) {
     case NFA_SPLIT: {
-//printf("SPLIT![0x%x] -- %d -- %d\n", nfa, sim->tracking_intervals, list_size(&(nfa->reachable)));
-
       for(int i = 1; i < list_size(&(nfa->reachable)); ++i) {
         thread_clone(sim, list_get_at(&(nfa->reachable), i), -1);
       }
       load_next(sim, list_get_at(&(nfa->reachable), 0));
-
-//      thread_clone(sim, nfa->out1, -1);
-//      load_next(sim, nfa->out2);
     } break;
     case NFA_CAPTUREGRP_BEGIN: {
+//printf("CAPTURE GROUP BEGIN: %d\n", nfa->id);
       sim->tracking_backrefs = 1;
       sim->backref_match[nfa->id].start = sim->input_ptr;
       sim->backref_match[nfa->id].end = NULL;
       process_adjacents(sim, nfa);
     } break;
     case NFA_CAPTUREGRP_END: {
+//printf("CAPTURE GROUP END: %d\n", nfa->id);
       sim->backref_match[nfa->id].end = sim->input_ptr - 1;
       process_adjacents(sim, nfa);
     } break;
@@ -338,7 +391,6 @@ load_next(NFASim * sim, NFA * nfa)
 
             --(sim->tracking_intervals);
             for(int i = nfa->value.split_idx + 1; i < list_size(&(nfa->reachable)); ++i) {
-//printf("HELLO\n");
               thread_clone(sim, list_get_at(&(nfa->reachable), i), -1);
             }
             load_next(sim, list_get_at(&(nfa->reachable), nfa->value.split_idx));
@@ -377,12 +429,20 @@ load_next(NFASim * sim, NFA * nfa)
     } break;
     case NFA_ACCEPTING: {
 /*
+int x = 15;
+int d = 0;
 if(sim->match.start) {
   const char * s = sim->match.start;
   while(s <= sim->match.end) {
+    ++d;
     printf("%c", *s);
     ++s;
   }
+
+  for(int i = 0; i < (x-d) - 1; ++i) {
+    printf(" ");
+  }
+
   printf(" -- [%d] [%d] [%d] [%d] -- tc(%d)/ic(%d) -- %s ***\n",
     sim->loop_record[0].count,
     sim->loop_record[1].count,
@@ -413,14 +473,20 @@ if(sim->match.start) {
              active_threads_sp[nfa->id] = sim->input_ptr;
              sim->ip = nfa;
              sim->status =  0;
-  /*
+/*
+  int x = 15;
+  int d = 0;
   if(sim->match.start) {
     const char * s = sim->match.start;
     while(s <= sim->match.end) {
+      ++d;
       printf("%c", *s);
       ++s;
     }
-    printf(" -- [%d] [%d] [%d] [%d] -- tc(%d)/ic(%d) -- %s --> %c\n",
+    for(int i = 0; i < (x-d) - 1; ++i) {
+      printf(" ");
+    }
+    printf(" -- [%d] [%d] [%d] [%d] -- tc(%d)/ic(%d) -- %s --> %c [0x%x]\n",
       sim->loop_record[0].count,
       sim->loop_record[1].count,
       sim->loop_record[2].count,
@@ -428,10 +494,11 @@ if(sim->match.start) {
       sim->tracking_intervals,
       sim->interval_count,
       sim->input_ptr,
-      nfa->value.literal
+      nfa->value.literal,
+      nfa
     );
   }
-  */
+*/
            }
            else {
              sim->status =  -1;
@@ -453,24 +520,9 @@ if(sim->match.start) {
 int
 process_adjacents(NFASim *sim, NFA * nfa)
 {
-//printf("process: %d -- %d\n", nfa->value.type, list_size(&(nfa->reachable)));
   NFA * next = NULL;
   for(int i = 1; i < list_size(&(nfa->reachable)); ++i) {
     thread_clone(sim, list_get_at(&(nfa->reachable), i), -1);
-/*
-    next = list_get_at(&(nfa->reachable), i);
-    if(next->value.type == NFA_INTERVAL) {
-      load_next(sim, next);
-    }
-    else {
-      if(i == 0) {
-        load_next(sim, next);
-      }
-      else {
-        thread_clone(sim, next, -1);
-      }
-    }
-*/
   }
   load_next(sim, list_get_at(&(nfa->reachable), 0));
 }
@@ -549,8 +601,10 @@ active_threads_sp[sim->ip->id] = NULL;
       } break;
       case NFA_BACKREFERENCE: {
         // FIXME: id - 1 should just be id
-        #define BACKREF_START(sim) ((sim)->backref_match[(sim)->ip->id - 1].start)
-        #define BACKREF_END(sim) ((sim)->backref_match[(sim)->ip->id - 1].end)
+        //#define BACKREF_START(sim) ((sim)->backref_match[(sim)->ip->id - 1].start)
+        //#define BACKREF_END(sim) ((sim)->backref_match[(sim)->ip->id - 1].end)
+        #define BACKREF_START(sim) ((sim)->backref_match[(sim)->ip->id].start)
+        #define BACKREF_END(sim) ((sim)->backref_match[(sim)->ip->id].end)
         const char * bref_end = BACKREF_END(sim);
         if(bref_end) {
           int fail = 0;
@@ -619,6 +673,7 @@ active_threads_sp[sim->ip->id] = NULL;
     backtrack(sim);
   }
 */
+//printf("\n");
   return sim->status;
 }
 
