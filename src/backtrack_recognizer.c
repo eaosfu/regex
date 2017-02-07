@@ -10,7 +10,6 @@
 #include "scanner.h"
 #include <stddef.h>
 #include "backtrack_recognizer.h"
-
 int match_interval_count1 = 0;
 int match_interval_count2 = 0;
 // FIXME: Put this inside the sim->ctrl, so it can be freed when we're done
@@ -162,9 +161,7 @@ reset_thread(NFASimCtrl * ctrl, NFA * start_node, char * start_pos)
     sim->input_ptr = start_pos;
     sim->tracking_backrefs  = 0;
     memset(sim->loop_record, 0, sizeof(LoopRecord) * sim->ctrl->loop_record_cap);
-    //load_next(sim, start_node);
     process_adjacents(sim, start_node);
-    //get_start_state(sim, start_node);
   }
   else {
     fatal("Unable to obtain an execution threads\n");
@@ -172,28 +169,20 @@ reset_thread(NFASimCtrl * ctrl, NFA * start_node, char * start_pos)
   return sim;
 }
 
-/*
+
 static inline NFASim *
 thread_clone(NFASim * sim, NFA * nfa, int id)
 {
   NFASim * clone;
   NFASimCtrl * ctrl = sim->ctrl;
 
-//if(nfa->value.type == NFA_SPLIT) {
-//  printf("SPLIT SHIT!\n");
-//}
-//if( nfa->value.type == NFA_TREE) {
-//  printf("TREE SHIT!\n");
-//}
-//if(nfa->value.type == NFA_INTERVAL) {
-//  printf("INTERVAL SHIT!\n");
-//}
-
+  int new_thread = 0;
 
   if(list_size(ctrl->thread_pool)) {
     clone = list_shift(ctrl->thread_pool);
   }
   else {
+    new_thread = 1;
     clone = xmalloc(sim->size);
   }
 
@@ -212,11 +201,11 @@ thread_clone(NFASim * sim, NFA * nfa, int id)
     memcpy(clone->loop_record, sim->loop_record, sizeof(LoopRecord) * sim->ctrl->loop_record_cap);
     clone->tracking_intervals = sim->tracking_intervals;
   }
-  else {
+  else if(new_thread == 0) {
     memset(clone->loop_record, 0, sizeof(LoopRecord) * sim->ctrl->loop_record_cap);
   }
 
-  if(clone->tracking_backrefs > 0) {
+  if(clone->tracking_backrefs > 0 && new_thread == 0) {
     memcpy(clone->backref_match, sim->backref_match, sizeof(Match) * MAX_BACKREF_COUNT);
   }
 
@@ -232,67 +221,7 @@ thread_clone(NFASim * sim, NFA * nfa, int id)
 
   return clone;
 }
-*/
 
-static inline NFASim *
-thread_clone(NFASim * sim, NFA * nfa, int id)
-{
-  NFASim * clone;
-  NFASimCtrl * ctrl = sim->ctrl;
-/*
-if(nfa->value.type == NFA_SPLIT) {
-  printf("SPLIT SHIT!\n");
-}
-if( nfa->value.type == NFA_TREE) {
-  printf("TREE SHIT!\n");
-}
-if(nfa->value.type == NFA_INTERVAL) {
-  printf("INTERVAL SHIT!\n");
-}
-*/
-
-  if(list_size(ctrl->thread_pool)) {
-    clone = list_shift(ctrl->thread_pool);
-  }
-  else {
-    clone = xmalloc(sim->size);
-  }
-
-  clone->status             = 0;
-  clone->ip                 = nfa;
-  clone->size               = sim->size;
-  clone->input_ptr          = sim->input_ptr;
-  clone->ctrl               = sim->ctrl;
-  clone->scanner            = sim->scanner;
-  clone->match              = sim->match;
-  clone->tracking_backrefs  = sim->tracking_backrefs;
-
-  clone->interval_count = sim->interval_count;
-
-  if(sim->tracking_intervals) {
-    memcpy(clone->loop_record, sim->loop_record, sizeof(LoopRecord) * sim->ctrl->loop_record_cap);
-    clone->tracking_intervals = sim->tracking_intervals;
-  }
-  else {
-    memset(clone->loop_record, 0, sizeof(LoopRecord) * sim->ctrl->loop_record_cap);
-  }
-
-  if(clone->tracking_backrefs > 0) {
-    memcpy(clone->backref_match, sim->backref_match, sizeof(Match) * MAX_BACKREF_COUNT);
-  }
-
-  load_next(clone, nfa);
-
-  if(clone->status == -1) {
-    list_append(ctrl->thread_pool, clone);
-    clone = NULL;
-  }
-  else {
-    list_append(ctrl->active_threads, clone);
-  }
-
-  return clone;
-}
 
 static inline NFASim *
 release_thread(NFASim * sim, NFA * start_state)
@@ -458,60 +387,44 @@ if(sim->match.start) {
       sim->status = 1;
     } break;
     default: {
-      //if(sim->tracking_intervals == 0 && active_threads_sp[nfa->id] == sim->input_ptr) {
-
       // Need this check since we can have threads that look identical in terms of
-      // input_ptr, interval_record and ip but end up taking different paths on the next
+      // input_ptr, interval_record and ip but end up taking different paths in the next
       // step.
-      if(sim->tracking_intervals == 0 && active_threads_sp[nfa->id] == sim->input_ptr) {
-         sim->status = -1;
-       }
-       else {
-         if(nfa->value.type == NFA_LITERAL) {
-           if(nfa->value.literal == *(sim->input_ptr)) {
-             sim->status = 0;
-             active_threads_sp[nfa->id] = sim->input_ptr;
-             sim->ip = nfa;
-             sim->status =  0;
-/*
-  int x = 15;
-  int d = 0;
-  if(sim->match.start) {
-    const char * s = sim->match.start;
-    while(s <= sim->match.end) {
-      ++d;
-      printf("%c", *s);
-      ++s;
-    }
-    for(int i = 0; i < (x-d) - 1; ++i) {
-      printf(" ");
-    }
-    printf(" -- [%d] [%d] [%d] [%d] -- tc(%d)/ic(%d) -- %s --> %c [0x%x]\n",
-      sim->loop_record[0].count,
-      sim->loop_record[1].count,
-      sim->loop_record[2].count,
-      sim->loop_record[3].count,
-      sim->tracking_intervals,
-      sim->interval_count,
-      sim->input_ptr,
-      nfa->value.literal,
-      nfa
-    );
-  }
-*/
-           }
-           else {
-             sim->status =  -1;
-           }
-         }
-         else {
-           sim->status = 0;
+      if(sim->tracking_intervals) {
+        sim->status = -1;
+        int match = 0;
+        if(nfa->value.type == NFA_LITERAL) {
+          match = (nfa->value.literal == INPUT(sim));
+        }
+        else if(nfa->value.type == NFA_LONG_LITERAL) {
+          match = ((nfa->value.lliteral)[0] == INPUT(sim));
+        }
+        else if(nfa->value.type == NFA_RANGE) {
+          match = is_literal_in_range(*(nfa->value.range), INPUT(sim));
+        }
+        else {
+          active_threads_sp[nfa->id] = sim->input_ptr;
+          sim->ip = nfa;
+          sim->status =  0;
+        }
+
+        if(match) {
+
+          active_threads_sp[nfa->id] = sim->input_ptr;
+          sim->ip = nfa;
+          sim->status =  0;
+        }
+      }
+      else {
+        if(active_threads_sp[nfa->id] == sim->input_ptr) {
+          sim->status = -1;
+        }
+        else {
            active_threads_sp[nfa->id] = sim->input_ptr;
            sim->ip = nfa;
            sim->status =  0;
-         }
-         //sim->status = (nfa->value.type == NFA_ACCEPTING) ? 1 : 0;
-       }
+        }
+      }
     }
   }
 }
@@ -681,19 +594,6 @@ active_threads_sp[sim->ip->id] = NULL;
 void
 get_start_state(NFASim * sim, NFA * nfa)
 {
-/*
-  if(nfa->value.type == NFA_EPSILON || nfa->value.type == NFA_TREE
-  || nfa->value.type == NFA_SPLIT || nfa->value.type == (NFA_SPLIT|NFA_PROGRESS)) {
-    process_adjacents(sim, nfa);
-  }
-  else if(nfa->value.type == NFA_CAPTUREGRP_BEGIN || nfa->value.type == NFA_INTERVAL) {
-    load_next(sim, nfa);
-  }
-  else {
-    sim->ip = nfa;
-    return;
-  }
-*/
   process_adjacents(sim, nfa);
 }
 
