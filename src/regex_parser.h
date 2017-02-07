@@ -75,23 +75,11 @@ typedef struct Parser {
   NFACtrl    * nfa_ctrl;
   ctrl_flags * ctrl_flags;
 
-  int loops_to_track;
-
-  int requires_backtracking;
-  
   // Count open parens
   int paren_count;
 
-  // counts how many branches need to be taken off the top of the branch_stack
-  // and tied
-  int tie_branches;
-
   // count the number of branches in the current nested sub-expression
   int subtree_branch_count;
-
-  // what is the capture group id of the last capture-group seen before
-  // entering the current branch
-  int branch_id;
 
   // Capture-Group Stuff
   int cgrp_count;
@@ -107,11 +95,6 @@ typedef struct Parser {
   int distinct_branch_points;
 
   // Interval Stuff
-  int interval_list_sz;
-  int next_interval_id;
-  int influencing_interval;
-  NFA * interval_list;
-
   int interval_count;
 
 // TEST

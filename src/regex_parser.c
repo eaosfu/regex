@@ -223,7 +223,6 @@ parse_interval_expression(Parser * parser)
     //parser_fatal("Syntax error at interval expression. Expected '}'", REGEX, READHEAD, 0);
     parser_fatal(MISSING_CLOSE_BRACE, REGEX, READHEAD, 0);
   }
-  ++(parser->loops_to_track);
 DONT_COUNT_LOOP:
   return;
 #undef DISCARD_WHITESPACE
@@ -243,7 +242,6 @@ parse_quantifier_expression(Parser * parser)
       push(parser->loop_nfas, nfa);
       nfa = new_posclosure_nfa(nfa);
       push(parser->symbol_stack, nfa);
-      ++(parser->loops_to_track);
       parse_quantifier_expression(parser);
     } break;
     case KLEENE: {
@@ -252,7 +250,6 @@ parse_quantifier_expression(Parser * parser)
       push(parser->loop_nfas, nfa);
       nfa = new_kleene_nfa(nfa);
       push(parser->symbol_stack, nfa);
-      ++(parser->loops_to_track);
       parse_quantifier_expression(parser);
     } break;
     case QMARK: {
@@ -260,7 +257,6 @@ parse_quantifier_expression(Parser * parser)
       nfa = pop(parser->symbol_stack);
       nfa = new_qmark_nfa(nfa);
       push(parser->symbol_stack, nfa);
-      ++(parser->loops_to_track);
       parse_quantifier_expression(parser);
     } break;
     case OPENBRACE: {
@@ -270,7 +266,6 @@ parse_quantifier_expression(Parser * parser)
     case PIPE: {
       parser->total_branch_count += (parser->in_alternation != 0) ? 1 : 2;
       ++(parser->in_alternation);
-      parser->branch_id = parser->current_cgrp - 1;
       parser_consume_token(parser);
       // concatenate everything on the stack unitl we see an open paren
       // or until nothing is left on the stack
@@ -1107,7 +1102,6 @@ parse_regex(Parser * parser)
     // give the last accepting state an id
     mark_nfa(peek(parser->symbol_stack));
 
-//    parser->loops_to_track += insert_progress_nfa(parser->loop_nfas);
 
 // TEST FIXME -- define an interface for this in nfa(.c/.h)
     //parser->total_nfa_ids = ((NFA *)peek(parser->symbol_stack))->ctrl->next_seq_id - 1;
@@ -1121,8 +1115,6 @@ parse_regex(Parser * parser)
     }
     collect_adjacencies(parser, (((NFA *)peek(parser->symbol_stack))->parent),
       (parser->total_nfa_ids + parser->interval_count));
-//printf("HERE\n");
-//exit(1);
 // END TEST
     ret = 1;
   }

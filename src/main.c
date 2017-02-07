@@ -100,7 +100,6 @@ main(int argc, char ** argv)
 {
   int status = 0;
   int opt = -1;
-  int read_pattern_file = 0;
 
   ctrl_flags cfl = 0;
   Scanner * scanner = NULL;
@@ -176,7 +175,9 @@ main(int argc, char ** argv)
 
   parser = init_parser(scanner, &cfl);
 
-  int run = parse_regex(parser);
+  if(parse_regex(parser) == 0) {
+    goto CLEANUP;
+  }
 
   if(fh) {
     fclose(fh);
@@ -211,6 +212,8 @@ main(int argc, char ** argv)
     }
     ++target_idx;
   }
+
+CLEANUP:
   fclose(fh);
 
   parser_free(parser);

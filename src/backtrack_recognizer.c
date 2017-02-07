@@ -243,14 +243,16 @@ NFASim *
 new_nfa_sim(Parser * parser, Scanner * scanner, ctrl_flags * cfl)
 {
   NFASim * sim;
-  int sz = sizeof(*sim) + (sizeof(*(sim->loop_record)) * (parser->loops_to_track));
+  //int sz = sizeof(*sim) + (sizeof(*(sim->loop_record)) * (parser->loops_to_track));
+  int sz = sizeof(*sim) + (sizeof(*(sim->loop_record)) * (parser->interval_count + 1));
   sim = xmalloc(sz);
   sim->size = sz;
   sim->ctrl = xmalloc(sizeof(*(sim->ctrl)));
 
   active_threads_sp = xmalloc(sizeof(char *) * (parser->total_nfa_ids + 1));
 
-  sim->ctrl->loop_record_cap = parser->loops_to_track;
+  //sim->ctrl->loop_record_cap = parser->loops_to_track;
+  sim->ctrl->loop_record_cap = parser->interval_count;
   sim->ctrl->active_threads = new_list();
   sim->ctrl->thread_pool = new_list();
   sim->ctrl->ctrl_flags  = cfl;
@@ -297,8 +299,6 @@ load_next(NFASim * sim, NFA * nfa)
     case NFA_INTERVAL: {
       ++(sim->interval_count);
       int count = ++((sim->loop_record[nfa->id]).count);
-      NFASim * clone = NULL;
-      NFA * tmp = NULL;
       if(nfa->value.min_rep > 0 && count < nfa->value.min_rep) {
         ++(sim->tracking_intervals);
         for(int i = 1; i < nfa->value.split_idx; ++i) {
@@ -433,7 +433,6 @@ if(sim->match.start) {
 int
 process_adjacents(NFASim *sim, NFA * nfa)
 {
-  NFA * next = NULL;
   for(int i = 1; i < list_size(&(nfa->reachable)); ++i) {
     thread_clone(sim, list_get_at(&(nfa->reachable), i), -1);
   }
@@ -617,7 +616,6 @@ run_nfa(NFASim * thread)
   get_start_state(thread, thread->ip);
   int match_found = 0;
   int current_run = 0; // did we match in the current run?
-  Match * m = NULL;
   while((*input_pointer) != '\0') {
 match_interval_count1 = match_interval_count2 = 0;
     while(thread) {
