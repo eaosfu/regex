@@ -408,7 +408,6 @@ if(sim->match.start) {
         }
 
         if(match) {
-
           active_threads_sp[nfa->id] = sim->input_ptr;
           sim->ip = nfa;
           sim->status =  0;
