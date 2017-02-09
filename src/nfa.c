@@ -355,8 +355,11 @@ new_interval_nfa(NFA * target, unsigned int min, unsigned int max)
   new_interval->value.min_rep = min;
   new_interval->value.max_rep = max;
   new_interval->value.split_idx = 0;
-
-  new_interval->out1 = target->parent;
+  NFA * tmp = target->parent;
+  // tighten loop
+  while((tmp->value.type == NFA_EPSILON) && (tmp = tmp->out2));
+  new_interval->out1 = tmp;
+// new_interval->out1 = target->parent;
   new_interval->out2 = accept;
 
 

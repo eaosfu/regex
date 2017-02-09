@@ -20,7 +20,8 @@ static void parse_sub_expression(Parser * parser);
 static void parse_bracket_expression(Parser * parser);
 static void regex_parser_start(Parser * parser);
 static inline void parser_consume_token(Parser * parser);
-static void __collect_adjacencies_helper(NFA *, NFA *);
+static void __collect_adjacencies_helper(NFA *, NFA *, int, NFA *, List *);
+static void merge_intervals(List *);
 
 Parser *
 init_parser(Scanner * scanner, ctrl_flags * cfl)
@@ -164,6 +165,7 @@ parse_interval_expression(Parser * parser)
       if(min == 0 && max == 1) {
         // <expression>{0,1} ; equivalent to <expression>?
         push(parser->symbol_stack, new_qmark_nfa(target));
+        ++(parser->interval_count);
       }
       else if(min == 1 && max == 1) {
         // return unmodified target
@@ -926,17 +928,13 @@ compare(void * a, void * b)
 
 
 static void
-__collect_adjacencies_helper(NFA * current, NFA * visiting)
+__collect_adjacencies_helper(NFA * current, NFA * visiting, int outn, NFA * forbidden, List * adj_intvls_list)
 {
-//if(current->value.type == NFA_INTERVAL) {
-//  printf("0 - current: [0x%x]:%d -- visiting: [0x%x]:%d\n",
-//  current, current->value.type, visiting, visiting->value.type);
-//}
   static int recursion = 0;
   if(visiting->value.type == NFA_EPSILON) {
     visiting->visited = 1;
     ++recursion;
-    __collect_adjacencies_helper(current, visiting->out2);
+    __collect_adjacencies_helper(current, visiting->out2, outn, forbidden, adj_intvls_list);
     --recursion;
     visiting->visited = 0;
   }
@@ -947,11 +945,18 @@ __collect_adjacencies_helper(NFA * current, NFA * visiting)
       switch(visiting->value.type) {
         case NFA_TREE:  // fallthrough
         case NFA_SPLIT:
-        case (NFA_SPLIT|NFA_PROGRESS): break;
+        case (NFA_SPLIT|NFA_PROGRESS): {
+        } break;
         default: {
           // if the node is matchable and is not already part of
           // our adjacency list.. add it.
-          if(list_search(&(current->reachable), visiting, compare) == NULL) {
+          current->full_circle = (visiting == forbidden) ? 1 : current->full_circle;
+/*
+if(current->value.type == NFA_INTERVAL && current->value.max_rep == 6) {
+ printf("HERE!\n");
+}
+*/
+          if((visiting != forbidden) && list_search(&(current->reachable), visiting, compare) == NULL) {
             list_append(&(current->reachable), visiting);
           }
         }
@@ -966,39 +971,64 @@ __collect_adjacencies_helper(NFA * current, NFA * visiting)
           for(int i = 0; i < list_size(visiting->value.branches); ++i) {
             branch = list_get_at(visiting->value.branches, i);
             ++recursion;
-            __collect_adjacencies_helper(current, branch);
+            __collect_adjacencies_helper(current, branch, outn, forbidden, adj_intvls_list);
             --recursion;
           }
           visiting->visited = 0;
         } break;
         case (NFA_SPLIT|NFA_PROGRESS):
         case NFA_SPLIT: {
-          if(current->value.type == NFA_INTERVAL && (visiting->value.literal == '+')) {
+          // Need to add this as a 'reachable' node because when we process an interval
+          // in the recognizer we want to avoid changing the state of the 'thread' holding
+          // the 'interval' source node while processing the NFA_SPLIT.
+          if(current->value.type == NFA_INTERVAL && (visiting->value.literal != '?')) {
+            // Make sure we don't include this current's tarting node in the loop
+/*
+printf("HERE!: {%d, %d} --> %c --out1--> %d:%c\n",
+  current->value.min_rep,
+  current->value.max_rep,
+  visiting->value.literal,
+  current->out1->value.type,
+  visiting->out1->value.literal);
+*/
+            __collect_adjacencies_helper(current, visiting->out1, outn, current->out1, adj_intvls_list);
+            __collect_adjacencies_helper(current, visiting->out2, outn, forbidden,  adj_intvls_list);
+/*
             if(list_search(&(current->reachable), visiting, compare) == NULL) {
-//printf("YAY: {%d,%d} --> [0x%x]\n", current->value.min_rep, current->value.max_rep, visiting);
               list_append(&(current->reachable), visiting);
             }
+*/
           }
           else {
             visiting->visited = 1;
             ++recursion;
-            __collect_adjacencies_helper(current, visiting->out1);
-            __collect_adjacencies_helper(current, visiting->out2);
+            __collect_adjacencies_helper(current, visiting->out1, outn, forbidden, adj_intvls_list);
+            __collect_adjacencies_helper(current, visiting->out2, outn, forbidden, adj_intvls_list);
             --recursion;
             visiting->visited = 0;
           }
         } break;
         default: {
-          // don't skip over NFA_INTERVALS if we haven't seen them yet
           if(current == visiting) {
             if(recursion == 0) {
+              // If the caller passed in current == visiting (i.e. recursion == 0) and
+              // current->value.type was some 'matchable' node (i.e. not an NFA_SPLIT,
+              // NFA_INTERVAL, etc.) then we still need to explore paths to neighboring
+              // nodes.
               ++recursion;
-              __collect_adjacencies_helper(current, visiting->out2);
+              __collect_adjacencies_helper(current, visiting->out2, outn, forbidden, adj_intvls_list);
               --recursion;
               break;
             }
           }
-          if(list_search(&(current->reachable), visiting, compare) == NULL) {
+          current->full_circle = (visiting == forbidden) ? 1 : current->full_circle;
+/*
+if(current->value.type == NFA_INTERVAL && current->value.max_rep == 6) {
+ printf("HERE!: forbidden: [0x%x]:%c vs. visiting: [0x%x]:%c ==> full_circle: %d\n",
+ forbidden, (forbidden) ? forbidden->value.literal: 0, visiting, visiting->value.literal, current->full_circle);
+}
+*/
+          if((visiting != forbidden) && list_search(&(current->reachable), visiting, compare) == NULL) {
             list_append(&(current->reachable), visiting);
           }
         }
@@ -1006,7 +1036,6 @@ __collect_adjacencies_helper(NFA * current, NFA * visiting)
     }
   }
   if(visiting->value.type == NFA_ACCEPTING) {
-//printf("current[0x%x] %d -- reaches accept\n", current, current->value.type);
     current->reaches_accept = 1;
   }
 
@@ -1022,12 +1051,17 @@ collect_adjacencies(Parser * parser, NFA * start, int total_collectables)
 
   NFA * current = start;
   NFA * visiting = start;
-
+ 
   // branch_stack no longer contains useful data so reuse it as a list
   List * l = parser->branch_stack;;
 
-  __collect_adjacencies_helper(current, visiting);
+  // store pairs of adjacent intervals
+  List * adj_intvls_list = new_list();
+
+
+  __collect_adjacencies_helper(current, visiting, 0, NULL, NULL);
   list_append(l, current);
+
   for(int i = 0; i < list_size(l); ++i) {
     if(i > total_collectables) {
       break; // should never hit this condition
@@ -1035,44 +1069,46 @@ collect_adjacencies(Parser * parser, NFA * start, int total_collectables)
     current = list_get_at(l, i);
     for(int j = 0; j < list_size(&(current->reachable)); ++j) {
       visiting = list_get_at(&(current->reachable),j);
-      if(list_search(l, visiting, compare)) {
+      //if(list_search(l, visiting, compare)) {
+      if(visiting->done) {
         continue;
       }
-      if(visiting->done == 0 && current != visiting && visiting->value.type != NFA_ACCEPTING) {
+      if(current != visiting && visiting->value.type != NFA_ACCEPTING) {
         visiting->visited = 1;
         if(visiting->value.type == NFA_INTERVAL) {
-          __collect_adjacencies_helper(visiting, visiting->out1);
+          __collect_adjacencies_helper(visiting, visiting->out1, 0, NULL, NULL);
           visiting->value.split_idx = list_size(&(visiting->reachable));
-// KLUDGE!
+// KLUDGE
           ListItem * old_head = visiting->reachable.head;
           ListItem * old_tail = visiting->reachable.tail;
           visiting->reachable.size = 0;
           visiting->reachable.head = visiting->reachable.tail = NULL;
 // END KLUDGE
-          __collect_adjacencies_helper(visiting, visiting->out2);
+          __collect_adjacencies_helper(visiting, visiting->out2, 1, NULL, adj_intvls_list);
 // KLUDGE!
           old_tail->next = visiting->reachable.head;
           visiting->reachable.size += visiting->value.split_idx;
           visiting->reachable.head = old_head;
-// KLUDGE!
-          visiting->done = 1;
-//debug_print_collected(current, NULL);
         }
         else if(visiting->value.type == NFA_SPLIT){
-          __collect_adjacencies_helper(visiting, visiting->out1);
-          __collect_adjacencies_helper(visiting, visiting->out2);
+          __collect_adjacencies_helper(visiting, visiting->out1, 0, NULL, NULL);
+          __collect_adjacencies_helper(visiting, visiting->out2, 0, NULL, NULL);
 //debug_print_collected(visiting, visiting->out2);
         }
         else {
-          __collect_adjacencies_helper(visiting, visiting->out2);
+          __collect_adjacencies_helper(visiting, visiting->out2, 0, NULL, NULL);
         }
         visiting->visited = 0;
+
         if(list_search(l, visiting, compare) == NULL) {
           list_append(l, visiting);
+          visiting->done = 1;
         }
       }
     }
   }
+
+  free(adj_intvls_list);
 }
 
 
@@ -1116,6 +1152,7 @@ parse_regex(Parser * parser)
     collect_adjacencies(parser, (((NFA *)peek(parser->symbol_stack))->parent),
       (parser->total_nfa_ids + parser->interval_count));
 // END TEST
+
     ret = 1;
   }
 

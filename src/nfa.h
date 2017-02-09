@@ -48,10 +48,13 @@ typedef struct NFA {
   struct NFA * parent;
   struct NFA * out1;
   struct NFA * out2;
+// FIXME: COMBINE THE FOLLOWING INTO A FLAG BITFIELD!
   int greedy;
   int visited;
   int done;
+  int full_circle;
   int reaches_accept;
+// END COBINE FLAGS
   List reachable;
   unsigned int id;
   struct {

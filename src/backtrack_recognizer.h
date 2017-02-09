@@ -19,16 +19,6 @@ typedef struct LoopRecord {
   int count;
 } LoopRecord;
 
-/*
-typedef struct BacktrackRecord {
-  int next_branch;
-  int count;
-  const char * input;
-  const char * match;
-  NFA  * restart_point;;
-} BacktrackRecord;
-*/
-
 
 typedef struct NFASim {
   struct NFASimCtrl * ctrl;

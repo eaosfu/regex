@@ -10,8 +10,6 @@
 #include "scanner.h"
 #include <stddef.h>
 #include "backtrack_recognizer.h"
-int match_interval_count1 = 0;
-int match_interval_count2 = 0;
 // FIXME: Put this inside the sim->ctrl, so it can be freed when we're done
 typedef const char * active_thread_input_ptr;
 static active_thread_input_ptr * active_threads_sp;
@@ -226,8 +224,6 @@ thread_clone(NFASim * sim, NFA * nfa, int id)
 static inline NFASim *
 release_thread(NFASim * sim, NFA * start_state)
 {
-  list_push(sim->ctrl->thread_pool, sim);
-  active_threads_sp[sim->ip->id] = NULL;
   sim->ip = start_state;
   sim->status = 0;
   sim->interval_count = 0;
@@ -235,6 +231,7 @@ release_thread(NFASim * sim, NFA * start_state)
   sim->match.end = NULL;
   sim->tracking_intervals = 0;
   sim->tracking_backrefs = 0;
+  list_push(sim->ctrl->thread_pool, sim);
   return list_shift(sim->ctrl->active_threads);
 }
 
@@ -243,7 +240,6 @@ NFASim *
 new_nfa_sim(Parser * parser, Scanner * scanner, ctrl_flags * cfl)
 {
   NFASim * sim;
-  //int sz = sizeof(*sim) + (sizeof(*(sim->loop_record)) * (parser->loops_to_track));
   int sz = sizeof(*sim) + (sizeof(*(sim->loop_record)) * (parser->interval_count + 1));
   sim = xmalloc(sz);
   sim->size = sz;
@@ -251,7 +247,6 @@ new_nfa_sim(Parser * parser, Scanner * scanner, ctrl_flags * cfl)
 
   active_threads_sp = xmalloc(sizeof(char *) * (parser->total_nfa_ids + 1));
 
-  //sim->ctrl->loop_record_cap = parser->loops_to_track;
   sim->ctrl->loop_record_cap = parser->interval_count;
   sim->ctrl->active_threads = new_list();
   sim->ctrl->thread_pool = new_list();
@@ -299,7 +294,7 @@ load_next(NFASim * sim, NFA * nfa)
     case NFA_INTERVAL: {
       ++(sim->interval_count);
       int count = ++((sim->loop_record[nfa->id]).count);
-      if(nfa->value.min_rep > 0 && count < nfa->value.min_rep) {
+      if(count < nfa->value.min_rep) {
         ++(sim->tracking_intervals);
         for(int i = 1; i < nfa->value.split_idx; ++i) {
           thread_clone(sim, list_get_at(&(nfa->reachable), i), -1);
@@ -314,9 +309,7 @@ load_next(NFASim * sim, NFA * nfa)
               thread_clone(sim, list_get_at(&(nfa->reachable), i), -1);
             }
 
-            if(nfa->reaches_accept == 0) {
-              sim->loop_record[nfa->id].count = 0;
-            }
+            sim->loop_record[nfa->id].count = 0;
 
             --(sim->tracking_intervals);
             for(int i = nfa->value.split_idx + 1; i < list_size(&(nfa->reachable)); ++i) {
@@ -327,19 +320,25 @@ load_next(NFASim * sim, NFA * nfa)
           else {
             --(sim->tracking_intervals);
 
-            if(nfa->reaches_accept == 0) {
-              sim->loop_record[nfa->id].count = 0;
+            sim->loop_record[nfa->id].count = 0;
+
+            if(nfa->full_circle) {
+              for(int i = 1; i < list_size(&(nfa->reachable)); ++i) {
+                thread_clone(sim, list_get_at(&(nfa->reachable), i), -1);
+              }
+              load_next(sim, list_get_at(&(nfa->reachable), 0));
+            }
+            else {
+              for(int i = nfa->value.split_idx + 1; i < list_size(&(nfa->reachable)); ++i) {
+                thread_clone(sim, list_get_at(&(nfa->reachable), i), -1);
+              }
+              load_next(sim, list_get_at(&(nfa->reachable), nfa->value.split_idx));
             }
 
-            for(int i = nfa->value.split_idx + 1; i < list_size(&(nfa->reachable)); ++i) {
-              thread_clone(sim, list_get_at(&(nfa->reachable), i), -1);
-            }
-            load_next(sim, list_get_at(&(nfa->reachable), nfa->value.split_idx));
           }
         }
         else {
           // unbounded upper limit
-          // FIXME:  this is wrong
             ++(sim->tracking_intervals);
             for(int i = 0; i < nfa->value.split_idx; ++i) {
               thread_clone(sim, list_get_at(&(nfa->reachable), i), -1);
@@ -444,14 +443,13 @@ process_adjacents(NFASim *sim, NFA * nfa)
 static inline int
 thread_step(NFASim * sim)
 {
+  active_threads_sp[sim->ip->id] = NULL;
   if(INPUT(sim) != '\0') {
     switch(INST_TYPE(sim)) {
       case NFA_ANY: {
         if(INPUT(sim) != EOL(sim)) {
           update_match(sim);
           ++(sim->input_ptr);
-active_threads_sp[sim->ip->id] = NULL;
-          //load_next(sim, NEXT_INST(sim));
           process_adjacents(sim, sim->ip);
         }
         else {
@@ -463,12 +461,9 @@ active_threads_sp[sim->ip->id] = NULL;
 //printf("[0x%x]: match: %c -- interval count: %d\n", sim, *(sim->input_ptr), sim->loop_record[0].count);
           update_match(sim);
           ++(sim->input_ptr);
-active_threads_sp[sim->ip->id] = NULL;
-          //load_next(sim, NEXT_INST(sim));
           process_adjacents(sim, sim->ip);
         }
         else {
-active_threads_sp[sim->ip->id] = NULL;
           sim->status = -1;
         }
       } break;
@@ -485,23 +480,18 @@ active_threads_sp[sim->ip->id] = NULL;
           }
         }
         if(match && sim->ip->value.idx == 0) {
-active_threads_sp[sim->ip->id] = NULL;
-          //load_next(sim, NEXT_INST(sim));
           process_adjacents(sim, sim->ip);
         }
         else {
           sim->ip->value.idx = 0;
           sim->status = -1;
         }
-active_threads_sp[sim->ip->id] = NULL;
       } break;
       case NFA_RANGE: {
         if(INPUT(sim) != EOL(sim)) {
           if(is_literal_in_range(RANGE(sim), INPUT(sim))) {
             update_match(sim);
             ++(sim->input_ptr);
-active_threads_sp[sim->ip->id] = NULL;
-            //load_next(sim, NEXT_INST(sim));
             process_adjacents(sim, sim->ip);
           }
           else {
@@ -538,8 +528,6 @@ active_threads_sp[sim->ip->id] = NULL;
             sim->input_ptr = tmp_input - 1;
             update_match(sim);
             ++(sim->input_ptr);
-active_threads_sp[sim->ip->id] = NULL;
-            //load_next(sim, NEXT_INST(sim));
             process_adjacents(sim, sim->ip);
           }
         }
@@ -551,8 +539,6 @@ active_threads_sp[sim->ip->id] = NULL;
       } break;
       case NFA_BOL_ANCHOR: {
         if(sim->input_ptr == sim->scanner->buffer) {
-active_threads_sp[sim->ip->id] = NULL;
-          //load_next(sim, NEXT_INST(sim));
           process_adjacents(sim, sim->ip);
         }
         else {
@@ -561,8 +547,6 @@ active_threads_sp[sim->ip->id] = NULL;
       } break;
       case NFA_EOL_ANCHOR: {
         if(INPUT(sim) == EOL(sim)) {
-active_threads_sp[sim->ip->id] = NULL;
-          //load_next(sim, NEXT_INST(sim));
           process_adjacents(sim, sim->ip);
         }
         else {
@@ -572,7 +556,7 @@ active_threads_sp[sim->ip->id] = NULL;
       case NFA_ACCEPTING: {
         sim->status = 1;
       } break;
-      default: {
+      default: { // should never hit this condition
         sim->status = -1;
       }
     }
@@ -580,12 +564,7 @@ active_threads_sp[sim->ip->id] = NULL;
   else {
     sim->status = 1;
   }
-/*
-  if(sim->status == -1) {
-    backtrack(sim);
-  }
-*/
-//printf("\n");
+
   return sim->status;
 }
 
@@ -617,7 +596,6 @@ run_nfa(NFASim * thread)
   int match_found = 0;
   int current_run = 0; // did we match in the current run?
   while((*input_pointer) != '\0') {
-match_interval_count1 = match_interval_count2 = 0;
     while(thread) {
       thread_step(thread);
       switch(thread->status) {
@@ -627,13 +605,6 @@ match_interval_count1 = match_interval_count2 = 0;
 //&& (ctrl->match.end == NULL || thread->match.end >= ctrl->match.end)) {
 //  match_interval_count = thread->tracking_intervals;
 
-/*
-if(thread->interval_count > match_interval_count2) {
-  match_interval_count1 = match_interval_count2;
-  match_interval_count2 = thread->interval_count;
-  printf("\tinterval count2 set to : %d\n", match_interval_count2);
-}
-*/
           current_run = match_found = 1;
           if((CTRL_FLAGS(ctrl) & (SILENT_MATCH_FLAG|INVERT_MATCH_FLAG)) == 0) {
             update_longest_match(&(ctrl->match), &(thread->match));
@@ -660,61 +631,22 @@ printf(" -- [%d] [%d] [%d] [%d] -- %d\n",
   thread->interval_count
 );
 */
-
         } // fall through
         case -1: {
           // kill thread
-//printf("[0x%x]: rejecting: %c vs. %c\n", thread, thread->ip->value.literal, *thread->input_ptr);
           thread = release_thread(thread, start_state);
-
-///*
-
-while(thread && thread->interval_count ) {
-  if(thread->interval_count < match_interval_count1
-  && thread->match.end < ctrl->match.end - 1) {
-//  if(thread->interval_count < match_interval_count - 1
-//  && thread->match.end < ctrl->match.end - 1) {
-//  if(thread->interval_count <= match_interval_count
-//  && thread->match.end < ctrl->match.end - 1) {
-///*
-//printf("BOO\n");
-//    printf("[0x%x]: match interval: %d .vs interval_count: %d: ",
-//      thread, match_interval_count, thread->interval_count);
-//    if(thread->match.end) {
-//      const char * s = thread->match.start;
-//      while(s <= thread->match.end) {
-//        printf("%c", *s);
-//        ++s;
-//      }
-//      printf("\n");
-//    }
-//
-//printf("skip\n");
-    thread = release_thread(thread, start_state);
-  }
-  else {
-    break;
-  }
-}
-//*/
         } break;
         case 0: {
           // keep trying
-
-//if(match_interval_count == 0) {
           if(list_size(ctrl->active_threads) > 0) {
             list_append(ctrl->active_threads, thread);
             thread = list_shift(ctrl->active_threads);
           }
-//}
-
-
         } break;
       }
 //printf("active threads: %d\n", list_size((ctrl->active_threads)));
     }
 
-//    match_interval_count = 0;
     if((CTRL_FLAGS(ctrl) & (SILENT_MATCH_FLAG|INVERT_MATCH_FLAG)) == 0) {
       new_match(ctrl, filename, filename_len);
     }
