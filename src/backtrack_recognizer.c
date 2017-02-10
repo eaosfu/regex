@@ -14,33 +14,24 @@
 typedef const char * active_thread_input_ptr;
 static active_thread_input_ptr * active_threads_sp;
 
-#define INPUT(sim) (*((sim)->input_ptr))
-#define EOL(sim)  ((sim)->scanner->eol_symbol)
-#define NEXT_INST(sim) ((sim)->ip->out2)
-#define CUR_INST(sim) ((sim)->ip)
-#define RANGE(sim) (*((sim)->ip->value.range))
-#define INST_TYPE(sim) ((sim)->ip->value.type)
-#define INST_TOKEN(sim) ((sim)->ip->value.literal)
-#define INST_LONG_TOKEN(sim) ((sim)->ip->value.lliteral[(sim)->ip->value.idx])
-#define RELEASE_ALL_THREADS(t) while((t)) { (t) = release_thread((t), start_state); }
-#define SKIP_EPSILONS(nfa) ({ while((nfa->value.type == NFA_EPSILON)) { \
-                                (nfa) = (nfa)->out2; } })
-
-#define SKIP_EPSILONS_AND_CAPTUREGRP_END(nfa) ({ \
-  while((nfa->value.type == NFA_EPSILON || nfa->value.type == NFA_CAPTUREGRP_END)) { (nfa) = (nfa)->out2; } \
-})
+#define EOL(sim)               ((sim)->scanner->eol_symbol)
+#define RANGE(sim)             (*((sim)->ip->value.range))
+#define INPUT(sim)             (*((sim)->input_ptr))
+#define INST_TYPE(sim)         ((sim)->ip->value.type)
+#define INST_TOKEN(sim)        ((sim)->ip->value.literal)
+#define INST_LONG_TOKEN(sim)   ((sim)->ip->value.lliteral[(sim)->ip->value.idx])
+#define RELEASE_ALL_THREADS(t) while((t)) { (t) = release_thread((t), (t)->ctrl->start_state); }
 
 static int  load_next(NFASim *, NFA *);
 static int  process_adjacents(NFASim *sim, NFA * nfa);
-static void get_start_state(NFASim * sim, NFA * nfa);
 
 
-void
+static void
 update_longest_match(Match * m, Match * nm)
 {
   if(m->end == 0 || ((m->end - m->start) < (nm->end - nm->start))) {
     m->start = nm->start;
-    m->end = nm->end;
+    m->end   = nm->end;
   }
   else if(((nm->start - m->end) > -1) && ((nm->start - m->end) <= 1)) {
     m->end = nm->end;
@@ -48,12 +39,12 @@ update_longest_match(Match * m, Match * nm)
 }
 
 
-void
+static void
 update_match(NFASim * sim)
 {
   if(sim->match.start == 0) {
     sim->match.start = sim->input_ptr;
-    sim->match.end = sim->input_ptr;
+    sim->match.end   = sim->input_ptr;
   }
   else {
     sim->match.end = sim->input_ptr;
@@ -61,13 +52,19 @@ update_match(NFASim * sim)
 }
 
 
-Match *
-new_match(NFASimCtrl * ctrl, const char * filename, int nm_len)
+static Match *
+//new_match(NFASimCtrl * ctrl, const char * filename, int nm_len)
+new_match(NFASimCtrl * ctrl, int shorten)
 {
   Match * match = NULL;
   if(((CTRL_FLAGS(ctrl) & SILENT_MATCH_FLAG) == 0)) {
-    const char * begin = ctrl->match.start;
-    const char * end = ctrl->match.end;
+    const char * filename = ctrl->filename;
+    const char * begin    = ctrl->match.start;
+    const char * end      = ctrl->match.end;
+    int nm_len            = ctrl->filename_len;
+    int line_no           = ctrl->scanner->line_no;
+    int w = 1;
+
     if(begin && (begin <= end)) {
       int sz = end - begin + 1;
 
@@ -75,6 +72,13 @@ new_match(NFASimCtrl * ctrl, const char * filename, int nm_len)
         sz += nm_len + 1; // add ':' after <filename>
       }
 
+      if((CTRL_FLAGS(ctrl) & SHOW_LINENO_FLAG)) {
+        int tmp = line_no;
+        while(tmp/10 > 0 && (tmp /=10) && ++w);
+        sz += w + 1; // add ':' after <line number>
+      }
+
+      // +1 for the '\0'
       if((ctrl->match_idx + sz + 1) >= MATCH_BUCKET_SIZE) {
         flush_matches(ctrl);
       }
@@ -93,6 +97,16 @@ new_match(NFASimCtrl * ctrl, const char * filename, int nm_len)
         snprintf(ctrl->matches + ctrl->match_idx, nm_len + 2, "%s:", filename);
         ctrl->match_idx += nm_len + 1;
         sz -= nm_len + 1;
+      }
+
+      if((CTRL_FLAGS(ctrl) & SHOW_LINENO_FLAG)) {
+        snprintf(ctrl->matches + ctrl->match_idx, nm_len + w + 1, "%d:", line_no);
+        ctrl->match_idx += w + 1;
+        sz -= w + 1;
+      }
+
+      if(shorten) {
+        --sz;
       }
 
       strncpy((ctrl->matches) + ctrl->match_idx, begin, sz);
@@ -118,18 +132,6 @@ flush_matches(NFASimCtrl * ctrl)
 }
 
 
-static inline int
-is_literal_in_range(nfa_range range, unsigned int c)
-{
-  int ret = 0;
-  unsigned int mask = set_bit(RANGE_BITVEC_WIDTH, c)|0;
-  if(range[get_bit_array_idx(c, RANGE_BITVEC_WIDTH)] & mask) {
-    ret = 1;
-  }
-  return ret;
-}
-
-
 void *
 free_match_string(void * m)
 {
@@ -140,26 +142,35 @@ free_match_string(void * m)
 }
 
 
-void
-record_match(NFASim * sim, char * begin, char * end)
+static inline int
+is_literal_in_range(nfa_range range, int c)
 {
-  sim->match.start = begin;
-  sim->match.end = end;
+  int ret = 0;
+  if(c > 0) {
+    unsigned int mask = set_bit(RANGE_BITVEC_WIDTH, c)|0;
+    if(range[get_bit_array_idx(c, RANGE_BITVEC_WIDTH)] & mask) {
+      ret = 1;
+    }
+  }
+  return ret;
 }
 
 
-NFASim *
-reset_thread(NFASimCtrl * ctrl, NFA * start_node, char * start_pos)
+static NFASim *
+reset_thread(NFASimCtrl * ctrl, NFA * start_state, char * start_pos)
 {
   NFASim * sim = NULL;
   if(list_size(ctrl->thread_pool)) {
-    sim = list_shift(ctrl->thread_pool);
-    reset_nfa_sim(sim, start_node);
+    sim                               = list_shift(ctrl->thread_pool);
+    sim->ip                           = start_state;
+    sim->input_ptr                    = start_pos;
+    sim->match.end                    = NULL;
+    sim->match.start                  = NULL;
+    sim->tracking_backrefs            = 0;
+    sim->ctrl->match.last_match_end   = NULL;
     restart_from(sim->scanner, start_pos);
-    sim->input_ptr = start_pos;
-    sim->tracking_backrefs  = 0;
     memset(sim->loop_record, 0, sizeof(LoopRecord) * sim->ctrl->loop_record_cap);
-    process_adjacents(sim, start_node);
+    process_adjacents(sim, start_state);
   }
   else {
     fatal("Unable to obtain an execution threads\n");
@@ -224,54 +235,21 @@ thread_clone(NFASim * sim, NFA * nfa, int id)
 static inline NFASim *
 release_thread(NFASim * sim, NFA * start_state)
 {
-  sim->ip = start_state;
-  sim->status = 0;
-  sim->interval_count = 0;
-  sim->match.start = NULL;
-  sim->match.end = NULL;
+  sim->ip                 = start_state;
+  sim->status             = 0;
+  sim->match.end          = NULL;
+  sim->match.start        = NULL;
+  sim->interval_count     = 0;
   sim->tracking_intervals = 0;
-  sim->tracking_backrefs = 0;
+  sim->tracking_backrefs  = 0;
   list_push(sim->ctrl->thread_pool, sim);
   return list_shift(sim->ctrl->active_threads);
 }
 
 
-NFASim *
-new_nfa_sim(Parser * parser, Scanner * scanner, ctrl_flags * cfl)
-{
-  NFASim * sim;
-  int sz = sizeof(*sim) + (sizeof(*(sim->loop_record)) * (parser->interval_count + 1));
-  sim = xmalloc(sz);
-  sim->size = sz;
-  sim->ctrl = xmalloc(sizeof(*(sim->ctrl)));
-
-  active_threads_sp = xmalloc(sizeof(char *) * (parser->total_nfa_ids + 1));
-
-  sim->ctrl->loop_record_cap = parser->interval_count;
-  sim->ctrl->active_threads = new_list();
-  sim->ctrl->thread_pool = new_list();
-  sim->ctrl->ctrl_flags  = cfl;
-
-  sim->scanner = scanner;
-  sim->ip = peek(parser->symbol_stack);
-  return sim;
-}
-
-
-void
-reset_nfa_sim(NFASim * sim, NFA * start_state)
-{
-  sim->ip = start_state;
-  sim->match.start = sim->match.end = NULL;
-  sim->ctrl->match.last_match_end = NULL;
-  memset(sim->loop_record,   0, sizeof(LoopRecord) * sim->ctrl->loop_record_cap);
-}
-
-
-int
+static int 
 load_next(NFASim * sim, NFA * nfa)
 {
-//printf("load_next(): nfa->value.type: %d\n", nfa->value.type);
   switch(nfa->value.type) {
     case NFA_SPLIT: {
       for(int i = 1; i < list_size(&(nfa->reachable)); ++i) {
@@ -280,14 +258,12 @@ load_next(NFASim * sim, NFA * nfa)
       load_next(sim, list_get_at(&(nfa->reachable), 0));
     } break;
     case NFA_CAPTUREGRP_BEGIN: {
-//printf("CAPTURE GROUP BEGIN: %d\n", nfa->id);
       sim->tracking_backrefs = 1;
       sim->backref_match[nfa->id].start = sim->input_ptr;
       sim->backref_match[nfa->id].end = NULL;
       process_adjacents(sim, nfa);
     } break;
     case NFA_CAPTUREGRP_END: {
-//printf("CAPTURE GROUP END: %d\n", nfa->id);
       sim->backref_match[nfa->id].end = sim->input_ptr - 1;
       process_adjacents(sim, nfa);
     } break;
@@ -356,42 +332,13 @@ load_next(NFASim * sim, NFA * nfa)
       }
     } break;
     case NFA_ACCEPTING: {
-/*
-int x = 15;
-int d = 0;
-if(sim->match.start) {
-  const char * s = sim->match.start;
-  while(s <= sim->match.end) {
-    ++d;
-    printf("%c", *s);
-    ++s;
-  }
-
-  for(int i = 0; i < (x-d) - 1; ++i) {
-    printf(" ");
-  }
-
-  printf(" -- [%d] [%d] [%d] [%d] -- tc(%d)/ic(%d) -- %s ***\n",
-    sim->loop_record[0].count,
-    sim->loop_record[1].count,
-    sim->loop_record[2].count,
-    sim->loop_record[3].count,
-    sim->tracking_intervals,
-    sim->interval_count,
-    sim->input_ptr
-  );
-}
-*/
       sim->ip = nfa;
       sim->status = 1;
     } break;
     default: {
-      // Need this check since we can have threads that look identical in terms of
-      // input_ptr, interval_record and ip but end up taking different paths in the next
-      // step.
-      if(sim->tracking_intervals) {
-        sim->status = -1;
-        int match = 0;
+      int match   =  1;
+      sim->status = -1;
+      if(sim->tracking_intervals || (active_threads_sp[nfa->id] != sim->input_ptr)) {
         if(nfa->value.type == NFA_LITERAL) {
           match = (nfa->value.literal == INPUT(sim));
         }
@@ -402,9 +349,9 @@ if(sim->match.start) {
           match = is_literal_in_range(*(nfa->value.range), INPUT(sim));
         }
         else {
-          active_threads_sp[nfa->id] = sim->input_ptr;
           sim->ip = nfa;
           sim->status =  0;
+          return 1;
         }
 
         if(match) {
@@ -413,22 +360,12 @@ if(sim->match.start) {
           sim->status =  0;
         }
       }
-      else {
-        if(active_threads_sp[nfa->id] == sim->input_ptr) {
-          sim->status = -1;
-        }
-        else {
-           active_threads_sp[nfa->id] = sim->input_ptr;
-           sim->ip = nfa;
-           sim->status =  0;
-        }
-      }
     }
   }
 }
 
 
-int
+static int inline
 process_adjacents(NFASim *sim, NFA * nfa)
 {
   for(int i = 1; i < list_size(&(nfa->reachable)); ++i) {
@@ -457,7 +394,6 @@ thread_step(NFASim * sim)
       } break;
       case NFA_LITERAL: {
         if(INPUT(sim) == INST_TOKEN(sim)) {
-//printf("[0x%x]: match: %c -- interval count: %d\n", sim, *(sim->input_ptr), sim->loop_record[0].count);
           update_match(sim);
           ++(sim->input_ptr);
           process_adjacents(sim, sim->ip);
@@ -501,9 +437,6 @@ thread_step(NFASim * sim)
         sim->status = -1;
       } break;
       case NFA_BACKREFERENCE: {
-        // FIXME: id - 1 should just be id
-        //#define BACKREF_START(sim) ((sim)->backref_match[(sim)->ip->id - 1].start)
-        //#define BACKREF_END(sim) ((sim)->backref_match[(sim)->ip->id - 1].end)
         #define BACKREF_START(sim) ((sim)->backref_match[(sim)->ip->id].start)
         #define BACKREF_END(sim) ((sim)->backref_match[(sim)->ip->id].end)
         const char * bref_end = BACKREF_END(sim);
@@ -568,72 +501,38 @@ thread_step(NFASim * sim)
 }
 
 
-void
-get_start_state(NFASim * sim, NFA * nfa)
-{
-  process_adjacents(sim, nfa);
-}
-
-
 int
 run_nfa(NFASim * thread)
 {
-//printf("-- %s\n", thread->scanner->buffer);
-  NFASimCtrl * ctrl = thread->ctrl;
-  ctrl->match.start = NULL;
-  ctrl->match.end = NULL;
-  const char * buffer_start;
-  const char * buffer_end;
-  const char * input_pointer;
-  const char * filename = get_filename(thread->scanner);
-  int filename_len = strlen(filename);
-  buffer_start = input_pointer = get_cur_pos(thread->scanner);
-  buffer_end = get_buffer_end(thread->scanner) - 1;
-  thread->input_ptr = input_pointer;
-  NFA * start_state = thread->ip;
-  get_start_state(thread, thread->ip);
-  int match_found = 0;
-  int current_run = 0; // did we match in the current run?
+  int match_found            = 0;
+  int current_run            = 0; // did we match in the current run?
+  NFASimCtrl * ctrl          = thread->ctrl;
+  thread->input_ptr          = ctrl->buffer_start;
+  const char * buffer_end    = get_buffer_end(thread->scanner) - 1;
+  const char * input_pointer = ctrl->buffer_start;
+  
+  process_adjacents(thread, ctrl->start_state);
+
   while((*input_pointer) != '\0') {
     while(thread) {
       thread_step(thread);
       switch(thread->status) {
         case 1: {
-//printf("-- DONE -- interval  count1: %d -- interval count2: %d\n", match_interval_count2, match_interval_count2);
-//if(thread->tracking_intervals > match_interval_count
-//&& (ctrl->match.end == NULL || thread->match.end >= ctrl->match.end)) {
-//  match_interval_count = thread->tracking_intervals;
-
           current_run = match_found = 1;
           if((CTRL_FLAGS(ctrl) & (SILENT_MATCH_FLAG|INVERT_MATCH_FLAG)) == 0) {
             update_longest_match(&(ctrl->match), &(thread->match));
             if(((CTRL_FLAGS(ctrl) & MGLOBAL_FLAG) == 0)) {
-              new_match(ctrl, filename, filename_len);
+              new_match(ctrl, 0);
               goto RELEASE_ALL_THREADS;
             }
           }
           else if((CTRL_FLAGS(ctrl) & INVERT_MATCH_FLAG) || (CTRL_FLAGS(ctrl) & MGLOBAL_FLAG) == 0) {
             goto RELEASE_ALL_THREADS;
           }
-/*
-printf("match: ");
-const char * s = thread->match.start;
-while(s <= thread->match.end) {
-  printf("%c", *s);
-  ++s;
-}
-printf(" -- [%d] [%d] [%d] [%d] -- %d\n",
-  thread->loop_record[0].count,
-  thread->loop_record[1].count,
-  thread->loop_record[2].count,
-  thread->loop_record[3].count,
-  thread->interval_count
-);
-*/
         } // fall through
         case -1: {
           // kill thread
-          thread = release_thread(thread, start_state);
+          thread = release_thread(thread, ctrl->start_state);
         } break;
         case 0: {
           // keep trying
@@ -643,11 +542,10 @@ printf(" -- [%d] [%d] [%d] [%d] -- %d\n",
           }
         } break;
       }
-//printf("active threads: %d\n", list_size((ctrl->active_threads)));
     }
 
-    if((CTRL_FLAGS(ctrl) & (SILENT_MATCH_FLAG|INVERT_MATCH_FLAG)) == 0) {
-      new_match(ctrl, filename, filename_len);
+    if((CTRL_FLAGS(ctrl) & INVERT_MATCH_FLAG) == 0) {
+      new_match(ctrl, 0);
     }
     if((current_run == 0) || (ctrl->match.end == 0)) {
       ++input_pointer;
@@ -658,7 +556,7 @@ printf(" -- [%d] [%d] [%d] [%d] -- %d\n",
     current_run = 0;
     ctrl->match.start = NULL;
     ctrl->match.end = NULL;
-    thread = reset_thread(ctrl, start_state, (char *)input_pointer);
+    thread = reset_thread(ctrl, ctrl->start_state, (char *)input_pointer);
   }
 RELEASE_ALL_THREADS:
   RELEASE_ALL_THREADS(thread);
@@ -666,14 +564,48 @@ RELEASE_ALL_THREADS:
   if((match_found == 0)
   && (CTRL_FLAGS(ctrl) & INVERT_MATCH_FLAG)
   && ((CTRL_FLAGS(ctrl) & SILENT_MATCH_FLAG) == 0)) {
-    ctrl->match.start = buffer_start;
-    ctrl->match.end   = buffer_end;
-    new_match(ctrl, filename, filename_len);
+    ctrl->match.start = ctrl->buffer_start;
+    ctrl->match.end   = ctrl->buffer_end;
+    new_match(ctrl, 1);
   }
-//flush_matches(ctrl);
-//ctrl->matches[0] = '\0';
-//printf("-- DONE --\n");
   return match_found;
+}
+
+
+NFASim *
+new_nfa_sim(Parser * parser, Scanner * scanner, ctrl_flags * cfl)
+{
+  NFASim * sim;
+  int sz    = sizeof(*sim) + (sizeof(*(sim->loop_record)) * (parser->interval_count));
+  sim       = xmalloc(sz);
+  sim->size = sz;
+  sim->ctrl = xmalloc(sizeof(*(sim->ctrl)));
+  active_threads_sp = xmalloc(sizeof(char *) * (parser->total_nfa_ids + 1));
+
+  sim->ip                    = peek(parser->symbol_stack);
+  sim->scanner               = scanner;
+  sim->ctrl->scanner         = scanner;
+  sim->ctrl->loop_record_cap = parser->interval_count;
+  sim->ctrl->active_threads  = new_list();
+  sim->ctrl->thread_pool     = new_list();
+  sim->ctrl->ctrl_flags      = cfl;
+  sim->ctrl->start_state     = sim->ip;
+  sim->ctrl->filename        = get_filename(scanner);
+  sim->ctrl->filename_len    = strlen(sim->ctrl->filename);
+  return sim;
+}
+
+
+void
+reset_nfa_sim(NFASim * sim, NFA * start_state)
+{
+  sim->match.end                  = NULL;
+  sim->match.start                = NULL;
+  sim->ctrl->start_state          = start_state;
+  sim->ctrl->match.last_match_end = NULL;
+  sim->ctrl->buffer_start         = get_cur_pos(sim->scanner);
+  sim->ctrl->buffer_end           = get_buffer_end(sim->scanner) - 1;
+  memset(sim->loop_record,   0, sizeof(LoopRecord) * sim->ctrl->loop_record_cap);
 }
 
 

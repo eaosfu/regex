@@ -22,7 +22,7 @@ static struct option const long_options[] = {
   {"pattern-file"   , required_argument, NULL, 'f'},
   {"show-file-name" , no_argument      , NULL, 'F'}, // not implemented
   {"invert-match"   , no_argument      , NULL, 'v'}, // FIXME: issue with showing eol symbol
-  {"show-match-line", no_argument      , NULL, 'l'}, // not implemented
+  {"show-match-line", no_argument      , NULL, 'l'},
   {"quiet"          , no_argument      , NULL, 'q'},
   {"silent"         , no_argument      , NULL, 'q'},
   {"ignore-case"    , no_argument      , NULL, 'i'}, // not implemented
@@ -124,7 +124,7 @@ main(int argc, char ** argv)
       case 'q': { SET_SILENT_MATCH_FLAG(&cfl);         } break;
       case 'v': { SET_INVERT_MATCH_FLAG(&cfl);         } break;
       case 'F': { SET_SHOW_FILE_NAME_FLAG(&cfl);       } break;
-      case 'L': { SET_SHOW_LINE_FLAG(&cfl);            } break;
+      case 'l': { SET_SHOW_LINENO_FLAG(&cfl);          } break;
       default:  { exit_unknown_opt(opt, EXIT_FAILURE); } break;
     }
   }
