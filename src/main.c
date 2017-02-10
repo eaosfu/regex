@@ -14,7 +14,7 @@
 // This should be long enough.
 char program_name[NAME_MAX];
 
-static const char short_options [] = {"Ff:ghilqv"};
+static const char short_options [] = {"Ff:ghinqv"};
 
 static struct option const long_options[] = {
   {"help"           , no_argument      , NULL, 'h'},
@@ -22,7 +22,7 @@ static struct option const long_options[] = {
   {"pattern-file"   , required_argument, NULL, 'f'},
   {"show-file-name" , no_argument      , NULL, 'F'},
   {"invert-match"   , no_argument      , NULL, 'v'},
-  {"show-match-line", no_argument      , NULL, 'l'},
+  {"show-match-line", no_argument      , NULL, 'n'},
   {"quiet"          , no_argument      , NULL, 'q'},
   {"silent"         , no_argument      , NULL, 'q'},
   {"ignore-case"    , no_argument      , NULL, 'i'}, // not implemented
@@ -124,7 +124,7 @@ main(int argc, char ** argv)
       case 'q': { SET_SILENT_MATCH_FLAG(&cfl);         } break;
       case 'v': { SET_INVERT_MATCH_FLAG(&cfl);         } break;
       case 'F': { SET_SHOW_FILE_NAME_FLAG(&cfl);       } break;
-      case 'l': { SET_SHOW_LINENO_FLAG(&cfl);          } break;
+      case 'n': { SET_SHOW_LINENO_FLAG(&cfl);          } break;
       default:  { exit_unknown_opt(opt, EXIT_FAILURE); } break;
     }
   }
@@ -185,6 +185,9 @@ main(int argc, char ** argv)
   
 
   // if we've made it this far we have all we need to run the recognizer
+  //nfa_sim  = new_nfa_sim(parser, scanner, &cfl);
+  //NFASimCtrl * nfa_sim_ctrl = nfa_sim->ctrl;
+  NFASimCtrl * nfa_sim_ctrl = new_nfa_sim(parser, scanner, &cfl);
   while(target_idx < argc) {
     fh = fopen(argv[target_idx], "r");
     if(fh == NULL) {
@@ -192,23 +195,16 @@ main(int argc, char ** argv)
     }
     filename = argv[target_idx];
     int line = 0;
-    nfa_sim = new_nfa_sim(parser, scanner, &cfl);
-    NFASimCtrl * thread_ctrl = nfa_sim->ctrl;
     while((scanner->line_len = getline(&scanner->buffer, &scanner->buf_len, fh)) > 0) {
       reset_scanner(scanner, filename);
-      reset_nfa_sim(nfa_sim, ((NFA *)peek(parser->symbol_stack))->parent);
-// TEST: FIXME: NEED A BETTER INTERFACE FOR THIS... THE SCANNER SHOULD PROBABLY HANDLE
-//              MOST/ALL INTERACTION WITH FILE/INPUT?
-      ++line;
+      nfa_sim = reset_nfa_sim(nfa_sim_ctrl, ((NFA *)peek(parser->symbol_stack))->parent);
+      ++line; // FIXME: scanner should update the line number on it's own
       scanner->line_no = line;
-// TEST
       run_nfa(nfa_sim);
-      nfa_sim = list_shift(thread_ctrl->thread_pool);
-//      nfa_sim->prev_thread = nfa_sim->next_thread = nfa_sim;
     }
 
-    if(thread_ctrl->match_idx) {
-      flush_matches(thread_ctrl);
+    if(nfa_sim_ctrl->match_idx) {
+      flush_matches(nfa_sim_ctrl);
     }
     ++target_idx;
   }
@@ -220,7 +216,7 @@ CLEANUP:
   free_scanner(scanner);
 
   if(nfa_sim) {
-    free_nfa_sim(nfa_sim);
+    free_nfa_sim(nfa_sim_ctrl);
   }
 
   return status;

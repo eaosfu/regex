@@ -282,9 +282,9 @@ sub main {
   gen_regex_output($regex_bin, $regex_output_dir, $regex_input_dir, \%input);
   diff_results(\%input);
 
-  if($memcheck) {
+#  if($memcheck) {
     run_memcheck($regex_bin, $regex_input_dir, \%input);
-  }
+#  }
 }
 
 

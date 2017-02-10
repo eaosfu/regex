@@ -55,11 +55,14 @@ typedef struct NFASimCtrl {
 
 
 int  run_nfa(NFASim *);
-void free_nfa_sim(NFASim *);
+//void free_nfa_sim(NFASim *);
+void free_nfa_sim(NFASimCtrl *);
 void * free_match_string(void *);
 void flush_matches(NFASimCtrl *);
-void reset_nfa_sim(NFASim *, NFA *);
-NFASim * new_nfa_sim(Parser *, Scanner *, ctrl_flags *);
+//void reset_nfa_sim(NFASim *, NFA *);
+NFASim * reset_nfa_sim(NFASimCtrl *, NFA *);
+//NFASim * new_nfa_sim(Parser *, Scanner *, ctrl_flags *);
+NFASimCtrl * new_nfa_sim(Parser *, Scanner *, ctrl_flags *);
 int  get_states(NFASim *, NFA *, List *, int, int, unsigned int);
 
 #endif

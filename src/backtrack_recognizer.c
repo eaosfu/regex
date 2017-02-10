@@ -20,7 +20,16 @@ static active_thread_input_ptr * active_threads_sp;
 #define INST_TYPE(sim)         ((sim)->ip->value.type)
 #define INST_TOKEN(sim)        ((sim)->ip->value.literal)
 #define INST_LONG_TOKEN(sim)   ((sim)->ip->value.lliteral[(sim)->ip->value.idx])
-#define RELEASE_ALL_THREADS(t) while((t)) { (t) = release_thread((t), (t)->ctrl->start_state); }
+//#define RELEASE_ALL_THREADS(t) while((t)) { (t) = release_thread((t), (t)->ctrl->start_state); }
+
+
+#define RELEASE_ALL_THREADS(ctrl, thread)      \
+({  while(list_size(((ctrl)->active_threads))) {                 \
+    list_push((ctrl)->thread_pool, list_shift((ctrl)->active_threads));\
+  }\
+  list_push((ctrl)->thread_pool, (thread));\
+})
+
 
 static int  load_next(NFASim *, NFA *);
 static int  process_adjacents(NFASim *sim, NFA * nfa);
@@ -53,7 +62,6 @@ update_match(NFASim * sim)
 
 
 static Match *
-//new_match(NFASimCtrl * ctrl, const char * filename, int nm_len)
 new_match(NFASimCtrl * ctrl, int shorten)
 {
   Match * match = NULL;
@@ -64,7 +72,6 @@ new_match(NFASimCtrl * ctrl, int shorten)
     int nm_len            = ctrl->filename_len;
     int line_no           = ctrl->scanner->line_no;
     int w = 1;
-
     if(begin && (begin <= end)) {
       int sz = end - begin + 1;
 
@@ -235,6 +242,7 @@ thread_clone(NFASim * sim, NFA * nfa, int id)
 static inline NFASim *
 release_thread(NFASim * sim, NFA * start_state)
 {
+/*
   sim->ip                 = start_state;
   sim->status             = 0;
   sim->match.end          = NULL;
@@ -242,6 +250,7 @@ release_thread(NFASim * sim, NFA * start_state)
   sim->interval_count     = 0;
   sim->tracking_intervals = 0;
   sim->tracking_backrefs  = 0;
+*/
   list_push(sim->ctrl->thread_pool, sim);
   return list_shift(sim->ctrl->active_threads);
 }
@@ -523,6 +532,9 @@ run_nfa(NFASim * thread)
             update_longest_match(&(ctrl->match), &(thread->match));
             if(((CTRL_FLAGS(ctrl) & MGLOBAL_FLAG) == 0)) {
               new_match(ctrl, 0);
+              ctrl->match.start = NULL;
+              ctrl->match.end  = NULL;
+              ctrl->match.last_match_end = NULL;
               goto RELEASE_ALL_THREADS;
             }
           }
@@ -559,7 +571,9 @@ run_nfa(NFASim * thread)
     thread = reset_thread(ctrl, ctrl->start_state, (char *)input_pointer);
   }
 RELEASE_ALL_THREADS:
-  RELEASE_ALL_THREADS(thread);
+  //RELEASE_ALL_THREADS(thread);
+  //RELEASE_ALL_THREADS(ctrl->active_threads, ctrl->thread_pool, thread);
+  RELEASE_ALL_THREADS(ctrl,thread);
 
   if((match_found == 0)
   && (CTRL_FLAGS(ctrl) & INVERT_MATCH_FLAG)
@@ -572,7 +586,7 @@ RELEASE_ALL_THREADS:
 }
 
 
-NFASim *
+NFASimCtrl *
 new_nfa_sim(Parser * parser, Scanner * scanner, ctrl_flags * cfl)
 {
   NFASim * sim;
@@ -582,7 +596,7 @@ new_nfa_sim(Parser * parser, Scanner * scanner, ctrl_flags * cfl)
   sim->ctrl = xmalloc(sizeof(*(sim->ctrl)));
   active_threads_sp = xmalloc(sizeof(char *) * (parser->total_nfa_ids + 1));
 
-  sim->ip                    = peek(parser->symbol_stack);
+  sim->ip                    = ((NFA *)peek(parser->symbol_stack))->parent;
   sim->scanner               = scanner;
   sim->ctrl->scanner         = scanner;
   sim->ctrl->loop_record_cap = parser->interval_count;
@@ -590,12 +604,11 @@ new_nfa_sim(Parser * parser, Scanner * scanner, ctrl_flags * cfl)
   sim->ctrl->thread_pool     = new_list();
   sim->ctrl->ctrl_flags      = cfl;
   sim->ctrl->start_state     = sim->ip;
-  sim->ctrl->filename        = get_filename(scanner);
-  sim->ctrl->filename_len    = strlen(sim->ctrl->filename);
-  return sim;
+  list_push(sim->ctrl->thread_pool, sim);
+  return sim->ctrl;
 }
 
-
+/*
 void
 reset_nfa_sim(NFASim * sim, NFA * start_state)
 {
@@ -605,19 +618,51 @@ reset_nfa_sim(NFASim * sim, NFA * start_state)
   sim->ctrl->match.last_match_end = NULL;
   sim->ctrl->buffer_start         = get_cur_pos(sim->scanner);
   sim->ctrl->buffer_end           = get_buffer_end(sim->scanner) - 1;
+  sim->ctrl->filename             = get_filename(sim->scanner);
+  sim->ctrl->filename_len         = strlen(sim->ctrl->filename);
   memset(sim->loop_record,   0, sizeof(LoopRecord) * sim->ctrl->loop_record_cap);
 }
-
+*/
+NFASim *
+reset_nfa_sim(NFASimCtrl * ctrl, NFA * start_state)
+{
+//  ctrl->start_state          = start_state;
+  ctrl->match.last_match_end = NULL;
+  ctrl->buffer_start         = get_cur_pos(ctrl->scanner);
+  ctrl->buffer_end           = get_buffer_end(ctrl->scanner) - 1;
+  ctrl->filename             = get_filename(ctrl->scanner);
+  ctrl->filename_len         = strlen(ctrl->filename);
+  NFASim * sim = NULL;
+  if(list_size(ctrl->thread_pool)) {
+    sim = list_shift(ctrl->thread_pool);
+    sim->match.end                  = NULL;
+    sim->match.start                = NULL;
+  }
+  else {
+    fatal("Unable to obtain thread for execution\n");
+  }
+  memset(sim->loop_record,   0, sizeof(LoopRecord) * sim->ctrl->loop_record_cap);
+  return sim;
+}
 
 void
-free_nfa_sim(NFASim * nfa_sim)
+free_nfa_sim(NFASimCtrl * ctrl)
 {
-  list_iterate(((*(NFASimCtrl **)nfa_sim)->active_threads), (void *)&free);
-  list_free(((*(NFASimCtrl **)nfa_sim)->active_threads), NULL);
+  //list_iterate(ctrl->active_threads, (void *)&free);
+  if(list_size((ctrl->active_threads))) {
+    while(list_size((ctrl->active_threads))) {
+      list_push(ctrl->thread_pool, list_shift(ctrl->active_threads));
+    }
+  }
+  //list_free_items(ctrl->active_threads, (void *)&free);
+  //list_free_items(ctrl->active_threads, (void *)&free);
+//  free(ctrl->active_threads);
+  list_free(ctrl->active_threads, NULL);
 
-  list_iterate(((*(NFASimCtrl **)nfa_sim)->thread_pool), (void *)&free);
-  list_free(((*(NFASimCtrl **)nfa_sim)->thread_pool), NULL);
-
-  free(nfa_sim->ctrl);
-  free(nfa_sim);
+  //list_iterate(ctrl->thread_pool, (void *)&free);
+//  list_free_items(ctrl->thread_pool, (void *)&free);
+//  free(ctrl->thread_pool);
+  //list_free(ctrl->thread_pool, NULL);
+  list_free(ctrl->thread_pool, (void *)&free);
+  free(ctrl);
 }
