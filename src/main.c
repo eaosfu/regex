@@ -20,8 +20,8 @@ static struct option const long_options[] = {
   {"help"           , no_argument      , NULL, 'h'},
   {"global_match"   , no_argument      , NULL, 'g'},
   {"pattern-file"   , required_argument, NULL, 'f'},
-  {"show-file-name" , no_argument      , NULL, 'F'}, // not implemented
-  {"invert-match"   , no_argument      , NULL, 'v'}, // FIXME: issue with showing eol symbol
+  {"show-file-name" , no_argument      , NULL, 'F'},
+  {"invert-match"   , no_argument      , NULL, 'v'},
   {"show-match-line", no_argument      , NULL, 'l'},
   {"quiet"          , no_argument      , NULL, 'q'},
   {"silent"         , no_argument      , NULL, 'q'},
