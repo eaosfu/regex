@@ -499,6 +499,7 @@ printf("PARSE BRACKET EXPRESSION\n");
   int negate_match = 0;
 printf("\tTOKEN: %c\n", parser->lookahead.value);
   if(parser->lookahead.type == CIRCUMFLEX) {
+                                       abdefghklmnopqr
     parser_consume_token(parser);
     negate_match = 1;
 //printf("NEGATE MATCH!\n");

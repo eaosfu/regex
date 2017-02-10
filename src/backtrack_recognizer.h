@@ -1,67 +1,55 @@
 #ifndef NFA_SIM_H_
 #define NFA_SIM_H_
 
-#define THREAD_LIMIT          20
-#define MAX_BACKREF_COUNT     20
+#define MAX_BACKREF_COUNT      9
 #define MATCH_BUCKET_SIZE   1024
-#define MAX_BACKTRACK_DEPTH 1024
 
 #include "regex_parser.h"
 
-
 typedef struct Match {
-  struct NFASimCtrl * ctrl;
   const char * start;
   const char * end;
   const char * last_match_end;
 } Match;
 
 
-typedef struct BacktrackRecord {
-  int count;
-  const char * input;
-  const char * match;
-  NFA  * restart_point;;
-} BacktrackRecord;
-
-
 typedef struct LoopRecord {
   int count;
-  char * last_match;
 } LoopRecord;
 
 
 typedef struct NFASim {
   struct NFASimCtrl * ctrl;
-  int sp;
-  int id;
+  int size; // size of this struct plus size of loop_record
+  int status;
+  int interval_count;
   int tracking_intervals;
   int tracking_backrefs;
-  int size;
-  int tracked_loop_count; // may not be necessary anymore
-  int status;
   const char * input_ptr;
   NFA * ip;
   NFA * start_state;
   Scanner * scanner;
+  int * loop_record_flags;
   Match match;
-  struct NFASim * next_thread;
-  struct NFASim * prev_thread;
-  BacktrackRecord backtrack_stack[MAX_BACKTRACK_DEPTH];
   Match backref_match[MAX_BACKREF_COUNT];
   LoopRecord loop_record[];
 } NFASim;
 
 
 typedef struct NFASimCtrl {
-  int next_thread_id;
+  int active;
   int match_idx;
+  int filename_len;
   int loop_record_cap;
-  Match match;
-  List * match_pool;
+  const char * filename;
+  const char * buffer_start;
+  const char * buffer_end;
+  NFA  * start_state;
   List * thread_pool;
   List * active_threads;
+  Scanner * scanner;
   ctrl_flags * ctrl_flags;
+  Match match;
   char matches[MATCH_BUCKET_SIZE];
 } NFASimCtrl;
 

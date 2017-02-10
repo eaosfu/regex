@@ -10,7 +10,7 @@
 #define ESCP_SEQ_FLAG         0x020
 // TAKE EFFECT AT RUNTIME
 #define MGLOBAL_FLAG          0x040
-#define SHOW_LINE_FLAG        0x080
+#define SHOW_LINENO_FLAG      0x080
 #define SHOW_FILE_NAME_FLAG   0x100
 #define IGNORE_CASE_FLAG      0x200
 #define SILENT_MATCH_FLAG     0x400
@@ -40,8 +40,8 @@
 #define CLEAR_MGLOBAL_FLAG(ctrl_flags)        (*(ctrl_flags) = *(ctrl_flags) & MGLOBAL_FLAG)
 
 // ENGINE DOESN'T SUPPORT THIS YET
-#define SET_SHOW_LINE_FLAG(ctrl_flags)        (*(ctrl_flags) = *(ctrl_flags) | SHOW_LINE_FLAG)
-#define CLEAR_SHOW_LINE_FLAG(ctrl_flags)      (*(ctrl_flags) = *(ctrl_flags) & SHOW_LINE_FLAG)
+#define SET_SHOW_LINENO_FLAG(ctrl_flags)      (*(ctrl_flags) = *(ctrl_flags) | SHOW_LINENO_FLAG)
+#define CLEAR_SHOW_LINENO_FLAG(ctrl_flags)    (*(ctrl_flags) = *(ctrl_flags) & SHOW_LINENO_FLAG)
 
 #define SET_IGNORE_CASE_FLAG(ctrl_flags)      (*(ctrl_flags) = *(ctrl_flags) | IGNORE_CASE_FLAG)
 #define CLEAR_IGNORE_CASE_FLAG(ctrl_flags)    (*(ctrl_flags) = *(ctrl_flags) & IGNORE_CASE_FLAG)

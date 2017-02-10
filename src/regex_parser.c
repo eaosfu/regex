@@ -10,6 +10,9 @@
 #define READHEAD (parser->scanner->readhead)
 
 
+void debug_print_collected(NFA *, NFA *);
+
+
 static void parse_paren_expression(Parser * parser);
 static void parse_literal_expression(Parser * parser);
 static void parse_quantifier_expression(Parser * parser);
@@ -17,7 +20,8 @@ static void parse_sub_expression(Parser * parser);
 static void parse_bracket_expression(Parser * parser);
 static void regex_parser_start(Parser * parser);
 static inline void parser_consume_token(Parser * parser);
-
+static void __collect_adjacencies_helper(NFA *, NFA *, int, NFA *, List *);
+static void merge_intervals(List *);
 
 Parser *
 init_parser(Scanner * scanner, ctrl_flags * cfl)
@@ -49,15 +53,8 @@ track_capture_group(Parser * parser, unsigned int type)
     ret = 1;
     NFA * right = new_literal_nfa(parser->nfa_ctrl, NFA_LITERAL, type);
     NFA * left  = pop(parser->symbol_stack);
-    right->parent->id = parser->cgrp_count - 1;
+    right->parent->id = parser->paren_stack[parser->paren_idx - 1] - 1;
     push(parser->symbol_stack, concatenate_nfa(left, right));
-  }
-
-  if(cgrp_is_complex(parser->cgrp_map, parser->current_cgrp)) {
-    ret = 2;
-    if(type == NFA_CAPTUREGRP_BEGIN) {
-      ++(parser->next_interval_id);
-    }
   }
 
   if(type == NFA_CAPTUREGRP_END) {
@@ -117,7 +114,7 @@ parse_interval_expression(Parser * parser)
   target = pop(parser->symbol_stack);
 
   int braces_balance = 0;
-  
+
   // Loop over interval that are back to back like in:
   // <expression>{min,Max}{min,Max}...{min,Max}
   // NOTE: this does not handle cases like:
@@ -150,7 +147,7 @@ parse_interval_expression(Parser * parser)
       braces_balance = 1;
       parser_consume_token(parser);
     }
-    
+
     if(min == -1) {
       // we can't combine the two intervals in cases like <expression>{,Max}{min,Max}
       // since the first interval needs to be able to match between 0 and Max times.
@@ -168,6 +165,7 @@ parse_interval_expression(Parser * parser)
       if(min == 0 && max == 1) {
         // <expression>{0,1} ; equivalent to <expression>?
         push(parser->symbol_stack, new_qmark_nfa(target));
+        ++(parser->interval_count);
       }
       else if(min == 1 && max == 1) {
         // return unmodified target
@@ -177,12 +175,14 @@ parse_interval_expression(Parser * parser)
         if(min > 0 && max == 0) {
           // <expression>{Min,} ;match at least Min, at most Infinity
           interval_nfa = new_interval_nfa(target, min, max);
+          ++(parser->interval_count);
         }
         else {
           // <expression>{,Max} ;match between 0 and Max
           // <expression>{Min,Max} ;match between Min and Max
           min = (min >= 0) ? min : 0;
           interval_nfa = new_interval_nfa(target, min, max);
+          ++(parser->interval_count);
         }
         push(parser->symbol_stack, interval_nfa);
       }
@@ -195,6 +195,7 @@ parse_interval_expression(Parser * parser)
       else if(min > 0 && max == -1) {
         // <expression>{M}
         interval_nfa = new_interval_nfa(target, min, max);
+        ++(parser->interval_count);
 
         push(parser->symbol_stack,
           concatenate_nfa(pop(parser->symbol_stack), interval_nfa));
@@ -224,7 +225,6 @@ parse_interval_expression(Parser * parser)
     //parser_fatal("Syntax error at interval expression. Expected '}'", REGEX, READHEAD, 0);
     parser_fatal(MISSING_CLOSE_BRACE, REGEX, READHEAD, 0);
   }
-  ++(parser->loops_to_track);
 DONT_COUNT_LOOP:
   return;
 #undef DISCARD_WHITESPACE
@@ -238,13 +238,12 @@ parse_quantifier_expression(Parser * parser)
   NFA * nfa;
 
   switch(parser->lookahead.type) {
-    case PLUS: { 
+    case PLUS: {
       parser_consume_token(parser);
       nfa = pop(parser->symbol_stack);
       push(parser->loop_nfas, nfa);
       nfa = new_posclosure_nfa(nfa);
       push(parser->symbol_stack, nfa);
-      ++(parser->loops_to_track);
       parse_quantifier_expression(parser);
     } break;
     case KLEENE: {
@@ -253,7 +252,6 @@ parse_quantifier_expression(Parser * parser)
       push(parser->loop_nfas, nfa);
       nfa = new_kleene_nfa(nfa);
       push(parser->symbol_stack, nfa);
-      ++(parser->loops_to_track);
       parse_quantifier_expression(parser);
     } break;
     case QMARK: {
@@ -261,7 +259,6 @@ parse_quantifier_expression(Parser * parser)
       nfa = pop(parser->symbol_stack);
       nfa = new_qmark_nfa(nfa);
       push(parser->symbol_stack, nfa);
-      ++(parser->loops_to_track);
       parse_quantifier_expression(parser);
     } break;
     case OPENBRACE: {
@@ -271,7 +268,6 @@ parse_quantifier_expression(Parser * parser)
     case PIPE: {
       parser->total_branch_count += (parser->in_alternation != 0) ? 1 : 2;
       ++(parser->in_alternation);
-      parser->branch_id = parser->current_cgrp - 1;
       parser_consume_token(parser);
       // concatenate everything on the stack unitl we see an open paren
       // or until nothing is left on the stack
@@ -401,7 +397,7 @@ parse_matching_list(Parser * parser, NFA * range_nfa, int negate)
       str_start = get_scanner_readhead(parser->scanner);
       prev_token = parser->lookahead;
 
-      push(parser->symbol_stack, new_literal_nfa(parser->nfa_ctrl, 
+      push(parser->symbol_stack, new_literal_nfa(parser->nfa_ctrl,
         parser->lookahead.value, NFA_LITERAL));
 
       parser_consume_token(parser);
@@ -415,7 +411,7 @@ parse_matching_list(Parser * parser, NFA * range_nfa, int negate)
       prev_token = parser->lookahead;
       parser_consume_token(parser);
     }
-    
+
 
     if(parser->lookahead.type != CLOSEBRACKET && prev_token.type != delim) {
       fatal(MALFORMED_BRACKET_EXPRESSION_ERROR);
@@ -429,7 +425,7 @@ parse_matching_list(Parser * parser, NFA * range_nfa, int negate)
       return;
     }
     char * collation_string = strndup(str_start, coll_str_len);
- 
+
     // We've successfully parsed a collation class
     switch(delim) {
       case COLON: {
@@ -520,26 +516,25 @@ parse_bracket_expression(Parser * parser)
   // disable scanning escape sequences
   CLEAR_ESCP_FLAG(&CTRL_FLAGS(parser));
   parser_consume_token(parser);
-  
+
   int negate_match = 0;
   if(parser->lookahead.type == CIRCUMFLEX) {
     parser_consume_token(parser);
     negate_match = 1;
   }
 
-  NFA * range_nfa = new_range_nfa(parser->nfa_ctrl, INTERVAL(parser), negate_match, parser->branch_id);
+  NFA * range_nfa = new_range_nfa(parser->nfa_ctrl, negate_match);
   push(parser->symbol_stack, range_nfa);
 
   parse_matching_list(parser, range_nfa->parent, negate_match);
 
   if(parser->lookahead.type != CLOSEBRACKET) {
-    //fatal("Expected ]\n");
     parser_fatal(MISSING_CLOSE_BRACKET, REGEX, READHEAD, 0);
   }
   else {
     // resets charclass array
-    token_in_charclass(0, 1); 
-    
+    token_in_charclass(0, 1);
+
     // re-enable scanning escape sequences
     SET_ESCP_FLAG(parser->ctrl_flags);
 
@@ -549,13 +544,13 @@ parse_bracket_expression(Parser * parser)
     if(right == open_delim_p) {
       fatal(EMPTY_BRACKET_EXPRESSION_ERROR);
     }
-    
+
     NFA * left  = pop(parser->symbol_stack); //NULL;
 
     if(left != open_delim_p) {
       fatal("Error parsing bracket expression\n");
     }
-    
+
     push(parser->symbol_stack, right);
     parse_quantifier_expression(parser);
   }
@@ -650,6 +645,9 @@ update_open_paren_accounting(Parser * parser)
   ++(parser->paren_count);
   parser->current_cgrp = ++(parser->cgrp_count);
 
+  parser->paren_stack[parser->paren_idx] = parser->cgrp_count;
+  ++(parser->paren_idx);
+
   if(parser->root_cgrp == 0) {
     parser->root_cgrp = parser->current_cgrp;
   }
@@ -665,6 +663,7 @@ void
 update_close_paren_accounting(Parser * parser, unsigned int subtree_br_cnt)
 {
   parser->subtree_branch_count = subtree_br_cnt;
+  --(parser->paren_idx);
 }
 
 
@@ -678,7 +677,7 @@ parse_paren_expression(Parser * parser)
   parser_consume_token(parser);
 
   // Used by PIPE to determine where lhs operand starts otherwise gets popped
-  // as lhs operand in a concatenation wich will simply return the rhs 
+  // as lhs operand in a concatenation wich will simply return the rhs
   // operand.
   push(parser->symbol_stack, (void*)NULL);
   regex_parser_start(parser);
@@ -750,14 +749,16 @@ parse_sub_expression(Parser * parser)
       push(parser->symbol_stack, concatenate_nfa(left, right));
     } break;
     case BACKREFERENCE: {
+/*
+      // FIXME: NEED A BETTER/MORE EFFICIENT/CORRECT WAY OF DETECTING INVALID BACKREFERNCES!
       if(parser->lookahead.value == 0
       || (parser->lookahead.value > parser->cgrp_count)
-      || (parser->current_cgrp > 0 
+      || (parser->current_cgrp > 0
          && parser->lookahead.value == parser->root_cgrp)) {
         parser_fatal(INVALID_BACKREF, REGEX, (READHEAD), -1);
       }
-      left = new_backreference_nfa(parser->nfa_ctrl, INTERVAL(parser),
-        parser->lookahead.value, parser->branch_id);
+*/
+      left = new_backreference_nfa(parser->nfa_ctrl, parser->lookahead.value - 1);
       push(parser->symbol_stack, left);
       parser_consume_token(parser);
       parse_quantifier_expression(parser);
@@ -831,7 +832,7 @@ prescan_input(Parser * parser)
 
     char ** next = &(parser->scanner->readhead);
     int eol = parser->scanner->eol_symbol;
-    
+
     if((*next)[0] != eol) {
       char c = next_char(parser->scanner);
       while(c != eol) {
@@ -869,7 +870,7 @@ insert_progress_nfa(List * loop_nfas)
   int count = 0;
   int stop = 0;
   NFA * looper = list_shift(loop_nfas);
-  NFA * walker = NULL; 
+  NFA * walker = NULL;
   for(int i = 0; i < sz; ++i) {
     if(looper && (looper->value.type & NFA_SPLIT)) {
       walker = looper->out1;
@@ -916,6 +917,201 @@ insert_progress_nfa(List * loop_nfas)
 }
 
 
+static void *
+compare(void * a, void * b)
+{
+  if(a == b) {
+    return a;
+  }
+  return NULL;
+}
+
+
+static void
+__collect_adjacencies_helper(NFA * current, NFA * visiting, int outn, NFA * forbidden, List * adj_intvls_list)
+{
+  static int recursion = 0;
+  if(visiting->value.type == NFA_EPSILON) {
+    visiting->visited = 1;
+    ++recursion;
+    __collect_adjacencies_helper(current, visiting->out2, outn, forbidden, adj_intvls_list);
+    --recursion;
+    visiting->visited = 0;
+  }
+  else {
+    // visiting is not an EPSILON
+    if(visiting->visited) {
+      // we've hit this node before
+      switch(visiting->value.type) {
+        case NFA_TREE:  // fallthrough
+        case NFA_SPLIT:
+        case (NFA_SPLIT|NFA_PROGRESS): {
+        } break;
+        default: {
+          // if the node is matchable and is not already part of
+          // our adjacency list.. add it.
+          current->full_circle = (visiting == forbidden) ? 1 : current->full_circle;
+/*
+if(current->value.type == NFA_INTERVAL && current->value.max_rep == 6) {
+ printf("HERE!\n");
+}
+*/
+          if((visiting != forbidden) && list_search(&(current->reachable), visiting, compare) == NULL) {
+            list_append(&(current->reachable), visiting);
+          }
+        }
+      }
+    }
+    else {
+      // we haven't seen this node before
+      switch(visiting->value.type) {
+        case NFA_TREE: {
+          visiting->visited = 1;
+          NFA * branch = NULL;
+          for(int i = 0; i < list_size(visiting->value.branches); ++i) {
+            branch = list_get_at(visiting->value.branches, i);
+            ++recursion;
+            __collect_adjacencies_helper(current, branch, outn, forbidden, adj_intvls_list);
+            --recursion;
+          }
+          visiting->visited = 0;
+        } break;
+        case (NFA_SPLIT|NFA_PROGRESS):
+        case NFA_SPLIT: {
+          // Need to add this as a 'reachable' node because when we process an interval
+          // in the recognizer we want to avoid changing the state of the 'thread' holding
+          // the 'interval' source node while processing the NFA_SPLIT.
+          if(current->value.type == NFA_INTERVAL && (visiting->value.literal != '?')) {
+            // Make sure we don't include this current's tarting node in the loop
+/*
+printf("HERE!: {%d, %d} --> %c --out1--> %d:%c\n",
+  current->value.min_rep,
+  current->value.max_rep,
+  visiting->value.literal,
+  current->out1->value.type,
+  visiting->out1->value.literal);
+*/
+            __collect_adjacencies_helper(current, visiting->out1, outn, current->out1, adj_intvls_list);
+            __collect_adjacencies_helper(current, visiting->out2, outn, forbidden,  adj_intvls_list);
+/*
+            if(list_search(&(current->reachable), visiting, compare) == NULL) {
+              list_append(&(current->reachable), visiting);
+            }
+*/
+          }
+          else {
+            visiting->visited = 1;
+            ++recursion;
+            __collect_adjacencies_helper(current, visiting->out1, outn, forbidden, adj_intvls_list);
+            __collect_adjacencies_helper(current, visiting->out2, outn, forbidden, adj_intvls_list);
+            --recursion;
+            visiting->visited = 0;
+          }
+        } break;
+        default: {
+          if(current == visiting) {
+            if(recursion == 0) {
+              // If the caller passed in current == visiting (i.e. recursion == 0) and
+              // current->value.type was some 'matchable' node (i.e. not an NFA_SPLIT,
+              // NFA_INTERVAL, etc.) then we still need to explore paths to neighboring
+              // nodes.
+              ++recursion;
+              __collect_adjacencies_helper(current, visiting->out2, outn, forbidden, adj_intvls_list);
+              --recursion;
+              break;
+            }
+          }
+          current->full_circle = (visiting == forbidden) ? 1 : current->full_circle;
+/*
+if(current->value.type == NFA_INTERVAL && current->value.max_rep == 6) {
+ printf("HERE!: forbidden: [0x%x]:%c vs. visiting: [0x%x]:%c ==> full_circle: %d\n",
+ forbidden, (forbidden) ? forbidden->value.literal: 0, visiting, visiting->value.literal, current->full_circle);
+}
+*/
+          if((visiting != forbidden) && list_search(&(current->reachable), visiting, compare) == NULL) {
+            list_append(&(current->reachable), visiting);
+          }
+        }
+      }
+    }
+  }
+  if(visiting->value.type == NFA_ACCEPTING) {
+    current->reaches_accept = 1;
+  }
+
+}
+
+
+void
+collect_adjacencies(Parser * parser, NFA * start, int total_collectables)
+{
+  if(start == NULL) {
+    return;
+  }
+
+  NFA * current = start;
+  NFA * visiting = start;
+ 
+  // branch_stack no longer contains useful data so reuse it as a list
+  List * l = parser->branch_stack;;
+
+  // store pairs of adjacent intervals
+  List * adj_intvls_list = new_list();
+
+
+  __collect_adjacencies_helper(current, visiting, 0, NULL, NULL);
+  list_append(l, current);
+
+  for(int i = 0; i < list_size(l); ++i) {
+    if(i > total_collectables) {
+      break; // should never hit this condition
+    }
+    current = list_get_at(l, i);
+    for(int j = 0; j < list_size(&(current->reachable)); ++j) {
+      visiting = list_get_at(&(current->reachable),j);
+      //if(list_search(l, visiting, compare)) {
+      if(visiting->done) {
+        continue;
+      }
+      if(current != visiting && visiting->value.type != NFA_ACCEPTING) {
+        visiting->visited = 1;
+        if(visiting->value.type == NFA_INTERVAL) {
+          __collect_adjacencies_helper(visiting, visiting->out1, 0, NULL, NULL);
+          visiting->value.split_idx = list_size(&(visiting->reachable));
+// KLUDGE
+          ListItem * old_head = visiting->reachable.head;
+          ListItem * old_tail = visiting->reachable.tail;
+          visiting->reachable.size = 0;
+          visiting->reachable.head = visiting->reachable.tail = NULL;
+// END KLUDGE
+          __collect_adjacencies_helper(visiting, visiting->out2, 1, NULL, adj_intvls_list);
+// KLUDGE!
+          old_tail->next = visiting->reachable.head;
+          visiting->reachable.size += visiting->value.split_idx;
+          visiting->reachable.head = old_head;
+        }
+        else if(visiting->value.type == NFA_SPLIT){
+          __collect_adjacencies_helper(visiting, visiting->out1, 0, NULL, NULL);
+          __collect_adjacencies_helper(visiting, visiting->out2, 0, NULL, NULL);
+//debug_print_collected(visiting, visiting->out2);
+        }
+        else {
+          __collect_adjacencies_helper(visiting, visiting->out2, 0, NULL, NULL);
+        }
+        visiting->visited = 0;
+
+        if(list_search(l, visiting, compare) == NULL) {
+          list_append(l, visiting);
+          visiting->done = 1;
+        }
+      }
+    }
+  }
+
+  free(adj_intvls_list);
+}
+
+
 int
 parse_regex(Parser * parser)
 {
@@ -942,11 +1138,21 @@ parse_regex(Parser * parser)
     // give the last accepting state an id
     mark_nfa(peek(parser->symbol_stack));
 
-    parser->loops_to_track += insert_progress_nfa(parser->loop_nfas);
 
 // TEST FIXME -- define an interface for this in nfa(.c/.h)
-    parser->total_nfa_ids = ((NFA *)peek(parser->symbol_stack))->ctrl->next_seq_id - 1;
+    //parser->total_nfa_ids = ((NFA *)peek(parser->symbol_stack))->ctrl->next_seq_id - 1;
+    parser->total_nfa_ids = ((NFA *)peek(parser->symbol_stack))->id;
+    if((((NFA *)peek(parser->symbol_stack))->parent)->value.type  & ~(NFA_SPLIT|NFA_EPSILON)) {
+      NFA * start_node = new_nfa(parser->nfa_ctrl, NFA_EPSILON);
+      NFA * right = pop(parser->symbol_stack);
+      start_node->out1 = start_node->out2 = right->parent;
+      right->parent = start_node;
+      push(parser->symbol_stack, right);
+    }
+    collect_adjacencies(parser, (((NFA *)peek(parser->symbol_stack))->parent),
+      (parser->total_nfa_ids + parser->interval_count));
 // END TEST
+
     ret = 1;
   }
 
@@ -958,9 +1164,137 @@ void
 parser_free(Parser * parser)
 {
   free_nfa(((NFA *)peek(parser->symbol_stack)));
-  stack_delete(&(parser->symbol_stack), NULL);
-  stack_delete(&(parser->branch_stack), NULL);
-  list_free(&(parser->loop_nfas), NULL);
+  stack_delete((parser->symbol_stack), NULL);
+  stack_delete((parser->branch_stack), NULL);
+  list_free((parser->loop_nfas), NULL);
   free(parser->nfa_ctrl);
   free(parser);
+}
+
+
+
+
+
+
+
+
+
+
+void
+debug_print_collected(NFA * current, NFA * visiting)
+{
+  if(current->value.type == NFA_INTERVAL) {
+    printf("\ninterval: {%d, %d}\n", current->value.min_rep, current->value.max_rep);
+    printf(" left list: %d\n", list_size(&(current->reachable)));
+      //for(int i = 0; i < list_size(&(current->reachable)); ++i) {
+      for(int i = 0; i < current->value.split_idx; ++i) {
+        if(i == 0) {
+          printf("\t[0x%x]:%d:%d",
+          ((NFA *)list_get_at(&(current->reachable), i)),
+          i, ((NFA *)list_get_at(&(current->reachable), i))->value.type);
+          switch(((NFA *)list_get_at(&(current->reachable), i))->value.type) {
+            case NFA_INTERVAL: {
+              printf(":{%d, %d}",
+                ((NFA *)list_get_at(&(current->reachable), i))->value.min_rep,
+                ((NFA *)list_get_at(&(current->reachable), i))->value.max_rep);
+            } break;
+            default: {
+              printf(":%c",
+                ((NFA *)list_get_at(&(current->reachable), i))->value.literal
+                );
+            }
+          }
+        }
+        else {
+          printf(" -- [0x%x]:%d:%d",
+          ((NFA *)list_get_at(&(current->reachable), i)),
+          i, ((NFA *)list_get_at(&(current->reachable), i))->value.type);
+          switch(((NFA *)list_get_at(&(current->reachable), i))->value.type) {
+            case NFA_INTERVAL: {
+              printf(":{%d, %d}",
+                ((NFA *)list_get_at(&(current->reachable), i))->value.min_rep,
+                ((NFA *)list_get_at(&(current->reachable), i))->value.max_rep);
+            } break;
+            default: {
+              printf(":%c",
+                ((NFA *)list_get_at(&(current->reachable), i))->value.literal
+              );
+            }
+          }
+        }
+      }
+      printf("\n");
+      printf("right list: %d\n", list_size(&(current->reachable)) - current->value.split_idx);
+        for(int i = 0; current->value.split_idx + 1 < list_size(&(current->reachable)); ++i) {
+          current = ((NFA *)list_get_at(&(current->reachable), i));
+          if(i == 0) {
+            printf("\t[0x%x]:%d:%d",
+            ((NFA *)list_get_at(&(current->reachable), i)),
+            i, ((NFA *)list_get_at(&(current->reachable), i))->value.type);
+            switch(((NFA *)list_get_at(&(current->reachable), i))->value.type) {
+              case NFA_INTERVAL: {
+                printf(":{%d, %d}",
+                  ((NFA *)list_get_at(&(current->reachable), i))->value.min_rep,
+                  ((NFA *)list_get_at(&(current->reachable), i))->value.max_rep);
+              } break;
+              default: {
+                printf(":%c",
+                  ((NFA *)list_get_at(&(current->reachable), i))->value.literal
+                  );
+              }
+            }
+          }
+          else {
+            printf(" -- [0x%x]:%d:%d",
+            ((NFA *)list_get_at(&(current->reachable), i)),
+            i, ((NFA *)list_get_at(&(current->reachable), i))->value.type);
+            switch(((NFA *)list_get_at(&(current->reachable), i))->value.type) {
+              case NFA_INTERVAL: {
+                printf(":{%d, %d}",
+                  ((NFA *)list_get_at(&(current->reachable), i))->value.min_rep,
+                  ((NFA *)list_get_at(&(current->reachable), i))->value.max_rep);
+              } break;
+              default: {
+                printf(":%c",
+                  ((NFA *)list_get_at(&(current->reachable), i))->value.literal
+                );
+              }
+            }
+          }
+        }
+        printf("\n\n");
+
+  }
+  else {
+    printf("[0x%x]:%d:%c\n", current, current->value.type, current->value.literal);
+    for(int i = 0; i < list_size(&(current->reachable)); ++i) {
+      if(i == 0) {
+        printf("\t%d:%d", i, ((NFA *)list_get_at(&(current->reachable), i))->value.type);
+        switch(((NFA *)list_get_at(&(current->reachable), i))->value.type) {
+          case NFA_INTERVAL: {
+            printf(":{%d, %d}",
+              ((NFA *)list_get_at(&(current->reachable), i))->value.min_rep,
+              ((NFA *)list_get_at(&(current->reachable), i))->value.max_rep);
+          } break;
+          default: {
+            printf(":%c", ((NFA *)list_get_at(&(current->reachable), i))->value.literal);
+          }
+        }
+      }
+      else {
+        printf(" -- %d:%d", i, ((NFA *)list_get_at(&(current->reachable), i))->value.type);
+        switch(((NFA *)list_get_at(&(current->reachable), i))->value.type) {
+          case NFA_INTERVAL: {
+            printf(":{%d, %d}",
+              ((NFA *)list_get_at(&(current->reachable), i))->value.min_rep,
+              ((NFA *)list_get_at(&(current->reachable), i))->value.max_rep);
+          } break;
+          default: {
+            printf(":%c", ((NFA *)list_get_at(&(current->reachable), i))->value.literal);
+          }
+        }
+      }
+    }
+    printf("\n");
+  }
 }

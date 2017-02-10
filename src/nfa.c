@@ -157,16 +157,12 @@ update_range_nfa(unsigned int low, unsigned int high, NFA * range_nfa, int negat
 
 
 NFA *
-new_range_nfa(NFACtrl * ctrl, NFA * interval, int negate, unsigned int branch_id)
+new_range_nfa(NFACtrl * ctrl, int negate)
 {
   NFA * start  = new_nfa(ctrl, NFA_RANGE);
   NFA * accept = new_nfa(ctrl, NFA_ACCEPTING);
   
   mark_nfa(start);
- 
-  if(interval) {
-    start->parent = interval;
-  }
 
   start->value.range = xmalloc(sizeof *(start->value.range));
 
@@ -218,6 +214,7 @@ new_literal_nfa(NFACtrl * ctrl, unsigned int literal, unsigned int type)
   start = new_nfa(ctrl, type);
 
   mark_nfa(start);
+
   start->value.literal = literal;
   start->out1 = start->out2 = accept;
 
@@ -228,12 +225,11 @@ new_literal_nfa(NFACtrl * ctrl, unsigned int literal, unsigned int type)
 
 
 NFA *
-new_backreference_nfa(NFACtrl * ctrl, NFA * interval, unsigned int capture_group_id, unsigned int branch_id)
+new_backreference_nfa(NFACtrl * ctrl, unsigned int capture_group_id)
 {
   NFA * start  = new_nfa(ctrl, NFA_BACKREFERENCE);
   NFA * accept = new_nfa(ctrl, NFA_ACCEPTING);
 
-  start->parent = interval;
   start->id = capture_group_id;
   start->out1 = start->out2 = accept;
 
@@ -249,7 +245,7 @@ new_kleene_nfa(NFA * body)
   NFA * start  = new_nfa(body->ctrl, NFA_SPLIT);
   NFA * accept = new_nfa(body->ctrl, NFA_ACCEPTING);
 
-  mark_interval_nfa(start);
+  //mark_interval_nfa(start);
 
   start->value.literal = '?';
   start->greedy = 1;
@@ -281,7 +277,7 @@ new_qmark_nfa(NFA * body)
   NFA * accept = new_nfa(body->ctrl, NFA_ACCEPTING);
   
   
-  mark_interval_nfa(start);
+  //mark_interval_nfa(start);
 
   start->greedy = 1;
   start->out1 = accept;
@@ -309,7 +305,7 @@ new_posclosure_nfa(NFA * body)
 
   body->value.type = NFA_SPLIT;
   body->greedy = 1;
-  mark_interval_nfa(body);
+  //mark_interval_nfa(body);
   body->value.literal = '+';
 //  body->out1 = body->parent;
   // tighten loop
@@ -358,9 +354,12 @@ new_interval_nfa(NFA * target, unsigned int min, unsigned int max)
 
   new_interval->value.min_rep = min;
   new_interval->value.max_rep = max;
-  new_interval->value.count = 0;
-
-  new_interval->out1 = target->parent;
+  new_interval->value.split_idx = 0;
+  NFA * tmp = target->parent;
+  // tighten loop
+  while((tmp->value.type == NFA_EPSILON) && (tmp = tmp->out2));
+  new_interval->out1 = tmp;
+// new_interval->out1 = target->parent;
   new_interval->out2 = accept;
 
 
@@ -516,7 +515,8 @@ free_nfa_helper(NFA * n, List * l, List * seen_states)
         for(int i = 0; i <= branch_count; ++i) {
           free_nfa_helper(list_shift(n->value.branches), l, seen_states);
         }
-        list_free(&(n->value.branches), NULL);
+        //list_free(&(n->value.branches), NULL);
+        list_free((n->value.branches), NULL);
       }
       else {
         free_nfa_helper(n->out1, l, seen_states);
@@ -570,11 +570,12 @@ free_nfa(NFA * nfa)
     if(del_nfa->value.type & NFA_RANGE) {
       free(del_nfa->value.range);
     }
+    list_free_items(&(del_nfa->reachable), NULL);
+
     free(del_nfa);
   }
-
-  list_free(&cur_state_set, NULL);
-  list_free(&next_state_set, NULL);
-  list_free(&seen_states, NULL);
-  list_free(&(ctrl->free_range), &free_nfa_wrapper);
+  list_free(cur_state_set, NULL);
+  list_free(next_state_set, NULL);
+  list_free(seen_states, NULL);
+  list_free((ctrl->free_range), &free_nfa_wrapper);
 }

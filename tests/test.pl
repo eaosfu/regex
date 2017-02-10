@@ -200,7 +200,7 @@ sub diff_results {
 
     if($result != 0) {
       $fail_count++;
-      print "Failed test $_: $args->{$_}{regex}\n";
+      print "Failed test $_: $args->{$_}{regex} $args->{$_}{regex_input}\n";
     }
   }
   $total = scalar (keys %{$args});
@@ -282,9 +282,9 @@ sub main {
   gen_regex_output($regex_bin, $regex_output_dir, $regex_input_dir, \%input);
   diff_results(\%input);
 
-#  if($memcheck) {
+  if($memcheck) {
     run_memcheck($regex_bin, $regex_input_dir, \%input);
-#  }
+  }
 }
 
 

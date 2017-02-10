@@ -22,7 +22,7 @@ static struct option const long_options[] = {
   {"pattern-file"   , required_argument, NULL, 'f'},
   {"show-file-name" , no_argument      , NULL, 'F'}, // not implemented
   {"invert-match"   , no_argument      , NULL, 'v'}, // FIXME: issue with showing eol symbol
-  {"show-match-line", no_argument      , NULL, 'l'}, // not implemented
+  {"show-match-line", no_argument      , NULL, 'l'},
   {"quiet"          , no_argument      , NULL, 'q'},
   {"silent"         , no_argument      , NULL, 'q'},
   {"ignore-case"    , no_argument      , NULL, 'i'}, // not implemented
@@ -45,13 +45,13 @@ print_usage(int exit_code)
   printf("       %s [options] -f <pattern_file> file [file]...\n", program_name);
   printf("\n");
   printf("options:\n"
-"  -F, --show-file-name     display line number for the match, starts at 1\n"
+"  -F, --show-file-name     display filename where match was found\n"
 "  -f, --pattern-file       read regex pattern from a file\n"
 "  -g, --global-match       find all matches on the input line\n"
-"                           by default only the first match stops the search\n"
+"                           by default the first match stops the search\n"
 "  -h, --help               display this help message\n"
 "  -i, --ignore-case        treat all input, including pattern, as lowercase\n"
-"  -l, --show-match-line    display line where matches are found\n"
+"  -l, --show-match-line    display line number for the match, starts at 1\n"
 "  -q, --quiet, --silent    suppress all output to stdout\n"
 "  -v, --invert-match       display lines where no matches are found\n"
 "\n"
@@ -100,7 +100,6 @@ main(int argc, char ** argv)
 {
   int status = 0;
   int opt = -1;
-  int read_pattern_file = 0;
 
   ctrl_flags cfl = 0;
   Scanner * scanner = NULL;
@@ -125,7 +124,7 @@ main(int argc, char ** argv)
       case 'q': { SET_SILENT_MATCH_FLAG(&cfl);         } break;
       case 'v': { SET_INVERT_MATCH_FLAG(&cfl);         } break;
       case 'F': { SET_SHOW_FILE_NAME_FLAG(&cfl);       } break;
-      case 'L': { SET_SHOW_LINE_FLAG(&cfl);            } break;
+      case 'l': { SET_SHOW_LINENO_FLAG(&cfl);          } break;
       default:  { exit_unknown_opt(opt, EXIT_FAILURE); } break;
     }
   }
@@ -176,7 +175,9 @@ main(int argc, char ** argv)
 
   parser = init_parser(scanner, &cfl);
 
-  int run = parse_regex(parser);
+  if(parse_regex(parser) == 0) {
+    goto CLEANUP;
+  }
 
   if(fh) {
     fclose(fh);
@@ -203,7 +204,7 @@ main(int argc, char ** argv)
 // TEST
       run_nfa(nfa_sim);
       nfa_sim = list_shift(thread_ctrl->thread_pool);
-      nfa_sim->prev_thread = nfa_sim->next_thread = nfa_sim;
+//      nfa_sim->prev_thread = nfa_sim->next_thread = nfa_sim;
     }
 
     if(thread_ctrl->match_idx) {
@@ -211,6 +212,8 @@ main(int argc, char ** argv)
     }
     ++target_idx;
   }
+
+CLEANUP:
   fclose(fh);
 
   parser_free(parser);
