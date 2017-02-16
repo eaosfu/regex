@@ -86,7 +86,7 @@ parser_backtrack(Parser * parser)
 }
 
 
-void
+static void
 parse_interval_expression(Parser * parser)
 {
 #define DISCARD_WHITESPACE(p)                                             \
@@ -234,7 +234,7 @@ DONT_COUNT_LOOP:
 }
 
 
-void
+static void
 parse_quantifier_expression(Parser * parser)
 {
   NFA * nfa;
@@ -374,7 +374,7 @@ token_in_charclass(unsigned int element, int reset)
 }
 
 
-void
+static void
 parse_matching_list(Parser * parser, NFA * range_nfa, int negate)
 {
 #define DOT_COLON_OR_EQUAL(l) \
@@ -517,7 +517,7 @@ parse_matching_list(Parser * parser, NFA * range_nfa, int negate)
 }
 
 
-void
+static void
 parse_bracket_expression(Parser * parser)
 {
   // use this as the new bottom of the stack
@@ -568,7 +568,7 @@ parse_bracket_expression(Parser * parser)
 }
 
 
-void
+static void
 parse_literal_expression(Parser * parser)
 {
   NFA * nfa;
@@ -674,7 +674,7 @@ update_close_paren_accounting(Parser * parser, unsigned int subtree_br_cnt)
 }
 
 
-void
+static void
 parse_paren_expression(Parser * parser)
 {
   unsigned int subtree_branch_count = update_open_paren_accounting(parser);
@@ -758,7 +758,7 @@ validate_backref(Parser * parser)
 }
 
 
-void
+static void
 parse_sub_expression(Parser * parser)
 {
   NFA * right = NULL;

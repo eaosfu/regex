@@ -528,8 +528,7 @@ run_nfa(NFASim * thread)
               goto RELEASE_ALL_THREADS;
             }
           }
-          else if((CTRL_FLAGS(ctrl) & INVERT_MATCH_FLAG)
-               || (CTRL_FLAGS(ctrl) & MGLOBAL_FLAG) == 0) {
+          else if((CTRL_FLAGS(ctrl) & (INVERT_MATCH_FLAG|MGLOBAL_FLAG)) == 0) {
             goto RELEASE_ALL_THREADS;
           }
         } // fall through
@@ -564,9 +563,7 @@ run_nfa(NFASim * thread)
 RELEASE_ALL_THREADS:
   RELEASE_ALL_THREADS(ctrl,thread);
 
-  if((match_found == 0)
-  && (CTRL_FLAGS(ctrl) & INVERT_MATCH_FLAG)
-  && ((CTRL_FLAGS(ctrl) & SILENT_MATCH_FLAG) == 0)) {
+  if((match_found == 0) && (CTRL_FLAGS(ctrl) & INVERT_MATCH_FLAG)) {
     ctrl->match.start = ctrl->buffer_start;
     ctrl->match.end   = ctrl->buffer_end;
     new_match(ctrl, 1);
@@ -615,9 +612,10 @@ reset_nfa_sim(NFASimCtrl * ctrl, NFA * start_state)
   else {
     fatal("Unable to obtain thread for execution\n");
   }
-  memset(sim->loop_record,   0, sizeof(LoopRecord) * sim->ctrl->loop_record_cap);
+  memset(sim->loop_record, 0, sizeof(LoopRecord) * sim->ctrl->loop_record_cap);
   return sim;
 }
+
 
 void
 free_nfa_sim(NFASimCtrl * ctrl)

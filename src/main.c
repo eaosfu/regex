@@ -14,16 +14,16 @@
 static const char short_options [] = {"Ff:ghinqv"};
 
 static struct option const long_options[] = {
-  {"help"           , no_argument      , NULL, 'h'},
-  {"global_match"   , no_argument      , NULL, 'g'},
-  {"pattern-file"   , required_argument, NULL, 'f'},
-  {"show-file-name" , no_argument      , NULL, 'F'},
-  {"invert-match"   , no_argument      , NULL, 'v'},
-  {"show-match-line", no_argument      , NULL, 'n'},
-  {"quiet"          , no_argument      , NULL, 'q'},
-  {"silent"         , no_argument      , NULL, 'q'},
-  {"ignore-case"    , no_argument      , NULL, 'i'}, // not implemented
-  {0                , 0                , 0   , 0}
+  {"help"            , no_argument      , NULL, 'h'}, 
+  {"global_match"    , no_argument      , NULL, 'g'},
+  {"pattern-file"    , required_argument, NULL, 'f'},
+  {"show-file-name"  , no_argument      , NULL, 'F'},
+  {"invert-match"    , no_argument      , NULL, 'v'},
+  {"show-line-number", no_argument      , NULL, 'n'},
+  {"quiet"           , no_argument      , NULL, 'q'},
+  {"silent"          , no_argument      , NULL, 'q'},
+  {"ignore-case"     , no_argument      , NULL, 'i'}, // not implemented
+  {0                 , 0                , 0   ,  0 }
 };
 
 
