@@ -38,6 +38,8 @@ void * list_search(List *, void *, COMPARE_PROC_pt);
 void * list_shift(List *);
 void * list_remove_at(List *, int);
 void * list_get_at(List *, int);
+void * list_get_head(List *);
+void * list_get_tail(List *);
 void * list_extend(List *, void *);
 void list_clear(List *);
 void list_iterate_from_to(List *, VISIT_PROC_pt, int, int);

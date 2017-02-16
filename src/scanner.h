@@ -8,8 +8,8 @@
 typedef struct Scanner {
   int line_no;
   int eol_symbol;
-  long int line_len;
-  long int buf_len;
+  ssize_t line_len;
+  size_t buf_len;
   const char * filename;
   ctrl_flags * ctrl_flags;
   char  * buffer;

@@ -121,9 +121,10 @@ endef
 define make_test_btrec
   $(eval CFLAGS += -g)
   $(call make_regex)
-  $(call make_test_slist)
-  test_btrec: regex test_slist
-		${RUN_SLIST_TEST}
+#  $(call make_test_slist)
+#  test_btrec: regex test_slist
+  test_btrec: regex
+#		${RUN_SLIST_TEST}
 		${PERL} ${PERL_TEST}
 endef
 

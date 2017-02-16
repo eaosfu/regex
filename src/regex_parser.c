@@ -10,9 +10,6 @@
 #define READHEAD (parser->scanner->readhead)
 
 
-void debug_print_collected(NFA *, NFA *);
-
-
 static void parse_paren_expression(Parser * parser);
 static void parse_literal_expression(Parser * parser);
 static void parse_quantifier_expression(Parser * parser);
@@ -21,7 +18,6 @@ static void parse_bracket_expression(Parser * parser);
 static void regex_parser_start(Parser * parser);
 static inline void parser_consume_token(Parser * parser);
 static void __collect_adjacencies_helper(NFA *, NFA *, int, NFA *, List *);
-static void merge_intervals(List *);
 
 Parser *
 init_parser(Scanner * scanner, ctrl_flags * cfl)
@@ -41,7 +37,7 @@ init_parser(Scanner * scanner, ctrl_flags * cfl)
 }
 
 
-// If we are currently parsing a subexpression (i.e. '('<expression')'
+// If we are currently parsing a subexpression (i.e. '('<expression')')
 // and we know there is a backreference to this capture group
 // insert a marker node so the recognizer knows to start tracking
 // what this matches
@@ -53,13 +49,20 @@ track_capture_group(Parser * parser, unsigned int type)
     ret = 1;
     NFA * right = new_literal_nfa(parser->nfa_ctrl, NFA_LITERAL, type);
     NFA * left  = pop(parser->symbol_stack);
+
+    if(type == NFA_CAPTUREGRP_BEGIN) {
+      parser->capgrp_record[parser->current_cgrp - 1].next_id =
+        right->parent->id;
+    }
+
     right->parent->id = parser->paren_stack[parser->paren_idx - 1] - 1;
     push(parser->symbol_stack, concatenate_nfa(left, right));
   }
 
   if(type == NFA_CAPTUREGRP_END) {
-    if(parser->root_cgrp == parser->current_cgrp) {
-      parser->root_cgrp = 0;
+    if(ret) {
+      parser->capgrp_record[parser->current_cgrp - 1].end =
+        get_cur_pos(parser->scanner);
     }
     --(parser->current_cgrp);
   }
@@ -160,7 +163,7 @@ parse_interval_expression(Parser * parser)
   if(braces_balance) {
     if(set_max) {
       if((max != 0) && (min > max)) {
-        fatal(INVALID_INTERVAL_EXPRESSION_ERROR);
+        parser_fatal(INVALID_INTERVAL_EXPRESSION_ERROR, REGEX, READHEAD - 2);
       }
       if(min == 0 && max == 1) {
         // <expression>{0,1} ; equivalent to <expression>?
@@ -222,8 +225,7 @@ parse_interval_expression(Parser * parser)
     }
   }
   else {
-    //parser_fatal("Syntax error at interval expression. Expected '}'", REGEX, READHEAD, 0);
-    parser_fatal(MISSING_CLOSE_BRACE, REGEX, READHEAD, 0);
+    parser_fatal(MISSING_CLOSE_BRACE_ERROR, REGEX, READHEAD);
   }
 DONT_COUNT_LOOP:
   return;
@@ -266,8 +268,10 @@ parse_quantifier_expression(Parser * parser)
       parse_quantifier_expression(parser);
     } break;
     case PIPE: {
-      parser->total_branch_count += (parser->in_alternation != 0) ? 1 : 2;
+      parser->tree_count += (parser->in_alternation) ? 0 : 1;
+      parser->branch += 1;
       ++(parser->in_alternation);
+      parser->lowest_id_on_branch = parser->nfa_ctrl->next_seq_id;
       parser_consume_token(parser);
       // concatenate everything on the stack unitl we see an open paren
       // or until nothing is left on the stack
@@ -319,6 +323,7 @@ parse_quantifier_expression(Parser * parser)
         left = new_alternation_nfa(parser->nfa_ctrl, parser->branch_stack, sz, NULL);
         parser->subtree_branch_count = 0;
         push(parser->symbol_stack, left);
+        parser->branch = 0;
       }
       else {
         left = new_alternation_nfa(parser->nfa_ctrl, parser->branch_stack,
@@ -414,7 +419,7 @@ parse_matching_list(Parser * parser, NFA * range_nfa, int negate)
 
 
     if(parser->lookahead.type != CLOSEBRACKET && prev_token.type != delim) {
-      fatal(MALFORMED_BRACKET_EXPRESSION_ERROR);
+      parser_fatal(MALFORMED_COLLATION_EXPRESSION_ERROR, REGEX, READHEAD);
     }
 
     // notice that -1 removes the trailing delim
@@ -431,14 +436,15 @@ parse_matching_list(Parser * parser, NFA * range_nfa, int negate)
       case COLON: {
         // handle expression like '[[:alpha:]]'
         if(update_range_w_collation(collation_string, coll_str_len, range_nfa, negate) == 0) {
-          fatal(UNKNOWN_CHARCLASS_ERROR);
+          //fatal(UNKNOWN_CHARCLASS_ERROR);
+          parser_fatal(UNKNOWN_CHARCLASS_ERROR, REGEX, READHEAD);
         }
       } break;
       case DOT: {
         warn("Collating-symbols not supported\n");
       } break;
       case EQUAL: {
-        warn("Equivalence-calss expresions  not supported\n");
+        warn("Equivalence-calss expressions not supported\n");
       } break;
       default: {
         // should never reach this point
@@ -466,6 +472,10 @@ parse_matching_list(Parser * parser, NFA * range_nfa, int negate)
       if(prev_token.value >= 'a' && prev_token.value <= 'z') {
         // special case [a-Z] where lowerboud 'a' has ascii value > upperbound 'Z'
         if(lookahead.value >= 'a' && lookahead.value <= 'z') {
+          // we know the range is in the lowercase alphabetic characters
+          if(prev_token.value > lookahead.value) {
+            parser_fatal(INVALID_RANGE_EXPRESSION_ERROR, REGEX, READHEAD);
+          }
           update_range_nfa(prev_token.value, lookahead.value, range_nfa, negate);
           range_invalid = 0;
         }
@@ -476,8 +486,8 @@ parse_matching_list(Parser * parser, NFA * range_nfa, int negate)
         }
       }
       else if(prev_token.value <= lookahead.value) {
-				// all other cases foce the lowerbound to have ascii value < upperbound
-				if(prev_token.value >= 'A' && prev_token.value <= 'Z') {
+        // all other cases foce the lowerbound to have ascii value < upperbound
+  			if(prev_token.value >= 'A' && prev_token.value <= 'Z') {
           // special case where we want to restrain upperbound to ascii value <= 'Z'
 					if(lookahead.value >= 'A' && lookahead.value <= 'Z') {
             update_range_nfa(prev_token.value, lookahead.value, range_nfa, negate);
@@ -490,7 +500,7 @@ parse_matching_list(Parser * parser, NFA * range_nfa, int negate)
 				}
       }
       if(range_invalid) {
-        fatal(INVALID_RANGE_EXPRESSION_ERROR);
+        parser_fatal(INVALID_RANGE_EXPRESSION_ERROR, REGEX, READHEAD);
       }
       parser_consume_token(parser); // consume end bound
     }
@@ -529,7 +539,7 @@ parse_bracket_expression(Parser * parser)
   parse_matching_list(parser, range_nfa->parent, negate_match);
 
   if(parser->lookahead.type != CLOSEBRACKET) {
-    parser_fatal(MISSING_CLOSE_BRACKET, REGEX, READHEAD, 0);
+    parser_fatal(MISSING_CLOSE_BRACKET_ERROR, REGEX, READHEAD);
   }
   else {
     // resets charclass array
@@ -540,11 +550,12 @@ parse_bracket_expression(Parser * parser)
 
     parser_consume_token(parser);
     NFA * right = pop(parser->symbol_stack);
-
+/*
     if(right == open_delim_p) {
-      fatal(EMPTY_BRACKET_EXPRESSION_ERROR);
+      //fatal(EMPTY_BRACKET_EXPRESSION_ERROR);
+      parser_fatal(EMPTY_BRACKET_EXPRESSION_ERROR, REGEX, READHEAD);
     }
-
+*/
     NFA * left  = pop(parser->symbol_stack); //NULL;
 
     if(left != open_delim_p) {
@@ -585,7 +596,7 @@ parse_literal_expression(Parser * parser)
 
        while(stop == 0) {
          switch(next.type) {
-           case ASCIIDIGIT:    // fall-through
+           case ASCIIDIGIT: // fall-through
            case ALPHA: {
              if(next.value == '\\') {
                parser_backtrack(parser);
@@ -595,8 +606,8 @@ parse_literal_expression(Parser * parser)
              }
            } break;
            case OPENBRACE:
-           case KLEENE:        // fall-through
-           case QMARK:         // fall-through
+           case KLEENE: // fall-through
+           case QMARK:  // fall-through
            case PLUS: {
              --len;
              parser_backtrack(parser);
@@ -648,10 +659,6 @@ update_open_paren_accounting(Parser * parser)
   parser->paren_stack[parser->paren_idx] = parser->cgrp_count;
   ++(parser->paren_idx);
 
-  if(parser->root_cgrp == 0) {
-    parser->root_cgrp = parser->current_cgrp;
-  }
-
   track_capture_group(parser, NFA_CAPTUREGRP_BEGIN);
   subtree_branch_count = parser->subtree_branch_count;
   parser->subtree_branch_count = 0;
@@ -685,7 +692,7 @@ parse_paren_expression(Parser * parser)
   if(parser->lookahead.type == CLOSEPAREN) {
     if(parser->paren_count == 0) {
       //fatal("Unmatched ')'\n");
-      parser_fatal(MISSING_CLOSE_PAREN, REGEX, READHEAD, 0);
+      parser_fatal(MISSING_CLOSE_PAREN_ERROR, REGEX, READHEAD);
     }
     int has_backref = track_capture_group(parser, NFA_CAPTUREGRP_END);
     --(parser->paren_count);
@@ -712,10 +719,42 @@ parse_paren_expression(Parser * parser)
     parse_quantifier_expression(parser);
   }
   else {
-    parser_fatal(MISSING_CLOSE_PAREN, REGEX, READHEAD, 0);
+    parser_fatal(MISSING_CLOSE_PAREN_ERROR, REGEX, READHEAD);
   }
 
   return;
+}
+
+
+static void
+validate_backref(Parser * parser)
+{
+  int val = parser->lookahead.value;
+  // Handle cases:
+  //   - backreference is an invalid value
+  //   - backreference is in the capture-group it references
+  //   - backreference precedes the capture-group.
+  if((val == 0)
+  || (val > MAX_CGRP)
+  || (parser->capgrp_record[val - 1].end == NULL)) {
+    parser_fatal(INVALID_BACKREF_ERROR, REGEX, READHEAD);
+  }
+
+  if(parser->in_alternation) {
+    // backreference is in an alternation/tree
+    NFA * tmp = list_get_tail(parser->branch_stack);
+    int lowest_id_on_tree = tmp->parent->id;
+    int first_id_in_cgrp = parser->capgrp_record[val - 1].next_id;
+    if(lowest_id_on_tree <= first_id_in_cgrp) {
+      // capture-group is in tree being processed
+      if(first_id_in_cgrp < parser->lowest_id_on_branch)  {
+        // capture-group and backref are on different branches
+        parser_fatal(INVALID_BACKREF_ERROR, REGEX, READHEAD);
+      }
+    }
+  }
+
+
 }
 
 
@@ -724,6 +763,7 @@ parse_sub_expression(Parser * parser)
 {
   NFA * right = NULL;
   NFA * left  = NULL;
+RETRY_PARSE:
   switch(parser->lookahead.type) {
     case DOT:        // fallthrough
     case COLON:      // fallthrough
@@ -749,15 +789,7 @@ parse_sub_expression(Parser * parser)
       push(parser->symbol_stack, concatenate_nfa(left, right));
     } break;
     case BACKREFERENCE: {
-/*
-      // FIXME: NEED A BETTER/MORE EFFICIENT/CORRECT WAY OF DETECTING INVALID BACKREFERNCES!
-      if(parser->lookahead.value == 0
-      || (parser->lookahead.value > parser->cgrp_count)
-      || (parser->current_cgrp > 0
-         && parser->lookahead.value == parser->root_cgrp)) {
-        parser_fatal(INVALID_BACKREF, REGEX, (READHEAD), -1);
-      }
-*/
+      validate_backref(parser);
       left = new_backreference_nfa(parser->nfa_ctrl, parser->lookahead.value - 1);
       push(parser->symbol_stack, left);
       parser_consume_token(parser);
@@ -768,12 +800,18 @@ parse_sub_expression(Parser * parser)
       push(parser->symbol_stack, concatenate_nfa(left, right));
     } break;
     case CLOSEBRACE: {
-      parser_fatal(MISSING_OPEN_BRACE, REGEX, READHEAD, 0);
+      parser_fatal(MISSING_OPEN_BRACE_ERROR, REGEX, READHEAD);
+    } break;
+    case CLOSEBRACKET: {
+      parser_fatal(MISSING_OPEN_BRACKET_ERROR, REGEX, READHEAD);
+    } break;
+    case HYPHEN: {
+      parser->lookahead.type = ALPHA;
+      goto RETRY_PARSE;
     } break;
     case CLOSEPAREN: // fallthrough
       if(parser->paren_count == 0) {
-        parser_fatal(MISSING_CLOSE_PAREN, REGEX, READHEAD, 0);
-        //fatal("Unmatched ')'\n");
+        parser_fatal(MISSING_OPEN_PAREN_ERROR, REGEX, READHEAD);
       }
     default: {
       // epsilon production
@@ -797,7 +835,7 @@ regex_parser_start(Parser * parser)
     parse_sub_expression(parser);
   }
   else {
-    fatal(INVALID_PARSE_START);
+    parser_fatal(INVALID_PARSE_START_ERROR, REGEX, READHEAD);
   }
 }
 
@@ -813,7 +851,7 @@ prescan_input(Parser * parser)
     return 0;
   }
 
-  // FIXME don't alway use alloc... have the scanner keep a large enough buffer
+  // FIXME don't always use alloc. Have the scanner keep a large enough buffer
   // to hold several scanner's buffers ?
   char * tmp_buffer = malloc(parser->scanner->buf_len);
   memcpy(tmp_buffer, parser->scanner->buffer, parser->scanner->buf_len);
@@ -856,64 +894,6 @@ prescan_input(Parser * parser)
 //  }
 
   return 1;
-}
-
-
-int
-insert_progress_nfa(List * loop_nfas)
-{
-  int sz = list_size(loop_nfas);
-  if(sz < 1 ) {
-    return 0;
-  }
-  int needs_progress = 0;
-  int count = 0;
-  int stop = 0;
-  NFA * looper = list_shift(loop_nfas);
-  NFA * walker = NULL;
-  for(int i = 0; i < sz; ++i) {
-    if(looper && (looper->value.type & NFA_SPLIT)) {
-      walker = looper->out1;
-      stop = needs_progress = 0;
-      while(stop == 0) {
-        switch(walker->value.type) {
-          case NFA_SPLIT: {
-            if(walker == looper) {
-              needs_progress = 1;
-              stop = 1;
-              continue;
-            }
-            switch(walker->value.literal) {
-              case '*': // fallthrough
-              case '+': {
-                if(walker->out2 == looper->out2) {
-                  walker = walker->out1;
-                }
-                else {
-                  walker = walker->out2;
-                }
-              } break;
-              case '?': walker = walker->out1; break;
-            }
-          } break;
-          case NFA_INTERVAL:
-          case NFA_CAPTUREGRP_END:
-          case NFA_EPSILON: {
-            walker = walker->out2;
-          } break;
-          default: {
-            stop = 1;
-          } break;
-        }
-      }
-      if(needs_progress) {
-        NFA_TRACK_PROGRESS(looper);
-        ++count;
-      }
-    }
-    looper = list_shift(loop_nfas);
-  }
-  return count;
 }
 
 
@@ -1093,7 +1073,6 @@ collect_adjacencies(Parser * parser, NFA * start, int total_collectables)
         else if(visiting->value.type == NFA_SPLIT){
           __collect_adjacencies_helper(visiting, visiting->out1, 0, NULL, NULL);
           __collect_adjacencies_helper(visiting, visiting->out2, 0, NULL, NULL);
-//debug_print_collected(visiting, visiting->out2);
         }
         else {
           __collect_adjacencies_helper(visiting, visiting->out2, 0, NULL, NULL);
@@ -1109,6 +1088,20 @@ collect_adjacencies(Parser * parser, NFA * start, int total_collectables)
   }
 
   free(adj_intvls_list);
+}
+
+
+static void
+insert_epsilon_start(Parser * parser)
+{
+  NFA * start_nfa = (((NFA *)peek(parser->symbol_stack))->parent);
+  if(start_nfa->value.type  & ~(NFA_SPLIT|NFA_EPSILON)) {
+    NFA * start_node = new_nfa(parser->nfa_ctrl, NFA_EPSILON);
+    NFA * right = pop(parser->symbol_stack);
+    start_node->out1 = start_node->out2 = right->parent;
+    right->parent = start_node;
+    push(parser->symbol_stack, right);
+  }
 }
 
 
@@ -1137,21 +1130,10 @@ parse_regex(Parser * parser)
 
     // give the last accepting state an id
     mark_nfa(peek(parser->symbol_stack));
-
-
-// TEST FIXME -- define an interface for this in nfa(.c/.h)
-    //parser->total_nfa_ids = ((NFA *)peek(parser->symbol_stack))->ctrl->next_seq_id - 1;
-    parser->total_nfa_ids = ((NFA *)peek(parser->symbol_stack))->id;
-    if((((NFA *)peek(parser->symbol_stack))->parent)->value.type  & ~(NFA_SPLIT|NFA_EPSILON)) {
-      NFA * start_node = new_nfa(parser->nfa_ctrl, NFA_EPSILON);
-      NFA * right = pop(parser->symbol_stack);
-      start_node->out1 = start_node->out2 = right->parent;
-      right->parent = start_node;
-      push(parser->symbol_stack, right);
-    }
+    parser->total_nfa_ids = get_next_seq_id(parser->nfa_ctrl);
+    insert_epsilon_start(parser);
     collect_adjacencies(parser, (((NFA *)peek(parser->symbol_stack))->parent),
       (parser->total_nfa_ids + parser->interval_count));
-// END TEST
 
     ret = 1;
   }
@@ -1169,132 +1151,4 @@ parser_free(Parser * parser)
   list_free((parser->loop_nfas), NULL);
   free(parser->nfa_ctrl);
   free(parser);
-}
-
-
-
-
-
-
-
-
-
-
-void
-debug_print_collected(NFA * current, NFA * visiting)
-{
-  if(current->value.type == NFA_INTERVAL) {
-    printf("\ninterval: {%d, %d}\n", current->value.min_rep, current->value.max_rep);
-    printf(" left list: %d\n", list_size(&(current->reachable)));
-      //for(int i = 0; i < list_size(&(current->reachable)); ++i) {
-      for(int i = 0; i < current->value.split_idx; ++i) {
-        if(i == 0) {
-          printf("\t[0x%x]:%d:%d",
-          ((NFA *)list_get_at(&(current->reachable), i)),
-          i, ((NFA *)list_get_at(&(current->reachable), i))->value.type);
-          switch(((NFA *)list_get_at(&(current->reachable), i))->value.type) {
-            case NFA_INTERVAL: {
-              printf(":{%d, %d}",
-                ((NFA *)list_get_at(&(current->reachable), i))->value.min_rep,
-                ((NFA *)list_get_at(&(current->reachable), i))->value.max_rep);
-            } break;
-            default: {
-              printf(":%c",
-                ((NFA *)list_get_at(&(current->reachable), i))->value.literal
-                );
-            }
-          }
-        }
-        else {
-          printf(" -- [0x%x]:%d:%d",
-          ((NFA *)list_get_at(&(current->reachable), i)),
-          i, ((NFA *)list_get_at(&(current->reachable), i))->value.type);
-          switch(((NFA *)list_get_at(&(current->reachable), i))->value.type) {
-            case NFA_INTERVAL: {
-              printf(":{%d, %d}",
-                ((NFA *)list_get_at(&(current->reachable), i))->value.min_rep,
-                ((NFA *)list_get_at(&(current->reachable), i))->value.max_rep);
-            } break;
-            default: {
-              printf(":%c",
-                ((NFA *)list_get_at(&(current->reachable), i))->value.literal
-              );
-            }
-          }
-        }
-      }
-      printf("\n");
-      printf("right list: %d\n", list_size(&(current->reachable)) - current->value.split_idx);
-        for(int i = 0; current->value.split_idx + 1 < list_size(&(current->reachable)); ++i) {
-          current = ((NFA *)list_get_at(&(current->reachable), i));
-          if(i == 0) {
-            printf("\t[0x%x]:%d:%d",
-            ((NFA *)list_get_at(&(current->reachable), i)),
-            i, ((NFA *)list_get_at(&(current->reachable), i))->value.type);
-            switch(((NFA *)list_get_at(&(current->reachable), i))->value.type) {
-              case NFA_INTERVAL: {
-                printf(":{%d, %d}",
-                  ((NFA *)list_get_at(&(current->reachable), i))->value.min_rep,
-                  ((NFA *)list_get_at(&(current->reachable), i))->value.max_rep);
-              } break;
-              default: {
-                printf(":%c",
-                  ((NFA *)list_get_at(&(current->reachable), i))->value.literal
-                  );
-              }
-            }
-          }
-          else {
-            printf(" -- [0x%x]:%d:%d",
-            ((NFA *)list_get_at(&(current->reachable), i)),
-            i, ((NFA *)list_get_at(&(current->reachable), i))->value.type);
-            switch(((NFA *)list_get_at(&(current->reachable), i))->value.type) {
-              case NFA_INTERVAL: {
-                printf(":{%d, %d}",
-                  ((NFA *)list_get_at(&(current->reachable), i))->value.min_rep,
-                  ((NFA *)list_get_at(&(current->reachable), i))->value.max_rep);
-              } break;
-              default: {
-                printf(":%c",
-                  ((NFA *)list_get_at(&(current->reachable), i))->value.literal
-                );
-              }
-            }
-          }
-        }
-        printf("\n\n");
-
-  }
-  else {
-    printf("[0x%x]:%d:%c\n", current, current->value.type, current->value.literal);
-    for(int i = 0; i < list_size(&(current->reachable)); ++i) {
-      if(i == 0) {
-        printf("\t%d:%d", i, ((NFA *)list_get_at(&(current->reachable), i))->value.type);
-        switch(((NFA *)list_get_at(&(current->reachable), i))->value.type) {
-          case NFA_INTERVAL: {
-            printf(":{%d, %d}",
-              ((NFA *)list_get_at(&(current->reachable), i))->value.min_rep,
-              ((NFA *)list_get_at(&(current->reachable), i))->value.max_rep);
-          } break;
-          default: {
-            printf(":%c", ((NFA *)list_get_at(&(current->reachable), i))->value.literal);
-          }
-        }
-      }
-      else {
-        printf(" -- %d:%d", i, ((NFA *)list_get_at(&(current->reachable), i))->value.type);
-        switch(((NFA *)list_get_at(&(current->reachable), i))->value.type) {
-          case NFA_INTERVAL: {
-            printf(":{%d, %d}",
-              ((NFA *)list_get_at(&(current->reachable), i))->value.min_rep,
-              ((NFA *)list_get_at(&(current->reachable), i))->value.max_rep);
-          } break;
-          default: {
-            printf(":%c", ((NFA *)list_get_at(&(current->reachable), i))->value.literal);
-          }
-        }
-      }
-    }
-    printf("\n");
-  }
 }

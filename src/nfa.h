@@ -95,10 +95,10 @@ NFA * new_literal_nfa(NFACtrl *, unsigned int, unsigned int);
 NFA * new_alternation_nfa(NFACtrl *, List *, unsigned int, NFA *);
 
 NFA * nfa_tie_branches(NFA *, List *, unsigned int);
-
 void mark_nfa(NFA *);
 void free_nfa(NFA *);
 void release_nfa(NFA *);
+int  get_next_seq_id(NFACtrl *);
 int  update_range_w_collation(char *, int, NFA *, int);
 void inject_capturegroup_markers(NFA *, NFA *, unsigned int);
 void update_range_nfa(unsigned int, unsigned int, NFA *, int);

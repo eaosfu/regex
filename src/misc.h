@@ -1,6 +1,10 @@
 #ifndef MISC_H_
 #define MISC_H_
 
+#include <limits.h>
+// This should be long enough.
+char program_name[NAME_MAX];
+
 // SHARED BETWEEN PARSER, SCANNER AND RECOGNIZER
 #define EOL_FLAG              0x001
 #define BOL_FLAG              0x002
@@ -61,6 +65,6 @@ typedef unsigned int ctrl_flags;
 void warn(const char *);
 void fatal(const char *);
 void * xmalloc(unsigned int);
-void parser_fatal(const char *, const char *, const char *, int);
+void parser_fatal(const char *, const char *, const char *);
 
 #endif

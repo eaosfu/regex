@@ -7,6 +7,15 @@
 #include <stdio.h>
 
 
+int
+get_next_seq_id(NFACtrl *ctrl)
+{
+  if(ctrl) {
+    return ctrl->next_seq_id;
+  }
+  return 0;
+}
+
 NFACtrl *
 new_nfa_ctrl()
 {
@@ -191,6 +200,7 @@ new_lliteral_nfa(NFACtrl * ctrl, char * src, unsigned int len)
 
   lliteral->ctrl = ctrl;
   mark_nfa(lliteral);
+start->id = lliteral->id;
   lliteral->out1 = lliteral->out2 = accept;
   lliteral->value.type = NFA_LONG_LITERAL;
   lliteral->value.len = len;
@@ -246,7 +256,7 @@ new_kleene_nfa(NFA * body)
   NFA * accept = new_nfa(body->ctrl, NFA_ACCEPTING);
 
   //mark_interval_nfa(start);
-
+start->id = body->parent->id;
   start->value.literal = '?';
   start->greedy = 1;
   start->out1 = accept;
@@ -278,7 +288,7 @@ new_qmark_nfa(NFA * body)
   
   
   //mark_interval_nfa(start);
-
+start->id = body->parent->id;
   start->greedy = 1;
   start->out1 = accept;
   start->out2 = body->parent;
@@ -300,6 +310,7 @@ new_posclosure_nfa(NFA * body)
   NFA * start  = new_nfa(body->ctrl, NFA_EPSILON);
   NFA * accept = new_nfa(body->ctrl, NFA_ACCEPTING);
 
+start->id = body->parent->id;
   // there is no direct transition to the accepting state
   start->out1 = start->out2 = body->parent;
 
@@ -346,7 +357,7 @@ new_interval_nfa(NFA * target, unsigned int min, unsigned int max)
 
     start->out1 = start->out2 = target->parent;
   }
-
+start->id = target->parent->id;
   target->value.type = NFA_EPSILON;
   target->out2 = new_interval;
 

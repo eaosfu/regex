@@ -10,6 +10,7 @@
 #include "scanner.h"
 #include <stddef.h>
 #include "backtrack_recognizer.h"
+
 // FIXME: Put this inside the sim->ctrl, so it can be freed when we're done
 typedef const char * active_thread_input_ptr;
 static active_thread_input_ptr * active_threads_sp;
@@ -20,19 +21,17 @@ static active_thread_input_ptr * active_threads_sp;
 #define INST_TYPE(sim)         ((sim)->ip->value.type)
 #define INST_TOKEN(sim)        ((sim)->ip->value.literal)
 #define INST_LONG_TOKEN(sim)   ((sim)->ip->value.lliteral[(sim)->ip->value.idx])
-//#define RELEASE_ALL_THREADS(t) while((t)) { (t) = release_thread((t), (t)->ctrl->start_state); }
 
-
-#define RELEASE_ALL_THREADS(ctrl, thread)      \
-({  while(list_size(((ctrl)->active_threads))) {                 \
-    list_push((ctrl)->thread_pool, list_shift((ctrl)->active_threads));\
-  }\
-  list_push((ctrl)->thread_pool, (thread));\
+#define RELEASE_ALL_THREADS(ctrl, thread)                               \
+({  while(list_size(((ctrl)->active_threads))) {                        \
+    list_push((ctrl)->thread_pool, list_shift((ctrl)->active_threads)); \
+  }                                                                     \
+  list_push((ctrl)->thread_pool, (thread));                             \
 })
 
 
-static int  load_next(NFASim *, NFA *);
-static int  process_adjacents(NFASim *sim, NFA * nfa);
+static void load_next(NFASim *, NFA *);
+static void process_adjacents(NFASim *sim, NFA * nfa);
 
 
 static void
@@ -187,7 +186,7 @@ reset_thread(NFASimCtrl * ctrl, NFA * start_state, char * start_pos)
 
 
 static inline NFASim *
-thread_clone(NFASim * sim, NFA * nfa, int id)
+thread_clone(NFASim * sim, NFA * nfa)
 {
   NFASim * clone;
   NFASimCtrl * ctrl = sim->ctrl;
@@ -242,27 +241,18 @@ thread_clone(NFASim * sim, NFA * nfa, int id)
 static inline NFASim *
 release_thread(NFASim * sim, NFA * start_state)
 {
-/*
-  sim->ip                 = start_state;
-  sim->status             = 0;
-  sim->match.end          = NULL;
-  sim->match.start        = NULL;
-  sim->interval_count     = 0;
-  sim->tracking_intervals = 0;
-  sim->tracking_backrefs  = 0;
-*/
   list_push(sim->ctrl->thread_pool, sim);
   return list_shift(sim->ctrl->active_threads);
 }
 
 
-static int 
+static void
 load_next(NFASim * sim, NFA * nfa)
 {
   switch(nfa->value.type) {
     case NFA_SPLIT: {
       for(int i = 1; i < list_size(&(nfa->reachable)); ++i) {
-        thread_clone(sim, list_get_at(&(nfa->reachable), i), -1);
+        thread_clone(sim, list_get_at(&(nfa->reachable), i));
       }
       load_next(sim, list_get_at(&(nfa->reachable), 0));
     } break;
@@ -278,11 +268,11 @@ load_next(NFASim * sim, NFA * nfa)
     } break;
     case NFA_INTERVAL: {
       ++(sim->interval_count);
-      int count = ++((sim->loop_record[nfa->id]).count);
+      int i, count = ++((sim->loop_record[nfa->id]).count);
       if(count < nfa->value.min_rep) {
         ++(sim->tracking_intervals);
-        for(int i = 1; i < nfa->value.split_idx; ++i) {
-          thread_clone(sim, list_get_at(&(nfa->reachable), i), -1);
+        for(i = 1; i < nfa->value.split_idx; ++i) {
+          thread_clone(sim, list_get_at(&(nfa->reachable), i));
         }
         load_next(sim, list_get_at(&(nfa->reachable), 0));
       }
@@ -290,15 +280,16 @@ load_next(NFASim * sim, NFA * nfa)
         if(nfa->value.max_rep > 0) {
           if(count < nfa->value.max_rep) {
             ++(sim->tracking_intervals);
-            for(int i = 0; i < nfa->value.split_idx; ++i) {
-              thread_clone(sim, list_get_at(&(nfa->reachable), i), -1);
+            for(i = 0; i < nfa->value.split_idx; ++i) {
+              thread_clone(sim, list_get_at(&(nfa->reachable), i));
             }
 
             sim->loop_record[nfa->id].count = 0;
 
             --(sim->tracking_intervals);
-            for(int i = nfa->value.split_idx + 1; i < list_size(&(nfa->reachable)); ++i) {
-              thread_clone(sim, list_get_at(&(nfa->reachable), i), -1);
+            i = nfa->value.split_idx + 1;
+            for(; i < list_size(&(nfa->reachable)); ++i) {
+              thread_clone(sim, list_get_at(&(nfa->reachable), i));
             }
             load_next(sim, list_get_at(&(nfa->reachable), nfa->value.split_idx));
           }
@@ -308,14 +299,15 @@ load_next(NFASim * sim, NFA * nfa)
             sim->loop_record[nfa->id].count = 0;
 
             if(nfa->full_circle) {
-              for(int i = 1; i < list_size(&(nfa->reachable)); ++i) {
-                thread_clone(sim, list_get_at(&(nfa->reachable), i), -1);
+              for(i = 1; i < list_size(&(nfa->reachable)); ++i) {
+                thread_clone(sim, list_get_at(&(nfa->reachable), i));
               }
               load_next(sim, list_get_at(&(nfa->reachable), 0));
             }
             else {
-              for(int i = nfa->value.split_idx + 1; i < list_size(&(nfa->reachable)); ++i) {
-                thread_clone(sim, list_get_at(&(nfa->reachable), i), -1);
+              i = nfa->value.split_idx + 1;
+              for(; i < list_size(&(nfa->reachable)); ++i) {
+                thread_clone(sim, list_get_at(&(nfa->reachable), i));
               }
               load_next(sim, list_get_at(&(nfa->reachable), nfa->value.split_idx));
             }
@@ -324,19 +316,19 @@ load_next(NFASim * sim, NFA * nfa)
         }
         else {
           // unbounded upper limit
-            ++(sim->tracking_intervals);
-            for(int i = 0; i < nfa->value.split_idx; ++i) {
-              thread_clone(sim, list_get_at(&(nfa->reachable), i), -1);
-            }
+          ++(sim->tracking_intervals);
+          for(i = 0; i < nfa->value.split_idx; ++i) {
+            thread_clone(sim, list_get_at(&(nfa->reachable), i));
+          }
 
-            if(nfa->reaches_accept == 0) {
-              sim->loop_record[nfa->id].count = 0;
-            }
+          if(nfa->reaches_accept == 0) {
+            sim->loop_record[nfa->id].count = 0;
+          }
 
-            for(int i = nfa->value.split_idx + 1; i < list_size(&(nfa->reachable)); ++i) {
-              thread_clone(sim, list_get_at(&(nfa->reachable), i), -1);
-            }
-            load_next(sim, list_get_at(&(nfa->reachable), nfa->value.split_idx));
+          for(i = nfa->value.split_idx + 1; i < list_size(&(nfa->reachable)); ++i) {
+            thread_clone(sim, list_get_at(&(nfa->reachable), i));
+          }
+          load_next(sim, list_get_at(&(nfa->reachable), nfa->value.split_idx));
         }
       }
     } break;
@@ -360,7 +352,6 @@ load_next(NFASim * sim, NFA * nfa)
         else {
           sim->ip = nfa;
           sim->status =  0;
-          return 1;
         }
 
         if(match) {
@@ -374,11 +365,11 @@ load_next(NFASim * sim, NFA * nfa)
 }
 
 
-static int inline
+static void inline
 process_adjacents(NFASim *sim, NFA * nfa)
 {
   for(int i = 1; i < list_size(&(nfa->reachable)); ++i) {
-    thread_clone(sim, list_get_at(&(nfa->reachable), i), -1);
+    thread_clone(sim, list_get_at(&(nfa->reachable), i));
   }
   load_next(sim, list_get_at(&(nfa->reachable), 0));
 }
@@ -449,10 +440,10 @@ thread_step(NFASim * sim)
         #define BACKREF_START(sim) ((sim)->backref_match[(sim)->ip->id].start)
         #define BACKREF_END(sim) ((sim)->backref_match[(sim)->ip->id].end)
         const char * bref_end = BACKREF_END(sim);
-        if(bref_end) {
+        const char * tmp_input = sim->input_ptr;
+        const char * bref_ptr = BACKREF_START(sim);
+        if(bref_ptr && bref_end) {
           int fail = 0;
-          const char * tmp_input = sim->input_ptr;
-          const char * bref_ptr = BACKREF_START(sim);
           while(bref_ptr <= bref_end) {
             if(*bref_ptr == *tmp_input) {
               ++bref_ptr; ++tmp_input;
@@ -517,7 +508,6 @@ run_nfa(NFASim * thread)
   int current_run            = 0; // did we match in the current run?
   NFASimCtrl * ctrl          = thread->ctrl;
   thread->input_ptr          = ctrl->buffer_start;
-  const char * buffer_end    = get_buffer_end(thread->scanner) - 1;
   const char * input_pointer = ctrl->buffer_start;
   
   process_adjacents(thread, ctrl->start_state);
@@ -538,7 +528,8 @@ run_nfa(NFASim * thread)
               goto RELEASE_ALL_THREADS;
             }
           }
-          else if((CTRL_FLAGS(ctrl) & INVERT_MATCH_FLAG) || (CTRL_FLAGS(ctrl) & MGLOBAL_FLAG) == 0) {
+          else if((CTRL_FLAGS(ctrl) & INVERT_MATCH_FLAG)
+               || (CTRL_FLAGS(ctrl) & MGLOBAL_FLAG) == 0) {
             goto RELEASE_ALL_THREADS;
           }
         } // fall through
@@ -571,8 +562,6 @@ run_nfa(NFASim * thread)
     thread = reset_thread(ctrl, ctrl->start_state, (char *)input_pointer);
   }
 RELEASE_ALL_THREADS:
-  //RELEASE_ALL_THREADS(thread);
-  //RELEASE_ALL_THREADS(ctrl->active_threads, ctrl->thread_pool, thread);
   RELEASE_ALL_THREADS(ctrl,thread);
 
   if((match_found == 0)
@@ -608,25 +597,10 @@ new_nfa_sim(Parser * parser, Scanner * scanner, ctrl_flags * cfl)
   return sim->ctrl;
 }
 
-/*
-void
-reset_nfa_sim(NFASim * sim, NFA * start_state)
-{
-  sim->match.end                  = NULL;
-  sim->match.start                = NULL;
-  sim->ctrl->start_state          = start_state;
-  sim->ctrl->match.last_match_end = NULL;
-  sim->ctrl->buffer_start         = get_cur_pos(sim->scanner);
-  sim->ctrl->buffer_end           = get_buffer_end(sim->scanner) - 1;
-  sim->ctrl->filename             = get_filename(sim->scanner);
-  sim->ctrl->filename_len         = strlen(sim->ctrl->filename);
-  memset(sim->loop_record,   0, sizeof(LoopRecord) * sim->ctrl->loop_record_cap);
-}
-*/
+
 NFASim *
 reset_nfa_sim(NFASimCtrl * ctrl, NFA * start_state)
 {
-//  ctrl->start_state          = start_state;
   ctrl->match.last_match_end = NULL;
   ctrl->buffer_start         = get_cur_pos(ctrl->scanner);
   ctrl->buffer_end           = get_buffer_end(ctrl->scanner) - 1;
@@ -648,21 +622,12 @@ reset_nfa_sim(NFASimCtrl * ctrl, NFA * start_state)
 void
 free_nfa_sim(NFASimCtrl * ctrl)
 {
-  //list_iterate(ctrl->active_threads, (void *)&free);
   if(list_size((ctrl->active_threads))) {
     while(list_size((ctrl->active_threads))) {
       list_push(ctrl->thread_pool, list_shift(ctrl->active_threads));
     }
   }
-  //list_free_items(ctrl->active_threads, (void *)&free);
-  //list_free_items(ctrl->active_threads, (void *)&free);
-//  free(ctrl->active_threads);
   list_free(ctrl->active_threads, NULL);
-
-  //list_iterate(ctrl->thread_pool, (void *)&free);
-//  list_free_items(ctrl->thread_pool, (void *)&free);
-//  free(ctrl->thread_pool);
-  //list_free(ctrl->thread_pool, NULL);
   list_free(ctrl->thread_pool, (void *)&free);
   free(ctrl);
 }

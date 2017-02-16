@@ -66,6 +66,12 @@ typedef struct IntervalRecord {
   int count;
 } IntervalRecord;
 
+typedef struct CaptureGrpRecord {
+  int next_id;
+  char * end;
+} CaptureGrpRecord;
+
+
 typedef struct Parser {
   Token lookahead;
   Scanner    * scanner;
@@ -83,7 +89,6 @@ typedef struct Parser {
 
   // Capture-Group Stuff
   int cgrp_count;
-  int root_cgrp;
   int current_cgrp;
   int in_new_cgrp;
   int paren_idx;
@@ -91,8 +96,9 @@ typedef struct Parser {
 
   // Alternation Stuff
   int in_alternation;
-  int total_branch_count;
-  int distinct_branch_points;
+  int tree_count;
+  int branch;
+  int lowest_id_on_branch;
 
   // Interval Stuff
   int interval_count;
@@ -100,6 +106,7 @@ typedef struct Parser {
 // TEST
   int total_nfa_ids;
 // TEST END
+  CaptureGrpRecord capgrp_record[CAPTURE_GROUP_MAX];
   int cgrp_map[CGRP_MAP_SIZE];
 } Parser;
 

@@ -11,13 +11,6 @@ FORMAT:
 /////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 TOP ITEM:
 /////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-  -- Implement prescan to detect which subexpressions are under the influence of an interval expression
-  -- If capture-group is under influence of an interval expression, all matching nfa nodes must be enhanced
-     so that they can report where they fail... this way the recognizer will be able to resume matching past
-     the interval if the min_rep had been met or exceeded... Note that for matching nfa nodes, the 'parent'
-     pointer is unused... Perhaps may be of some use.
-  -- If an interval ties a set of branches that end in quatifiers: '*', '+', '?' then those quantifiers need
-     to match as much as possible before proceeding the the interval expression
 
 
 

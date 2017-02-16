@@ -5,6 +5,25 @@
 
 #include <stdio.h>
 
+void *
+list_get_tail(List * list)
+{
+  if(list) {
+    return list->tail->data;
+  }
+  return NULL;
+}
+
+
+void *
+list_get_head(List * list)
+{
+  if(list) {
+    return list->head->data;
+  }
+  return NULL;
+}
+
 
 unsigned int
 list_size(List * list)

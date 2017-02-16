@@ -4,12 +4,14 @@
 #include "misc.h"
 
 void
-parser_fatal(const char * msg, const char * regex, const char * here, int adjust)
+parser_fatal(const char * msg, const char * regex, const char * here)
 {
-  fprintf(stderr, "ERROR: %s: ", msg);
-  fprintf(stderr, "%s\n", regex);
-  int finger = snprintf(NULL, 0, "ERROR: %s: ", msg) + here - regex + adjust;
-  for(int i = 0; i < finger; ++i) {
+  char err_msg[200] = {0};
+  int sz = snprintf(NULL, 0, "%s: %s: %s", program_name, msg, regex);
+  snprintf(&(err_msg[0]), sz, "%s: %s: %s", program_name, msg, regex);
+  fprintf(stderr, "%s\n", &(err_msg[0]));
+  sz = sz - 1 - strlen(regex) + (here - regex);
+  for(int i = 0; i < sz; ++i) {
     fprintf(stderr, " ");
   }
   fprintf(stderr, "^\n");

@@ -4,15 +4,12 @@
 #include <string.h>
 #include <stdio.h>
 #include <libgen.h>
-#include <limits.h>
 
 #include "misc.h"
 #include "scanner.h"
 #include "backtrack_recognizer.h"
 
 
-// This should be long enough.
-char program_name[NAME_MAX];
 
 static const char short_options [] = {"Ff:ghinqv"};
 
@@ -185,9 +182,8 @@ main(int argc, char ** argv)
   
 
   // if we've made it this far we have all we need to run the recognizer
-  //nfa_sim  = new_nfa_sim(parser, scanner, &cfl);
-  //NFASimCtrl * nfa_sim_ctrl = nfa_sim->ctrl;
   NFASimCtrl * nfa_sim_ctrl = new_nfa_sim(parser, scanner, &cfl);
+
   while(target_idx < argc) {
     fh = fopen(argv[target_idx], "r");
     if(fh == NULL) {
@@ -195,7 +191,7 @@ main(int argc, char ** argv)
     }
     filename = argv[target_idx];
     int line = 0;
-    while((scanner->line_len = getline(&scanner->buffer, &scanner->buf_len, fh)) > 0) {
+    while((scanner->line_len = getline(&(scanner->buffer), &(scanner->buf_len), fh)) > 0) {
       reset_scanner(scanner, filename);
       nfa_sim = reset_nfa_sim(nfa_sim_ctrl, ((NFA *)peek(parser->symbol_stack))->parent);
       ++line; // FIXME: scanner should update the line number on it's own
