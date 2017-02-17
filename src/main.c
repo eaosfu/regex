@@ -140,7 +140,7 @@ main(int argc, char ** argv)
   }
 
   if(target_idx >= argc) {
-    exit_msg_usage("ERROR: No search files provided", EXIT_FAILURE);
+    exit_msg_usage("ERROR: No search file(s) provided", EXIT_FAILURE);
   }
   
 
@@ -165,7 +165,7 @@ main(int argc, char ** argv)
   }
 
   if(line_len < 0) {
-    fatal("UNABLE READ REGEX FILE\n");
+    fatal("Unable to read regex file\n");
   }
 
   scanner  = init_scanner(filename, buffer, buf_len, line_len, &cfl);
