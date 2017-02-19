@@ -103,9 +103,8 @@ typedef struct Parser {
   // Interval Stuff
   int interval_count;
 
-// TEST
   int total_nfa_ids;
-// TEST END
+
   CaptureGrpRecord capgrp_record[CAPTURE_GROUP_MAX];
   int cgrp_map[CGRP_MAP_SIZE];
 } Parser;
