@@ -29,6 +29,7 @@ void reset_scanner(Scanner *, const char *);
 int next_char(Scanner *);
 char * get_scanner_readhead(Scanner *);
 char * get_cur_pos(Scanner *);
+int          get_buffer_length(Scanner *);
 const char * get_buffer_start(Scanner *);
 const char * get_buffer_end(Scanner *);
 const char * get_filename(Scanner *);

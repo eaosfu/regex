@@ -21,6 +21,16 @@ get_buffer_end(Scanner * s)
 }
 
 
+int
+get_buffer_length(Scanner * s)
+{
+  if(s) {
+    return s->buf_len;
+  }
+  return 0;
+}
+
+
 const char *
 get_buffer_start(Scanner * s)
 {
