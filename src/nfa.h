@@ -90,7 +90,8 @@ NFA * concatenate_nfa(NFA *, NFA *);
 NFA * new_nfa(NFACtrl *, unsigned int);
 NFA * new_backreference_nfa(NFACtrl *, unsigned int);
 NFA * new_lliteral_nfa(NFACtrl *, char *, unsigned int);
-NFA * new_interval_nfa(NFA *, unsigned int, unsigned int);
+//NFA * new_interval_nfa(NFA *, unsigned int, unsigned int);
+NFA * new_interval_nfa(NFA *, unsigned int, unsigned int, NFA **, NFA **);
 NFA * new_literal_nfa(NFACtrl *, unsigned int, unsigned int);
 NFA * new_alternation_nfa(NFACtrl *, List *, unsigned int, NFA *);
 

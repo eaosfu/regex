@@ -11,7 +11,7 @@
 
 
 
-static const char short_options [] = {"Ff:ghinqv"};
+static const char short_options [] = {"Ff:ghinoqv"};
 
 static struct option const long_options[] = {
   {"help"            , no_argument      , NULL, 'h'}, 
@@ -20,6 +20,7 @@ static struct option const long_options[] = {
   {"show-file-name"  , no_argument      , NULL, 'F'},
   {"invert-match"    , no_argument      , NULL, 'v'},
   {"show-line-number", no_argument      , NULL, 'n'},
+  {"show-match-only" , no_argument      , NULL, 'o'},
   {"quiet"           , no_argument      , NULL, 'q'},
   {"silent"          , no_argument      , NULL, 'q'},
   {"ignore-case"     , no_argument      , NULL, 'i'}, // not implemented
@@ -48,7 +49,8 @@ print_usage(int exit_code)
 "                           by default the first match stops the search\n"
 "  -h, --help               display this help message\n"
 "  -i, --ignore-case        treat all input, including pattern, as lowercase\n"
-"  -l, --show-match-line    display line number for the match, starts at 1\n"
+"  -n, --show-match-line    display line number for the match, starts at 1\n"
+"  -o, --show-match-only    only display matching string\n"
 "  -q, --quiet, --silent    suppress all output to stdout\n"
 "  -v, --invert-match       display lines where no matches are found\n"
 "\n"
@@ -98,7 +100,7 @@ main(int argc, char ** argv)
   int status = 0;
   int opt = -1;
 
-  ctrl_flags cfl = 0;
+  ctrl_flags cfl = SHOW_MATCH_LINE_FLAG;
   Scanner * scanner = NULL;
   Parser  * parser  = NULL;
   NFASim  * nfa_sim = NULL;
@@ -119,9 +121,11 @@ main(int argc, char ** argv)
       case 'g': { SET_MGLOBAL_FLAG(&cfl);              } break;
       case 'i': { SET_IGNORE_CASE_FLAG(&cfl);          } break;
       case 'q': { SET_SILENT_MATCH_FLAG(&cfl);         } break;
-      case 'v': { SET_INVERT_MATCH_FLAG(&cfl);         } break;
+      case 'v': { CLEAR_SHOW_MATCH_LINE_FLAG(&cfl);
+                  SET_INVERT_MATCH_FLAG(&cfl);         } break;
       case 'F': { SET_SHOW_FILE_NAME_FLAG(&cfl);       } break;
       case 'n': { SET_SHOW_LINENO_FLAG(&cfl);          } break;
+      case 'o': { CLEAR_SHOW_MATCH_LINE_FLAG(&cfl);    } break;
       default:  { exit_unknown_opt(opt, EXIT_FAILURE); } break;
     }
   }

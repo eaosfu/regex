@@ -19,6 +19,7 @@ char program_name[NAME_MAX];
 #define IGNORE_CASE_FLAG      0x200
 #define SILENT_MATCH_FLAG     0x400
 #define INVERT_MATCH_FLAG     0x800
+#define SHOW_MATCH_LINE_FLAG  0x1000
 
 // Access the control flags
 #define CTRL_FLAGS(s) (*((s)->ctrl_flags))
@@ -41,24 +42,26 @@ char program_name[NAME_MAX];
 // These control the nfa_sim's matching behavour
 // Note that once set these are never cleared
 #define SET_MGLOBAL_FLAG(ctrl_flags)          (*(ctrl_flags) = *(ctrl_flags) | MGLOBAL_FLAG)
-#define CLEAR_MGLOBAL_FLAG(ctrl_flags)        (*(ctrl_flags) = *(ctrl_flags) & MGLOBAL_FLAG)
+#define CLEAR_MGLOBAL_FLAG(ctrl_flags)        (*(ctrl_flags) = *(ctrl_flags) & ~MGLOBAL_FLAG)
 
 // ENGINE DOESN'T SUPPORT THIS YET
 #define SET_SHOW_LINENO_FLAG(ctrl_flags)      (*(ctrl_flags) = *(ctrl_flags) | SHOW_LINENO_FLAG)
-#define CLEAR_SHOW_LINENO_FLAG(ctrl_flags)    (*(ctrl_flags) = *(ctrl_flags) & SHOW_LINENO_FLAG)
+#define CLEAR_SHOW_LINENO_FLAG(ctrl_flags)    (*(ctrl_flags) = *(ctrl_flags) & ~SHOW_LINENO_FLAG)
 
 #define SET_IGNORE_CASE_FLAG(ctrl_flags)      (*(ctrl_flags) = *(ctrl_flags) | IGNORE_CASE_FLAG)
-#define CLEAR_IGNORE_CASE_FLAG(ctrl_flags)    (*(ctrl_flags) = *(ctrl_flags) & IGNORE_CASE_FLAG)
+#define CLEAR_IGNORE_CASE_FLAG(ctrl_flags)    (*(ctrl_flags) = *(ctrl_flags) & ~IGNORE_CASE_FLAG)
 
 #define SET_SHOW_FILE_NAME_FLAG(ctrl_flags)   (*(ctrl_flags) = *(ctrl_flags) | SHOW_FILE_NAME_FLAG)
-#define CLEAR_SHOW_FILE_NAME_FLAG(ctrl_flags) (*(ctrl_flags) = *(ctrl_flags) & SHOW_FILE_NAME_FLAG)
+#define CLEAR_SHOW_FILE_NAME_FLAG(ctrl_flags) (*(ctrl_flags) = *(ctrl_flags) & ~SHOW_FILE_NAME_FLAG)
 
 #define SET_SILENT_MATCH_FLAG(ctrl_flags)     (*(ctrl_flags) = *(ctrl_flags) | SILENT_MATCH_FLAG)
-#define CLEAR_SILENT_MATCH_FLAG(ctrl_flags)   (*(ctrl_flags) = *(ctrl_flags) & SILENT_MATCH_FLAG)
+#define CLEAR_SILENT_MATCH_FLAG(ctrl_flags)   (*(ctrl_flags) = *(ctrl_flags) & ~SILENT_MATCH_FLAG)
 
 #define SET_INVERT_MATCH_FLAG(ctrl_flags)     (*(ctrl_flags) = *(ctrl_flags) | INVERT_MATCH_FLAG)
-#define CLEAR_INVERT_MATCH_FLAG(ctrl_flags)   (*(ctrl_flags) = *(ctrl_flags) & INVERT_MATCH_FLAG)
+#define CLEAR_INVERT_MATCH_FLAG(ctrl_flags)   (*(ctrl_flags) = *(ctrl_flags) & ~INVERT_MATCH_FLAG)
 
+#define SET_SHOW_MATCH_LINE_FLAG(ctrl_flags)   (*(ctrl_flags) = *(ctrl_flags) | SHOW_MATCH_LINE_FLAG)
+#define CLEAR_SHOW_MATCH_LINE_FLAG(ctrl_flags) (*(ctrl_flags) = *(ctrl_flags) & ~SHOW_MATCH_LINE_FLAG)
 
 typedef unsigned int ctrl_flags;
 

@@ -26,11 +26,12 @@ static active_thread_input_ptr * active_threads_sp;
 ({  while(list_size(((ctrl)->active_threads))) {                        \
     list_push((ctrl)->thread_pool, list_shift((ctrl)->active_threads)); \
   }                                                                     \
-  list_push((ctrl)->thread_pool, (thread));                             \
+  if(thread) list_push((ctrl)->thread_pool, (thread));                  \
 })
 
 
 static void load_next(NFASim *, NFA *);
+static void load_start_states(NFASim ** sim, NFA * start_state);
 static void process_adjacents(NFASim *sim, NFA * nfa);
 
 
@@ -61,7 +62,7 @@ update_match(NFASim * sim)
 
 
 static Match *
-new_match(NFASimCtrl * ctrl, int shorten)
+new_match(NFASimCtrl * ctrl)
 {
   Match * match = NULL;
   if(((CTRL_FLAGS(ctrl) & SILENT_MATCH_FLAG) == 0)) {
@@ -72,6 +73,12 @@ new_match(NFASimCtrl * ctrl, int shorten)
     int line_no           = ctrl->scanner->line_no;
     int w = 1;
     if(begin && (begin <= end)) {
+
+      if((CTRL_FLAGS(ctrl) & SHOW_MATCH_LINE_FLAG)) {
+        begin = ctrl->buffer_start;
+        end = ctrl->buffer_end - 1;
+      }
+
       int sz = end - begin + 1;
 
       if((CTRL_FLAGS(ctrl) & SHOW_FILE_NAME_FLAG) && nm_len > 0) {
@@ -109,10 +116,6 @@ new_match(NFASimCtrl * ctrl, int shorten)
         snprintf(ctrl->matches + ctrl->match_idx, nm_len + w + 1, "%d:", line_no);
         ctrl->match_idx += w + 1;
         sz -= w + 1;
-      }
-
-      if(shorten) {
-        --sz;
       }
 
       strncpy((ctrl->matches) + ctrl->match_idx, begin, sz);
@@ -176,7 +179,7 @@ reset_thread(NFASimCtrl * ctrl, NFA * start_state, char * start_pos)
     sim->ctrl->match.last_match_end   = NULL;
     restart_from(sim->scanner, start_pos);
     memset(sim->loop_record, 0, sizeof(LoopRecord) * sim->ctrl->loop_record_cap);
-    process_adjacents(sim, start_state);
+    load_start_states(&sim, start_state);
   }
   else {
     fatal("Unable to obtain an execution threads\n");
@@ -185,13 +188,24 @@ reset_thread(NFASimCtrl * ctrl, NFA * start_state, char * start_pos)
 }
 
 
-static inline NFASim *
-thread_clone(NFASim * sim, NFA * nfa)
+static inline void *
+thread_clone(NFA * nfa, NFASim * sim)
 {
   NFASim * clone;
   NFASimCtrl * ctrl = sim->ctrl;
 
   int new_thread = 0;
+
+  if(nfa->value.type == NFA_LITERAL) {
+    if(nfa->value.literal != INPUT(sim)) {
+      return NULL;
+    }
+  }
+  if(nfa->value.type == NFA_LONG_LITERAL) {
+    if(*(nfa->value.lliteral) != INPUT(sim)) {
+      return NULL;
+    }
+  }
 
   if(list_size(ctrl->thread_pool)) {
     clone = list_shift(ctrl->thread_pool);
@@ -250,12 +264,6 @@ static void
 load_next(NFASim * sim, NFA * nfa)
 {
   switch(nfa->value.type) {
-    case NFA_SPLIT: {
-      for(int i = 1; i < list_size(&(nfa->reachable)); ++i) {
-        thread_clone(sim, list_get_at(&(nfa->reachable), i));
-      }
-      load_next(sim, list_get_at(&(nfa->reachable), 0));
-    } break;
     case NFA_CAPTUREGRP_BEGIN: {
       sim->tracking_backrefs = 1;
       sim->backref_match[nfa->id].start = sim->input_ptr;
@@ -268,67 +276,61 @@ load_next(NFASim * sim, NFA * nfa)
     } break;
     case NFA_INTERVAL: {
       ++(sim->interval_count);
-      int i, count = ++((sim->loop_record[nfa->id]).count);
+      int start, end, far_end= list_size(&(nfa->reachable)) - 1;
+      int count = ++((sim->loop_record[nfa->id]).count);
+      NFA * tmp = NULL;
       if(count < nfa->value.min_rep) {
+        start = 1;
+        end = (nfa->value.split_idx - 1);
         ++(sim->tracking_intervals);
-        for(i = 1; i < nfa->value.split_idx; ++i) {
-          thread_clone(sim, list_get_at(&(nfa->reachable), i));
-        }
-        load_next(sim, list_get_at(&(nfa->reachable), 0));
+        tmp = list_get_at(&(nfa->reachable), 0);
+        list_iterate_from_to(&(nfa->reachable), start, end, (void *)thread_clone, (void *)sim);
+        load_next(sim, tmp);
       }
       else {
         if(nfa->value.max_rep > 0) {
           if(count < nfa->value.max_rep) {
             ++(sim->tracking_intervals);
-            for(i = 0; i < nfa->value.split_idx; ++i) {
-              thread_clone(sim, list_get_at(&(nfa->reachable), i));
-            }
-
+            end = nfa->value.split_idx - 1;
+            list_iterate_from_to(&(nfa->reachable), 0, end, (void *)thread_clone, (void *)sim);
             sim->loop_record[nfa->id].count = 0;
-
             --(sim->tracking_intervals);
-            i = nfa->value.split_idx + 1;
-            for(; i < list_size(&(nfa->reachable)); ++i) {
-              thread_clone(sim, list_get_at(&(nfa->reachable), i));
-            }
-            load_next(sim, list_get_at(&(nfa->reachable), nfa->value.split_idx));
+            start = nfa->value.split_idx + 1;
+            tmp = list_get_at(&(nfa->reachable), nfa->value.split_idx);
+            list_iterate_from_to(&(nfa->reachable), start, far_end, (void *)thread_clone, (void *)sim);
+            load_next(sim, tmp);
           }
           else {
             --(sim->tracking_intervals);
-
             sim->loop_record[nfa->id].count = 0;
-
             if(nfa->full_circle) {
-              for(i = 1; i < list_size(&(nfa->reachable)); ++i) {
-                thread_clone(sim, list_get_at(&(nfa->reachable), i));
-              }
-              load_next(sim, list_get_at(&(nfa->reachable), 0));
+              tmp = list_get_at(&(nfa->reachable), 0);
+              list_iterate_from_to(&(nfa->reachable), 1, far_end, (void *)thread_clone, (void *)sim);
+              load_next(sim, tmp);
             }
             else {
-              i = nfa->value.split_idx + 1;
-              for(; i < list_size(&(nfa->reachable)); ++i) {
-                thread_clone(sim, list_get_at(&(nfa->reachable), i));
-              }
-              load_next(sim, list_get_at(&(nfa->reachable), nfa->value.split_idx));
+              start = nfa->value.split_idx + 1;
+              tmp = list_get_at(&(nfa->reachable), nfa->value.split_idx);
+              list_iterate_from_to(&(nfa->reachable), start, far_end, (void *)thread_clone, (void *)sim);
+              load_next(sim, tmp);
             }
-
           }
         }
         else {
           // unbounded upper limit
           ++(sim->tracking_intervals);
-          for(i = 0; i < nfa->value.split_idx; ++i) {
-            thread_clone(sim, list_get_at(&(nfa->reachable), i));
-          }
+          end = nfa->value.split_idx - 1;
+          list_iterate_from_to(&(nfa->reachable), 0, end, (void *)thread_clone, (void *)sim);
 
           if(nfa->reaches_accept == 0) {
             sim->loop_record[nfa->id].count = 0;
           }
 
-          for(i = nfa->value.split_idx + 1; i < list_size(&(nfa->reachable)); ++i) {
-            thread_clone(sim, list_get_at(&(nfa->reachable), i));
-          }
-          load_next(sim, list_get_at(&(nfa->reachable), nfa->value.split_idx));
+          start = nfa->value.split_idx + 1;
+          end = nfa->value.split_idx- 1;
+          tmp = list_get_at(&(nfa->reachable), nfa->value.split_idx);
+          list_iterate_from_to(&(nfa->reachable), start, end, (void *)thread_clone, sim);
+          load_next(sim, tmp);
         }
       }
     } break;
@@ -369,7 +371,8 @@ static void inline
 process_adjacents(NFASim *sim, NFA * nfa)
 {
   for(int i = 1; i < list_size(&(nfa->reachable)); ++i) {
-    thread_clone(sim, list_get_at(&(nfa->reachable), i));
+    //thread_clone(sim, list_get_at(&(nfa->reachable), i));
+    thread_clone(list_get_at(&(nfa->reachable), i), sim);
   }
   load_next(sim, list_get_at(&(nfa->reachable), 0));
 }
@@ -488,7 +491,7 @@ thread_step(NFASim * sim)
       case NFA_ACCEPTING: {
         sim->status = 1;
       } break;
-      default: { // should never hit this condition
+      default: {
         sim->status = -1;
       }
     }
@@ -501,6 +504,15 @@ thread_step(NFASim * sim)
 }
 
 
+static inline void
+load_start_states(NFASim ** sim, NFA * start_state) {
+  process_adjacents((*sim), start_state);
+  if((*sim)->status == -1) {
+    *sim = release_thread(*sim, start_state);
+  }
+}
+
+
 int
 run_nfa(NFASim * thread)
 {
@@ -510,7 +522,7 @@ run_nfa(NFASim * thread)
   thread->input_ptr          = ctrl->buffer_start;
   const char * input_pointer = ctrl->buffer_start;
   
-  process_adjacents(thread, ctrl->start_state);
+  load_start_states(&thread, ctrl->start_state);
 
   while((*input_pointer) != '\0') {
     while(thread) {
@@ -518,13 +530,10 @@ run_nfa(NFASim * thread)
       switch(thread->status) {
         case 1: {
           current_run = match_found = 1;
-          if((CTRL_FLAGS(ctrl) & (SILENT_MATCH_FLAG|INVERT_MATCH_FLAG)) == 0) {
+          if((CTRL_FLAGS(ctrl) & (SILENT_MATCH_FLAG|INVERT_MATCH_FLAG|SHOW_MATCH_LINE_FLAG)) == 0) {
             update_longest_match(&(ctrl->match), &(thread->match));
             if(((CTRL_FLAGS(ctrl) & MGLOBAL_FLAG) == 0)) {
-              new_match(ctrl, 0);
-              ctrl->match.start = NULL;
-              ctrl->match.end  = NULL;
-              ctrl->match.last_match_end = NULL;
+              new_match(ctrl);
               goto RELEASE_ALL_THREADS;
             }
           }
@@ -546,8 +555,8 @@ run_nfa(NFASim * thread)
       }
     }
 
-    if((CTRL_FLAGS(ctrl) & INVERT_MATCH_FLAG) == 0) {
-      new_match(ctrl, 0);
+    if((CTRL_FLAGS(ctrl) & (SHOW_MATCH_LINE_FLAG|INVERT_MATCH_FLAG)) == 0) {
+      new_match(ctrl);
     }
     if((current_run == 0) || (ctrl->match.end == 0)) {
       ++input_pointer;
@@ -563,10 +572,11 @@ run_nfa(NFASim * thread)
 RELEASE_ALL_THREADS:
   RELEASE_ALL_THREADS(ctrl,thread);
 
-  if((match_found == 0) && (CTRL_FLAGS(ctrl) & INVERT_MATCH_FLAG)) {
+  if((match_found == 0) && (CTRL_FLAGS(ctrl) & INVERT_MATCH_FLAG)
+  ||  match_found && (CTRL_FLAGS(ctrl) & SHOW_MATCH_LINE_FLAG)) {
     ctrl->match.start = ctrl->buffer_start;
-    ctrl->match.end   = ctrl->buffer_end;
-    new_match(ctrl, 1);
+    ctrl->match.end   = ctrl->buffer_end - 1;
+    new_match(ctrl);
   }
   return match_found;
 }
@@ -603,6 +613,8 @@ reset_nfa_sim(NFASimCtrl * ctrl, NFA * start_state)
   ctrl->buffer_end           = get_buffer_end(ctrl->scanner) - 1;
   ctrl->filename             = get_filename(ctrl->scanner);
   ctrl->filename_len         = strlen(ctrl->filename);
+  ctrl->match.start                  = NULL;
+  ctrl->match.end                    = NULL;
   NFASim * sim = NULL;
   if(list_size(ctrl->thread_pool)) {
     sim = list_shift(ctrl->thread_pool);

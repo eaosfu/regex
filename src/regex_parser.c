@@ -85,6 +85,32 @@ parser_backtrack(Parser * parser)
   parser_consume_token(parser);
 }
 
+static int
+merge_intervals(Parser * parser, int min, int max, NFA * target)
+{
+  int ret = 0;
+  NFA * tmp = target->parent;
+  while((tmp->value.type == NFA_EPSILON) && (tmp = tmp->out2));
+  if(parser->prev_interval_head == tmp && parser->prev_interval->out2->out2 == NULL) {
+    if(min == 0 || parser->prev_interval->value.min_rep == 0) {
+      parser->prev_interval->value.min_rep += min;
+    }
+    else {
+      parser->prev_interval->value.min_rep *= min;
+    }
+
+    if(max == 0 || parser->prev_interval->value.max_rep == 0) {
+      parser->prev_interval->value.max_rep += max;
+    }
+    else {
+      parser->prev_interval->value.max_rep *= max;
+    }
+    push(parser->symbol_stack, target);
+    ret = 1;
+  }
+  return ret;
+}
+
 
 static void
 parse_interval_expression(Parser * parser)
@@ -175,19 +201,16 @@ parse_interval_expression(Parser * parser)
         push(parser->symbol_stack, target);
       }
       else {
-        if(min > 0 && max == 0) {
-          // <expression>{Min,} ;match at least Min, at most Infinity
-          interval_nfa = new_interval_nfa(target, min, max);
-          ++(parser->interval_count);
-        }
-        else {
+        if((min > 0 && max == 0) == 0) {
           // <expression>{,Max} ;match between 0 and Max
           // <expression>{Min,Max} ;match between Min and Max
           min = (min >= 0) ? min : 0;
-          interval_nfa = new_interval_nfa(target, min, max);
+        } // else <expression>{Min,} ;match at least Min, at most Infinity
+        if(merge_intervals(parser, min, max, target) == 0) {
+          interval_nfa = new_interval_nfa(target, min, max, &(parser->prev_interval_head), &(parser->prev_interval));
           ++(parser->interval_count);
+          push(parser->symbol_stack, interval_nfa);
         }
-        push(parser->symbol_stack, interval_nfa);
       }
     }
     else {
@@ -197,7 +220,7 @@ parse_interval_expression(Parser * parser)
       }
       else if(min > 0 && max == -1) {
         // <expression>{M}
-        interval_nfa = new_interval_nfa(target, min, max);
+        interval_nfa = new_interval_nfa(target, min, max, &(parser->prev_interval_head), &(parser->prev_interval));
         ++(parser->interval_count);
 
         push(parser->symbol_stack,
@@ -925,17 +948,11 @@ __collect_adjacencies_helper(NFA * current, NFA * visiting, int outn, NFA * forb
       switch(visiting->value.type) {
         case NFA_TREE:  // fallthrough
         case NFA_SPLIT:
-        case (NFA_SPLIT|NFA_PROGRESS): {
-        } break;
+      break;
         default: {
           // if the node is matchable and is not already part of
           // our adjacency list.. add it.
           current->full_circle = (visiting == forbidden) ? 1 : current->full_circle;
-/*
-if(current->value.type == NFA_INTERVAL && current->value.max_rep == 6) {
- printf("HERE!\n");
-}
-*/
           if((visiting != forbidden) && list_search(&(current->reachable), visiting, compare) == NULL) {
             list_append(&(current->reachable), visiting);
           }
@@ -956,28 +973,14 @@ if(current->value.type == NFA_INTERVAL && current->value.max_rep == 6) {
           }
           visiting->visited = 0;
         } break;
-        case (NFA_SPLIT|NFA_PROGRESS):
         case NFA_SPLIT: {
           // Need to add this as a 'reachable' node because when we process an interval
           // in the recognizer we want to avoid changing the state of the 'thread' holding
           // the 'interval' source node while processing the NFA_SPLIT.
           if(current->value.type == NFA_INTERVAL && (visiting->value.literal != '?')) {
             // Make sure we don't include this current's tarting node in the loop
-/*
-printf("HERE!: {%d, %d} --> %c --out1--> %d:%c\n",
-  current->value.min_rep,
-  current->value.max_rep,
-  visiting->value.literal,
-  current->out1->value.type,
-  visiting->out1->value.literal);
-*/
             __collect_adjacencies_helper(current, visiting->out1, outn, current->out1, adj_intvls_list);
             __collect_adjacencies_helper(current, visiting->out2, outn, forbidden,  adj_intvls_list);
-/*
-            if(list_search(&(current->reachable), visiting, compare) == NULL) {
-              list_append(&(current->reachable), visiting);
-            }
-*/
           }
           else {
             visiting->visited = 1;
@@ -1002,12 +1005,6 @@ printf("HERE!: {%d, %d} --> %c --out1--> %d:%c\n",
             }
           }
           current->full_circle = (visiting == forbidden) ? 1 : current->full_circle;
-/*
-if(current->value.type == NFA_INTERVAL && current->value.max_rep == 6) {
- printf("HERE!: forbidden: [0x%x]:%c vs. visiting: [0x%x]:%c ==> full_circle: %d\n",
- forbidden, (forbidden) ? forbidden->value.literal: 0, visiting, visiting->value.literal, current->full_circle);
-}
-*/
           if((visiting != forbidden) && list_search(&(current->reachable), visiting, compare) == NULL) {
             list_append(&(current->reachable), visiting);
           }

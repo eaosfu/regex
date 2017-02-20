@@ -13,6 +13,8 @@ typedef COMPARE_PROC * COMPARE_PROC_pt;
 typedef struct List {
   int size;
   int pool_size;
+  int iter_idx;
+  struct ListItem * iter;
   struct ListItem * head;
   struct ListItem * pool;
   struct ListItem * tail;
@@ -42,7 +44,7 @@ void * list_get_head(List *);
 void * list_get_tail(List *);
 void * list_extend(List *, void *);
 void list_clear(List *);
-void list_iterate_from_to(List *, VISIT_PROC_pt, int, int);
+void list_iterate_from_to(List *, int, int, VISIT_PROC2_pt, void * arg2);
 void list_iterate(List *, VISIT_PROC_pt);
 void list_iterate2(List *, VISIT_PROC2_pt, void *, void **);
 void list_free(List *, VISIT_PROC_pt);

@@ -139,6 +139,10 @@ list_push(List * list, void * data)
     list->tail = list->head;
   }
 
+  if(list->iter_idx != 0) {
+    ++(list->iter_idx);
+  }
+
   list->size++;
 
   return list->size;
@@ -161,6 +165,8 @@ list_shift(List * list)
   if(old_head == list->tail) {
     list->tail = NULL;
   }
+
+  --(list->iter_idx);
 
   release_to_pool(list, old_head);
 
@@ -248,6 +254,10 @@ list_remove_at(List * list, int idx)
   }
 
   void * removed_data = removed_item->data;
+
+  if(removed_data == list->iter) {
+    list->iter_idx = -1;
+  }
 
   release_to_pool(list, removed_item);
   
@@ -495,6 +505,35 @@ list_chop(List * list, unsigned int sz)
   }
 
   return chopped;
+}
+
+
+void
+list_iterate_from_to(List * list, int from, int to, VISIT_PROC2_pt action, void *arg2)
+{
+  if(list == NULL || from < 0 || (to - from) < 0 || to < 0 || to >= list->size) {
+    return;
+  }
+
+  if(list->iter == NULL || list->iter_idx < 0 || from < list->iter_idx || list->iter_idx > to) {
+    list->iter_idx = 0;
+    list->iter = list->head;
+  }
+
+  if(list->iter_idx < from) {
+    while(list->iter_idx != from) {
+      ++(list->iter_idx);
+      list->iter = list->iter->next;
+    }
+  }
+
+  ListItem ** li = &(list->iter);
+  for(int i = from; i <= to; ++i && ++(list->iter_idx)) {
+    action((void *)((*li)->data), arg2);
+    (*li) = (*li)->next;
+  }
+
+  return;
 }
 
 

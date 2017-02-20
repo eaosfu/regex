@@ -332,13 +332,8 @@ start->id = body->parent->id;
 }
 
 
-// This is for intervals that only influence a single character
-// i.e <expression>{min, Max} where <expression> is a single character.
-// These can however be under the influence of another interval. If this
-// is the case, the new interval's 'parent' pointer will point to the 
-// influencing interval.
 NFA *
-new_interval_nfa(NFA * target, unsigned int min, unsigned int max)
+new_interval_nfa(NFA * target, unsigned int min, unsigned int max, NFA ** t_reachable, NFA ** ret_interval)
 {
   NFA * start = new_nfa(target->ctrl, NFA_EPSILON);
   NFA * accept = new_nfa(target->ctrl, NFA_ACCEPTING);
@@ -354,7 +349,6 @@ new_interval_nfa(NFA * target, unsigned int min, unsigned int max)
     ++min;
   }
   else {
-
     start->out1 = start->out2 = target->parent;
   }
 start->id = target->parent->id;
@@ -367,13 +361,14 @@ start->id = target->parent->id;
   new_interval->value.max_rep = max;
   new_interval->value.split_idx = 0;
   NFA * tmp = target->parent;
-  // tighten loop
+
   while((tmp->value.type == NFA_EPSILON) && (tmp = tmp->out2));
   new_interval->out1 = tmp;
-// new_interval->out1 = target->parent;
+
+  *t_reachable = tmp;
+  *ret_interval = new_interval;
+
   new_interval->out2 = accept;
-
-
   accept->parent = start;
 
   return accept;

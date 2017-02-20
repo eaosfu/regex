@@ -78,6 +78,8 @@ typedef struct Parser {
   Stack      * symbol_stack;
   Stack      * branch_stack;
   List       * loop_nfas;
+  NFA        * prev_interval;
+  NFA        * prev_interval_head;
   NFACtrl    * nfa_ctrl;
   ctrl_flags * ctrl_flags;
 
