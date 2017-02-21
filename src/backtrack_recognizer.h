@@ -37,7 +37,6 @@ typedef struct NFASim {
 
 
 typedef struct NFASimCtrl {
-  int active;
   int match_idx;
   int filename_len;
   int loop_record_cap;
