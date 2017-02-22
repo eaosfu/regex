@@ -935,15 +935,15 @@ __collect_adjacencies_helper(NFA * current, NFA * visiting, int outn, NFA * forb
 {
   static int recursion = 0;
   if(visiting->value.type == NFA_EPSILON) {
-    visiting->visited = 1;
+    SET_NFA_VISITED_FLAG(visiting);
     ++recursion;
     __collect_adjacencies_helper(current, visiting->out2, outn, forbidden, adj_intvls_list);
     --recursion;
-    visiting->visited = 0;
+    CLEAR_NFA_VISITED_FLAG(visiting);
   }
   else {
     // visiting is not an EPSILON
-    if(visiting->visited) {
+    if(CHECK_NFA_VISITED_FLAG(visiting)) {
       // we've hit this node before
       switch(visiting->value.type) {
         case NFA_TREE:  // fallthrough
@@ -952,7 +952,7 @@ __collect_adjacencies_helper(NFA * current, NFA * visiting, int outn, NFA * forb
         default: {
           // if the node is matchable and is not already part of
           // our adjacency list.. add it.
-          current->full_circle = (visiting == forbidden) ? 1 : current->full_circle;
+          if(visiting == forbidden) SET_NFA_CYCLE_FLAG(current);
           if((visiting != forbidden) && list_search(&(current->reachable), visiting, compare) == NULL) {
             list_append(&(current->reachable), visiting);
           }
@@ -963,7 +963,7 @@ __collect_adjacencies_helper(NFA * current, NFA * visiting, int outn, NFA * forb
       // we haven't seen this node before
       switch(visiting->value.type) {
         case NFA_TREE: {
-          visiting->visited = 1;
+          SET_NFA_VISITED_FLAG(visiting);
           NFA * branch = NULL;
           for(int i = 0; i < list_size(visiting->value.branches); ++i) {
             branch = list_get_at(visiting->value.branches, i);
@@ -971,7 +971,7 @@ __collect_adjacencies_helper(NFA * current, NFA * visiting, int outn, NFA * forb
             __collect_adjacencies_helper(current, branch, outn, forbidden, adj_intvls_list);
             --recursion;
           }
-          visiting->visited = 0;
+          CLEAR_NFA_VISITED_FLAG(visiting);
         } break;
         case NFA_SPLIT: {
           // Need to add this as a 'reachable' node because when we process an interval
@@ -983,12 +983,12 @@ __collect_adjacencies_helper(NFA * current, NFA * visiting, int outn, NFA * forb
             __collect_adjacencies_helper(current, visiting->out2, outn, forbidden,  adj_intvls_list);
           }
           else {
-            visiting->visited = 1;
+            SET_NFA_VISITED_FLAG(visiting);
             ++recursion;
             __collect_adjacencies_helper(current, visiting->out1, outn, forbidden, adj_intvls_list);
             __collect_adjacencies_helper(current, visiting->out2, outn, forbidden, adj_intvls_list);
             --recursion;
-            visiting->visited = 0;
+            CLEAR_NFA_VISITED_FLAG(visiting);
           }
         } break;
         default: {
@@ -1004,7 +1004,7 @@ __collect_adjacencies_helper(NFA * current, NFA * visiting, int outn, NFA * forb
               break;
             }
           }
-          current->full_circle = (visiting == forbidden) ? 1 : current->full_circle;
+          if(visiting == forbidden) SET_NFA_CYCLE_FLAG(current);
           if((visiting != forbidden) && list_search(&(current->reachable), visiting, compare) == NULL) {
             list_append(&(current->reachable), visiting);
           }
@@ -1013,9 +1013,8 @@ __collect_adjacencies_helper(NFA * current, NFA * visiting, int outn, NFA * forb
     }
   }
   if(visiting->value.type == NFA_ACCEPTING) {
-    current->reaches_accept = 1;
+    SET_NFA_ACCEPTS_FLAG(current);
   }
-
 }
 
 
@@ -1047,11 +1046,11 @@ collect_adjacencies(Parser * parser, NFA * start, int total_collectables)
     for(int j = 0; j < list_size(&(current->reachable)); ++j) {
       visiting = list_get_at(&(current->reachable),j);
       //if(list_search(l, visiting, compare)) {
-      if(visiting->done) {
+      if(CHECK_NFA_DONE_FLAG(visiting)) {
         continue;
       }
       if(current != visiting && visiting->value.type != NFA_ACCEPTING) {
-        visiting->visited = 1;
+        SET_NFA_VISITED_FLAG(visiting);
         if(visiting->value.type == NFA_INTERVAL) {
           __collect_adjacencies_helper(visiting, visiting->out1, 0, NULL, NULL);
           visiting->value.split_idx = list_size(&(visiting->reachable));
@@ -1074,11 +1073,11 @@ collect_adjacencies(Parser * parser, NFA * start, int total_collectables)
         else {
           __collect_adjacencies_helper(visiting, visiting->out2, 0, NULL, NULL);
         }
-        visiting->visited = 0;
+        CLEAR_NFA_VISITED_FLAG(visiting);
 
         if(list_search(l, visiting, compare) == NULL) {
           list_append(l, visiting);
-          visiting->done = 1;
+          SET_NFA_DONE_FLAG(visiting);
         }
       }
     }

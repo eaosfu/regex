@@ -303,7 +303,7 @@ load_next(NFASim * sim, NFA * nfa)
           else {
             --(sim->tracking_intervals);
             sim->loop_record[nfa->id].count = 0;
-            if(nfa->full_circle) {
+            if(CHECK_NFA_CYCLE_FLAG(nfa)) {
               tmp = list_get_at(&(nfa->reachable), 0);
               list_iterate_from_to(&(nfa->reachable), 1, far_end, (void *)thread_clone, (void *)sim);
               load_next(sim, tmp);
@@ -322,7 +322,7 @@ load_next(NFASim * sim, NFA * nfa)
           end = nfa->value.split_idx - 1;
           list_iterate_from_to(&(nfa->reachable), 0, end, (void *)thread_clone, (void *)sim);
 
-          if(nfa->reaches_accept == 0) {
+          if(CHECK_NFA_ACCEPTS_FLAG(nfa) == 0) {
             sim->loop_record[nfa->id].count = 0;
           }
 

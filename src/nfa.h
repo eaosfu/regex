@@ -29,6 +29,31 @@
 #define RANGE_BITVEC_WIDTH REGULAR_BITVEC_WIDTH
 #define SIZE_OF_RANGE (SIZE_OF_LOCALE/RANGE_BITVEC_WIDTH)
 
+#define DONE    0x01
+#define CYCLE   0x02
+#define GREEDY  0x04
+#define VISITED 0x08
+#define ACCEPTS 0x10
+
+#define SET_NFA_DONE_FLAG(n)      ((n)->flags |= DONE)
+#define CLEAR_NFA_DONE_FLAG(n)    ((n)->flags &= ~DONE)
+
+#define SET_NFA_CYCLE_FLAG(n)     ((n)->flags |= CYCLE)
+#define CLEAR_NFA_CYCLE_FLAG(n)   ((n)->flags &= ~CYCLE)
+
+#define SET_NFA_GREEDY_FLAG(n)    ((n)->flags |= GREEDY)
+#define CLEAR_NFA_GREEDY_FLAG(n)  ((n)->flags &= ~GREEDY)
+
+#define SET_NFA_VISITED_FLAG(n)   ((n)->flags |= VISITED)
+#define CLEAR_NFA_VISITED_FLAG(n) ((n)->flags &= ~VISITED)
+
+#define SET_NFA_ACCEPTS_FLAG(n)   ((n)->flags |= ACCEPTS)
+#define CLEAR_NFA_ACCEPTS_FLAG(n) ((n)->flags &= ~ACCEPTS)
+
+#define CHECK_NFA_DONE_FLAG(n)    ((n)->flags & DONE)
+#define CHECK_NFA_CYCLE_FLAG(n)   ((n)->flags & CYCLE)
+#define CHECK_NFA_ACCEPTS_FLAG(n) ((n)->flags & ACCEPTS)
+#define CHECK_NFA_VISITED_FLAG(n) ((n)->flags & VISITED)
 
 typedef unsigned int nfa_range[SIZE_OF_RANGE];
 
@@ -49,11 +74,7 @@ typedef struct NFA {
   struct NFA * out1;
   struct NFA * out2;
 // FIXME: COMBINE THE FOLLOWING INTO A FLAG BITFIELD!
-  int greedy;
-  int visited;
-  int done;
-  int full_circle;
-  int reaches_accept;
+  int flags;
 // END COBINE FLAGS
   List reachable;
   unsigned int id;

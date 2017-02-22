@@ -258,12 +258,10 @@ new_kleene_nfa(NFA * body)
   //mark_interval_nfa(start);
 start->id = body->parent->id;
   start->value.literal = '?';
-  start->greedy = 1;
   start->out1 = accept;
   start->out2 = body->parent;
 
   body->value.type = NFA_SPLIT;
-  body->greedy = 1;
   body->value.literal = '*';
 //  body->out1 = body->parent;
   body->out2 = accept;
@@ -289,7 +287,6 @@ new_qmark_nfa(NFA * body)
   
   //mark_interval_nfa(start);
 start->id = body->parent->id;
-  start->greedy = 1;
   start->out1 = accept;
   start->out2 = body->parent;
   start->value.literal = '?';
@@ -315,7 +312,6 @@ start->id = body->parent->id;
   start->out1 = start->out2 = body->parent;
 
   body->value.type = NFA_SPLIT;
-  body->greedy = 1;
   //mark_interval_nfa(body);
   body->value.literal = '+';
 //  body->out1 = body->parent;
@@ -343,7 +339,6 @@ new_interval_nfa(NFA * target, unsigned int min, unsigned int max, NFA ** t_reac
   if(min == 0) {
     start->value.type = NFA_SPLIT;
     start->value.literal = '?';
-    start->greedy = 1;
     start->out1 = target->parent;
     start->out2 = accept;
     ++min;
