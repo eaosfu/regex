@@ -952,8 +952,10 @@ __collect_adjacencies_helper(NFA * current, NFA * visiting, int outn, NFA * forb
         default: {
           // if the node is matchable and is not already part of
           // our adjacency list.. add it.
-          if(visiting == forbidden) SET_NFA_CYCLE_FLAG(current);
-          if((visiting != forbidden) && list_search(&(current->reachable), visiting, compare) == NULL) {
+          if(visiting == forbidden) {
+            SET_NFA_CYCLE_FLAG(current);
+          }
+          else if(list_search(&(current->reachable), visiting, compare) == NULL) {
             list_append(&(current->reachable), visiting);
           }
         }
@@ -1004,8 +1006,10 @@ __collect_adjacencies_helper(NFA * current, NFA * visiting, int outn, NFA * forb
               break;
             }
           }
-          if(visiting == forbidden) SET_NFA_CYCLE_FLAG(current);
-          if((visiting != forbidden) && list_search(&(current->reachable), visiting, compare) == NULL) {
+          if(visiting == forbidden) {
+            SET_NFA_CYCLE_FLAG(current);
+          }
+          else if(list_search(&(current->reachable), visiting, compare) == NULL) {
             list_append(&(current->reachable), visiting);
           }
         }

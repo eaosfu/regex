@@ -11,6 +11,9 @@
 #include <stddef.h>
 #include "backtrack_recognizer.h"
 
+//FIXME: BLAH
+static const char * g_last_saw = 0;
+
 // FIXME: Put this inside the sim->ctrl, so it can be freed when we're done
 typedef const char * active_thread_input_ptr;
 static active_thread_input_ptr * active_threads_sp;
@@ -292,13 +295,38 @@ load_next(NFASim * sim, NFA * nfa)
           if(count < nfa->value.max_rep) {
             ++(sim->tracking_intervals);
             end = nfa->value.split_idx - 1;
-            list_iterate_from_to(&(nfa->reachable), 0, end, (void *)thread_clone, (void *)sim);
-            sim->loop_record[nfa->id].count = 0;
-            --(sim->tracking_intervals);
-            start = nfa->value.split_idx + 1;
-            tmp = list_get_at(&(nfa->reachable), nfa->value.split_idx);
-            list_iterate_from_to(&(nfa->reachable), start, far_end, (void *)thread_clone, (void *)sim);
-            load_next(sim, tmp);
+// FIXME: TEST -- still need to think about this...
+if(CHECK_NFA_CYCLE_FLAG(nfa)) {
+//printf("[0x%x]\n", nfa);
+  if(g_last_saw == &INPUT(sim)) {
+    sim->loop_record[nfa->id].count = 0;
+    --(sim->tracking_intervals);
+    start = nfa->value.split_idx + 1;
+    tmp = list_get_at(&(nfa->reachable), nfa->value.split_idx);
+    list_iterate_from_to(&(nfa->reachable), start, far_end, (void *)thread_clone, (void *)sim);
+    load_next(sim, tmp);
+  }
+  else {
+    g_last_saw = &INPUT(sim);
+    list_iterate_from_to(&(nfa->reachable), 0, end, (void *)thread_clone, (void *)sim);
+    sim->loop_record[nfa->id].count = 0;
+    --(sim->tracking_intervals);
+    start = nfa->value.split_idx + 1;
+    tmp = list_get_at(&(nfa->reachable), nfa->value.split_idx);
+    list_iterate_from_to(&(nfa->reachable), start, far_end, (void *)thread_clone, (void *)sim);
+    load_next(sim, tmp);
+  }
+}
+// END TEST
+else {
+  list_iterate_from_to(&(nfa->reachable), 0, end, (void *)thread_clone, (void *)sim);
+  sim->loop_record[nfa->id].count = 0;
+  --(sim->tracking_intervals);
+  start = nfa->value.split_idx + 1;
+  tmp = list_get_at(&(nfa->reachable), nfa->value.split_idx);
+  list_iterate_from_to(&(nfa->reachable), start, far_end, (void *)thread_clone, (void *)sim);
+  load_next(sim, tmp);
+}
           }
           else {
             --(sim->tracking_intervals);
@@ -516,6 +544,7 @@ load_start_states(NFASim ** sim, NFA * start_state) {
 int
 run_nfa(NFASim * thread)
 {
+  g_last_saw = 0;
   int match_found            = 0;
   int current_run            = 0; // did we match in the current run?
   NFASimCtrl * ctrl          = thread->ctrl;
@@ -564,6 +593,7 @@ run_nfa(NFASim * thread)
     else {
       input_pointer = ctrl->match.end + 1;
     }
+g_last_saw = 0;
     current_run = 0;
     ctrl->match.start = NULL;
     ctrl->match.end = NULL;
