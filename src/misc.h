@@ -2,24 +2,26 @@
 #define MISC_H_
 
 #include <limits.h>
+#include <ctype.h>
+
 // This should be long enough.
 char program_name[NAME_MAX];
 
 // SHARED BETWEEN PARSER, SCANNER AND RECOGNIZER
-#define EOL_FLAG              0x001
-#define BOL_FLAG              0x002
-#define UNPUT_FLAG            0x004
-#define AT_EOL_FLAG           0x008
-#define AT_BOL_FLAG           0x010
-#define ESCP_SEQ_FLAG         0x020
+#define EOL_FLAG              0x00001
+#define BOL_FLAG              0x00002
+#define UNPUT_FLAG            0x00004
+#define AT_EOL_FLAG           0x00008
+#define AT_BOL_FLAG           0x00010
+#define ESCP_SEQ_FLAG         0x00020
 // TAKE EFFECT AT RUNTIME
-#define MGLOBAL_FLAG          0x040
-#define SHOW_LINENO_FLAG      0x080
-#define SHOW_FILE_NAME_FLAG   0x100
-#define IGNORE_CASE_FLAG      0x200
-#define SILENT_MATCH_FLAG     0x400
-#define INVERT_MATCH_FLAG     0x800
-#define SHOW_MATCH_LINE_FLAG  0x1000
+#define MGLOBAL_FLAG          0x00040
+#define SHOW_LINENO_FLAG      0x00080
+#define SHOW_FILE_NAME_FLAG   0x00100
+#define IGNORE_CASE_FLAG      0x00200
+#define SILENT_MATCH_FLAG     0x00400
+#define INVERT_MATCH_FLAG     0x00800
+#define SHOW_MATCH_LINE_FLAG  0x01000
 
 // Access the control flags
 #define CTRL_FLAGS(s) (*((s)->ctrl_flags))

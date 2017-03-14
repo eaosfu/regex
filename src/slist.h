@@ -26,15 +26,20 @@ typedef struct ListItem {
 } ListItem;
 
 
+#define LIST_LOCAL(t) List (t) = {.iter_idx=-1}
+
 List * new_list();
 List * list_chop(List *, unsigned int);
 List * list_deep_copy(ListItem *);
+List * list_transfer(List *, List *);
+List * list_transfer_on_match(List *, List *, VISIT_PROC2_pt, void *);
 ListItem * list_reverse(ListItem *);
+ListItem * list_get_iterator(List *); // get rid of this!!!
 
 int list_push(List *, void *);
 int list_insert_at(List *, void *, int);
 int list_append(List *, void *);
-unsigned int list_size(List *);
+int list_set_iterator(List *, int);
 
 void * list_search(List *, void *, COMPARE_PROC_pt);
 void * list_shift(List *);
@@ -42,7 +47,7 @@ void * list_remove_at(List *, int);
 void * list_get_at(List *, int);
 void * list_get_head(List *);
 void * list_get_tail(List *);
-void * list_extend(List *, void *);
+void * list_get_next(List *);
 void list_clear(List *);
 void list_iterate_from_to(List *, int, int, VISIT_PROC2_pt, void * arg2);
 void list_iterate(List *, VISIT_PROC_pt);
@@ -50,6 +55,7 @@ void list_iterate2(List *, VISIT_PROC2_pt, void *, void **);
 void list_free(List *, VISIT_PROC_pt);
 void list_free_items(List *, VISIT_PROC_pt);
 
+#define list_size(l) ((l) ? (l)->size : 0)
 
 #define list_swap(l1, l2)  \
   do {                     \
@@ -60,3 +66,4 @@ void list_free_items(List *, VISIT_PROC_pt);
   } while(0);
 
 #endif
+

@@ -1,7 +1,6 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
-#include <ctype.h>
 #include "misc.h"
 #include "errmsg.h"
 #include "regex_parser.h"
@@ -33,6 +32,15 @@ init_parser(Scanner * scanner, ctrl_flags * cfl)
   parser->loop_nfas       = new_list();
   parser->nfa_ctrl        = new_nfa_ctrl();
   parser_consume_token(parser);
+
+  if(CTRL_FLAGS(parser) & IGNORE_CASE_FLAG) {
+    char * c = get_cur_pos(parser->scanner);
+    while(c != get_buffer_end(parser->scanner) - 1){
+      *c = toupper(*c);
+      ++c;
+    }
+  }
+
   return parser;
 }
 
@@ -41,7 +49,7 @@ init_parser(Scanner * scanner, ctrl_flags * cfl)
 // and we know there is a backreference to this capture group
 // insert a marker node so the recognizer knows to start tracking
 // what this matches
-int
+static int
 track_capture_group(Parser * parser, unsigned int type)
 {
   int ret = 0;
@@ -336,7 +344,7 @@ parse_quantifier_expression(Parser * parser)
           left  = pop(parser->symbol_stack);
         }
         push(parser->symbol_stack, left);
-        push(parser->branch_stack, right);
+        push(parser->branch_stack, right); // FIXME: LEAK!! -- Need to investigate
       }
 
       --(parser->in_alternation);
@@ -594,7 +602,7 @@ parse_bracket_expression(Parser * parser)
 static void
 parse_literal_expression(Parser * parser)
 {
-  NFA * nfa;
+  NFA * nfa = NULL;
   switch(parser->lookahead.type) {
     case DOT: {
       nfa = new_literal_nfa(parser->nfa_ctrl, parser->lookahead.value, NFA_ANY);
@@ -657,11 +665,9 @@ parse_literal_expression(Parser * parser)
 
        SET_ESCP_FLAG(&CTRL_FLAGS(parser));
 
-       if(len > 1) {
-         nfa = new_lliteral_nfa(parser->nfa_ctrl, src, len);
-       }
-       else {
-         nfa = new_literal_nfa(parser->nfa_ctrl, c, NFA_LITERAL);
+       for(int i = 0; i < len; ++i) {
+         c = src[i];
+         nfa = concatenate_nfa(nfa, new_literal_nfa(parser->nfa_ctrl, c, NFA_LITERAL));
        }
        parser_consume_token(parser);
     }
@@ -934,6 +940,12 @@ static void
 __collect_adjacencies_helper(NFA * current, NFA * visiting, int outn, NFA * forbidden, List * adj_intvls_list)
 {
   static int recursion = 0;
+
+  if(visiting == forbidden) {
+    SET_NFA_CYCLE_FLAG(current);
+    return;
+  }
+
   if(visiting->value.type == NFA_EPSILON) {
     SET_NFA_VISITED_FLAG(visiting);
     ++recursion;
@@ -952,10 +964,7 @@ __collect_adjacencies_helper(NFA * current, NFA * visiting, int outn, NFA * forb
         default: {
           // if the node is matchable and is not already part of
           // our adjacency list.. add it.
-          if(visiting == forbidden) {
-            SET_NFA_CYCLE_FLAG(current);
-          }
-          else if(list_search(&(current->reachable), visiting, compare) == NULL) {
+          if(list_search(&(current->reachable), visiting, compare) == NULL) {
             list_append(&(current->reachable), visiting);
           }
         }
@@ -979,8 +988,9 @@ __collect_adjacencies_helper(NFA * current, NFA * visiting, int outn, NFA * forb
           // Need to add this as a 'reachable' node because when we process an interval
           // in the recognizer we want to avoid changing the state of the 'thread' holding
           // the 'interval' source node while processing the NFA_SPLIT.
-          if(current->value.type == NFA_INTERVAL && (visiting->value.literal != '?')) {
-            // Make sure we don't include this current's tarting node in the loop
+          //if(current->value.type == NFA_INTERVAL && (visiting->value.literal != '?')) {
+          if(current->value.type == NFA_INTERVAL) {
+            // Make sure we don't include this current's starting node in the loop
             __collect_adjacencies_helper(current, visiting->out1, outn, current->out1, adj_intvls_list);
             __collect_adjacencies_helper(current, visiting->out2, outn, forbidden,  adj_intvls_list);
           }
@@ -1006,10 +1016,7 @@ __collect_adjacencies_helper(NFA * current, NFA * visiting, int outn, NFA * forb
               break;
             }
           }
-          if(visiting == forbidden) {
-            SET_NFA_CYCLE_FLAG(current);
-          }
-          else if(list_search(&(current->reachable), visiting, compare) == NULL) {
+          if(list_search(&(current->reachable), visiting, compare) == NULL) {
             list_append(&(current->reachable), visiting);
           }
         }
@@ -1019,6 +1026,7 @@ __collect_adjacencies_helper(NFA * current, NFA * visiting, int outn, NFA * forb
   if(visiting->value.type == NFA_ACCEPTING) {
     SET_NFA_ACCEPTS_FLAG(current);
   }
+  return;
 }
 
 
@@ -1036,8 +1044,8 @@ collect_adjacencies(Parser * parser, NFA * start, int total_collectables)
   List * l = parser->branch_stack;;
 
   // store pairs of adjacent intervals
-  List * adj_intvls_list = new_list();
-
+  List * adj_intvls_list = new_list(); //FIXME: currently not being used... still thinking about this
+  List * tmp = new_list();
 
   __collect_adjacencies_helper(current, visiting, 0, NULL, NULL);
   list_append(l, current);
@@ -1049,7 +1057,6 @@ collect_adjacencies(Parser * parser, NFA * start, int total_collectables)
     current = list_get_at(l, i);
     for(int j = 0; j < list_size(&(current->reachable)); ++j) {
       visiting = list_get_at(&(current->reachable),j);
-      //if(list_search(l, visiting, compare)) {
       if(CHECK_NFA_DONE_FLAG(visiting)) {
         continue;
       }
@@ -1058,17 +1065,11 @@ collect_adjacencies(Parser * parser, NFA * start, int total_collectables)
         if(visiting->value.type == NFA_INTERVAL) {
           __collect_adjacencies_helper(visiting, visiting->out1, 0, NULL, NULL);
           visiting->value.split_idx = list_size(&(visiting->reachable));
-// KLUDGE
-          ListItem * old_head = visiting->reachable.head;
-          ListItem * old_tail = visiting->reachable.tail;
-          visiting->reachable.size = 0;
-          visiting->reachable.head = visiting->reachable.tail = NULL;
-// END KLUDGE
+          list_clear(tmp);
+          list_transfer(tmp, &(visiting->reachable)); // stash reachable list
           __collect_adjacencies_helper(visiting, visiting->out2, 1, NULL, adj_intvls_list);
-// KLUDGE!
-          old_tail->next = visiting->reachable.head;
-          visiting->reachable.size += visiting->value.split_idx;
-          visiting->reachable.head = old_head;
+          list_transfer(tmp, &(visiting->reachable));
+          list_transfer(&(visiting->reachable), tmp); // reattach full reachable list to visiting node
         }
         else if(visiting->value.type == NFA_SPLIT){
           __collect_adjacencies_helper(visiting, visiting->out1, 0, NULL, NULL);
@@ -1088,6 +1089,7 @@ collect_adjacencies(Parser * parser, NFA * start, int total_collectables)
   }
 
   free(adj_intvls_list);
+  free(tmp);
 }
 
 

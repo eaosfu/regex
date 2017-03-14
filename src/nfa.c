@@ -188,7 +188,7 @@ new_range_nfa(NFACtrl * ctrl, int negate)
    return accept;
 }
 
-
+/*
 NFA *
 new_lliteral_nfa(NFACtrl * ctrl, char * src, unsigned int len)
 {
@@ -200,7 +200,7 @@ new_lliteral_nfa(NFACtrl * ctrl, char * src, unsigned int len)
 
   lliteral->ctrl = ctrl;
   mark_nfa(lliteral);
-start->id = lliteral->id;
+  start->id = lliteral->id;
   lliteral->out1 = lliteral->out2 = accept;
   lliteral->value.type = NFA_LONG_LITERAL;
   lliteral->value.len = len;
@@ -213,6 +213,7 @@ start->id = lliteral->id;
 
   return accept;
 }
+*/
 
 
 NFA *
@@ -369,6 +370,28 @@ start->id = target->parent->id;
   return accept;
 }
 
+static void *
+is_nfa_tree(void * arg, void *arg2)
+{
+  if(arg == NULL) {
+    return NULL;
+  }
+
+  NFA * nfa = arg;
+  void * ret = NULL;
+  if(nfa->parent != NULL) {
+    if(nfa->parent->value.type == NFA_TREE) {
+      if(arg2 != NULL) {
+        nfa->value.type = NFA_EPSILON;
+        nfa->out2 = arg2;
+      }
+      ret = nfa->parent->value.branches;
+      free(nfa->parent);
+    }
+  }
+  return ret;
+}
+
 
 //
 // FUNCTION: new_alternation_nfa:
@@ -401,15 +424,78 @@ new_alternation_nfa(NFACtrl * ctrl, List * branches_list, unsigned int num_branc
 
   start->value.branches = list_chop(branches_list, num_branches);
 
-  ListItem * li = start->value.branches->head;
+/*
+  ListItem ** li = &(start->value.branches->head);
+  List * tmp = new_list();
 
   for(int i = 0; i < num_branches; ++i) {
-    ((NFA *)li->data)->value.type = NFA_EPSILON;
-    ((NFA *)li->data)->out2 = terminator->parent;
+    if(((NFA *)(*li)->data)->parent->value.type == NFA_TREE) {
+      //FIXME: need better interface for this sort of list manipulation
+      ((NFA *)(*li)->data)->value.type = NFA_EPSILON;
+      ((NFA *)(*li)->data)->out2 = terminator->parent;
+      list_push(tmp, ((NFA *)(*li)->data)->parent->value.branches);
+      free(((NFA *)(*li)->data)->parent);// = terminator->parent;
+      ListItem * tmp_li = (*li);
+      *li = (*li)->next;
+      free(tmp_li);
+      --(start->value.branches->size);
+      li = &(*li);
+      continue;
+    }
+    ((NFA *)((*li)->data))->value.type = NFA_EPSILON;
+    ((NFA *)((*li)->data))->out2 = terminator->parent;
+    (*li)->data = ((NFA *)(*li)->data)->parent;
+    li = &((*li)->next);
+  }
+
+  // list fix up
+  if(list_size(start->value.branches) <= 1) {
+    if(list_size(start->value.branches) == 0) {
+      start->value.branches->head = NULL;
+      start->value.branches->tail = NULL;
+      start->value.branches->iter = NULL;
+      start->value.branches->iter_idx = -1;
+    }
+    else if(list_size(start->value.branches) == 1) {
+      start->value.branches->tail = start->value.branches->head;
+      start->value.branches->iter = start->value.branches->head;
+      start->value.branches->iter_idx = 0;
+    }
+  }
+*/
+
+  List * tmp = new_list();
+  list_transfer_on_match(tmp, start->value.branches, is_nfa_tree, terminator->parent);
+
+  ListItem * li = start->value.branches->head;
+  //for(int i = 0; i < num_branches; ++i) {
+  for(int i = 0; (i < num_branches) && (li != NULL); ++i) {
+    ((NFA *)(li->data))->value.type = NFA_EPSILON;
+    ((NFA *)(li->data))->out2 = terminator->parent;
     li->data = ((NFA *)li->data)->parent;
     li = li->next;
   }
 
+
+
+  List * sub_tree = NULL;
+  list_set_iterator(tmp, 0);
+  while((sub_tree = list_get_next(tmp)) != NULL) {
+    list_transfer(start->value.branches, sub_tree);
+    list_free(sub_tree, NULL);
+  }
+
+  list_free(tmp, NULL);
+
+/*
+  ListItem * li = start->value.branches->head;
+  for(int i = 0; i < num_branches; ++i) {
+    ((NFA *)(li->data))->value.type = NFA_EPSILON;
+    ((NFA *)(li->data))->out2 = terminator->parent;
+    li->data = ((NFA *)li->data)->parent;
+    li = li->next;
+  }
+*/
   terminator->parent = start;
 
   return terminator;

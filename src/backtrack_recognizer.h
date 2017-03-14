@@ -43,6 +43,7 @@ typedef struct NFASimCtrl {
   const char * filename;
   const char * buffer_start;
   const char * buffer_end;
+  const char * last_interval_pos;
   NFA  * start_state;
   List * thread_pool;
   List * active_threads;
@@ -50,18 +51,16 @@ typedef struct NFASimCtrl {
   ctrl_flags * ctrl_flags;
   Match match;
   char matches[MATCH_BUCKET_SIZE];
+  const char * active_threads_sp[];
 } NFASimCtrl;
 
 
 int  run_nfa(NFASim *);
-//void free_nfa_sim(NFASim *);
-void free_nfa_sim(NFASimCtrl *);
-void * free_match_string(void *);
-void flush_matches(NFASimCtrl *);
-//void reset_nfa_sim(NFASim *, NFA *);
-NFASim * reset_nfa_sim(NFASimCtrl *, NFA *);
-//NFASim * new_nfa_sim(Parser *, Scanner *, ctrl_flags *);
-NFASimCtrl * new_nfa_sim(Parser *, Scanner *, ctrl_flags *);
 int  get_states(NFASim *, NFA *, List *, int, int, unsigned int);
+void free_nfa_sim(NFASimCtrl *);
+void flush_matches(NFASimCtrl *);
+void * free_match_string(void *);
+NFASim * reset_nfa_sim(NFASimCtrl *, NFA *);
+NFASimCtrl * new_nfa_sim(Parser *, Scanner *, ctrl_flags *);
 
 #endif

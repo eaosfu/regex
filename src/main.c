@@ -9,9 +9,17 @@
 #include "scanner.h"
 #include "backtrack_recognizer.h"
 
+#include <sys/types.h>
+#include <sys/stat.h>
+#include <unistd.h>
 
+#include <dirent.h>
 
-static const char short_options [] = {"Ff:ghinoqv"};
+#include <errno.h>
+
+static ino_t stdout_ino;
+
+static const char short_options [] = {"EFf:ghinoqrsv"};
 
 static struct option const long_options[] = {
   {"help"            , no_argument      , NULL, 'h'}, 
@@ -23,7 +31,11 @@ static struct option const long_options[] = {
   {"show-match-only" , no_argument      , NULL, 'o'},
   {"quiet"           , no_argument      , NULL, 'q'},
   {"silent"          , no_argument      , NULL, 'q'},
-  {"ignore-case"     , no_argument      , NULL, 'i'}, // not implemented
+  {"no-messages"     , no_argument      , NULL, 's'},
+  {"ignore-case"     , no_argument      , NULL, 'i'},
+//  {"exclude"         , no_argument      , NULL, 'E'},  // not implemented
+//  {"parallel"        , no_argument      , NULL, 'T'},  // not implemented
+  {"recursive"       , no_argument      , NULL, 'r'},
   {0                 , 0                , 0   ,  0 }
 };
 
@@ -41,8 +53,11 @@ print_usage(int exit_code)
 {
   printf("usage: %s [options] '<regex>'  file [file]...\n", program_name);
   printf("       %s [options] -f <pattern_file> file [file]...\n", program_name);
+  printf("       %s [options] -f <pattern_file> -E='exclude1 exclude2...' file [file]...\n", program_name);
   printf("\n");
   printf("options:\n"
+//"  -T, --threaded           when searching multiple files/directories do so in parallel\n"
+//"  -E, --exclude            list of files/directories to exclude from search\n"
 "  -F, --show-file-name     display filename where match was found\n"
 "  -f, --pattern-file       read regex pattern from a file\n"
 "  -g, --global-match       find all matches on the input line\n"
@@ -52,10 +67,11 @@ print_usage(int exit_code)
 "  -n, --show-match-line    display line number for the match, starts at 1\n"
 "  -o, --show-match-only    only display matching string\n"
 "  -q, --quiet, --silent    suppress all output to stdout\n"
+"  -r, --recusrive          suppress all output to stdout\n"
+"  -s, --no-messages        suppress messges about nonexistent/unreadable input\n"
 "  -v, --invert-match       display lines where no matches are found\n"
 "\n"
-"Exit status is 1 if a match is found anywhere, 0 otherwise; unless an error\n"
-"occurs, in which case the exit status will be set to 1.\n");
+"Exit status is 0 if a match is found anywhere, 1 otherwise.\n");
   printf("\n");
   exit(exit_code);
 }
@@ -84,6 +100,7 @@ exit_msg_usage(const char * msg, int exit_code)
   print_usage(exit_code);
 }
 
+
 static void
 set_program_name(char * name)
 {
@@ -94,21 +111,192 @@ set_program_name(char * name)
 }
 
 
+static void
+_warn(const char * msg)
+{
+}
+
+
+static void
+stat_action(const char * pathname, const char * name, List * target_files, List * target_dirs, int rdir)
+{
+  struct stat sb;
+
+  int name_len = strlen(name);
+  if(pathname) {
+    // avoid adding '.' and '..' directories
+    if(name_len < 3) {
+      if(name[0] == '.') {
+        if(name_len == 2) {
+          if(name[1] == '.') {
+            return;
+          }
+        }
+        else {
+          return;
+        }
+      }
+    }
+  }
+  else if(name_len == 2) {
+    printf("Ooops: %s\n", name); exit(1);
+  }
+
+  char nm[PATH_MAX + NAME_MAX];
+  int sz = 0;
+  if(pathname) {
+    sz = snprintf(NULL, 0, "%s/%s", pathname, name);
+    snprintf(nm, ++sz, "%s/%s", pathname, name);
+  }
+  else {
+    sz = snprintf(NULL, 0, "%s", name);
+    snprintf(nm, ++sz, "%s", name);
+  }
+
+  if(sz < 0) {
+    printf("%s: Internal error: ", program_name);
+    perror("");
+    exit(1);
+  }
+
+  errno = 0;
+  if(stat(nm, &sb) < 0) {
+    fprintf(stderr, "%s: %s: ", program_name, name);
+    perror("");
+    return;
+  }
+
+  if(sb.st_ino == stdout_ino) {
+    fprintf(stderr, "%s: input file '%s' is also the output\n", program_name, name);
+    return;
+  }
+
+  char * fpth = malloc(sz);
+  if(fpth == NULL) {
+    fatal("Insufficient memory\n");
+  }
+
+  if(pathname) {
+    snprintf(fpth, sz, "%s/%s", pathname, name);
+  }
+  else {
+    snprintf(fpth, sz, "%s", name);
+  }
+
+  switch(sb.st_mode & S_IFMT) {
+    case S_IFREG: { // regular file
+      //list_append(target_files, (char *)name);
+      list_append(target_files, fpth);
+    } break;
+    case S_IFDIR: { // directory
+      if(rdir) {
+        //list_append(target_dirs, (char *)name);
+        list_append(target_dirs, fpth);
+      }
+      else {
+        fprintf(stderr, "%s: %s: Is a directory\n", program_name, name);
+        // FIXME: move this to a 'recognizer_errmsg.h' file
+      }
+    } break;
+/*
+    case S_IFCHR: { // char device
+      printf("Searching through character devices is currently not supported, skipping %s\n",
+        name);
+    } break;
+    case S_IFSOCK: { // socket
+      fprintf(stderr, "Searching sockets is currently not supported, skipping: %s...\n",
+        name);
+    } break;
+    case S_IFIFO: { // FIFO
+      fprintf(stderr, "Searching FIFOs is currently not supported, skipping: %s...\n",
+        name);
+    } break;
+    case S_IFLNK: { // symbolic link
+      printf("Not sure what to do with symbolic links, skipping %s...\n", name);
+    } break;
+    case S_IFBLK: { // block device
+      printf("Not sure what to do with block devices, skipping %s...\n", name);
+    } break;
+*/
+    default: { // should never reach this case
+      printf("%s is not a regular file or directory\n", name);
+      free(fpth);
+    }
+  }
+}
+
+
+static void
+process_dir(char * pathname, List * target_files, List * target_dirs)
+{
+  // if we make it into this function then we are recursively visiting subdirectories
+  DIR * dir = NULL;
+  struct dirent * de;
+  errno = 0;
+
+  if(isatty(STDOUT_FILENO) == 0) {
+    struct stat sb;
+    if(fstat(STDOUT_FILENO, &sb) < 0) {
+      fatal("Internal error\n");
+    }
+    stdout_ino = sb.st_ino;
+  }
+
+  int i = strlen(pathname) - 1;
+  while(i > 1) {
+    if(pathname[i] == '/') {
+      pathname[i] = '\0';
+      --i;
+      continue;
+    }
+    break;
+  }
+
+  if((dir = opendir(pathname))) {
+    while(de = readdir(dir)) {
+      stat_action(pathname, de->d_name, target_files, target_dirs, 1);
+    }
+  }
+  else {
+    fprintf(stderr, "No such file or directory: %s\n", pathname);
+  }
+}
+
+
+static void
+process_targets(int argc, char ** argv, int target_idx, List * target_files, List * target_dirs, int rdir)
+{
+  struct stat sb;
+  while(target_idx < argc) {
+    if(strlen(argv[target_idx]) == 1 && *(argv[target_idx]) == '-') {
+      printf("Searching stdin is currently not supported, skipping..\n");
+      ++target_idx;
+      continue;
+    }
+    stat_action(NULL, argv[target_idx], target_files, target_dirs, rdir);
+    ++target_idx;
+  }
+}
+
+
 int
 main(int argc, char ** argv)
 {
   int status = 0;
+  int rdir   = 0;
   int opt = -1;
 
   ctrl_flags cfl = SHOW_MATCH_LINE_FLAG;
-  Scanner * scanner = NULL;
-  Parser  * parser  = NULL;
-  NFASim  * nfa_sim = NULL;
-  FILE    * fh    = NULL;
-  char * filename = NULL;
-  char * buffer = NULL;
-  size_t buf_len = 0;
+  Scanner * scanner     = NULL;
+  Parser  * parser      = NULL;
+  NFASim  * nfa_sim     = NULL;
+  FILE    * fh          = NULL;
+  const char * filename = NULL;
+  char * buffer         = NULL;
+  size_t buf_len        = 0;
   unsigned int line_len = 0;
+  List * target_files = new_list();
+  List * target_dirs = new_list();
 
   set_program_name(argv[0]);
 
@@ -126,6 +314,7 @@ main(int argc, char ** argv)
       case 'F': { SET_SHOW_FILE_NAME_FLAG(&cfl);       } break;
       case 'n': { SET_SHOW_LINENO_FLAG(&cfl);          } break;
       case 'o': { CLEAR_SHOW_MATCH_LINE_FLAG(&cfl);    } break;
+      case 'r': { rdir = 1;                            } break;
       default:  { exit_unknown_opt(opt, EXIT_FAILURE); } break;
     }
   }
@@ -145,6 +334,9 @@ main(int argc, char ** argv)
 
   if(target_idx >= argc) {
     exit_msg_usage("ERROR: No search file(s) provided", EXIT_FAILURE);
+  }
+  else {
+    process_targets(argc, argv, target_idx, target_files, target_dirs, rdir);
   }
   
 
@@ -187,7 +379,41 @@ main(int argc, char ** argv)
 
   // if we've made it this far we have all we need to run the recognizer
   NFASimCtrl * nfa_sim_ctrl = new_nfa_sim(parser, scanner, &cfl);
+  char * current_target_dir = NULL;
+  char * current_target_file = NULL;
 
+PROCESS_TARGET_FILES:
+  while((current_target_file = list_shift(target_files))) {
+    filename = current_target_file;
+    fh = fopen(current_target_file, "r");
+    if(fh == NULL) {
+      fprintf(stderr, "Unable to open file: %s\n", current_target_file);
+      fatal("Unable to open file\n");
+    }
+    int line = 0;
+
+    while((scanner->line_len = getline(&(scanner->buffer), &(scanner->buf_len), fh)) > 0) {
+      reset_scanner(scanner, filename);
+      nfa_sim = reset_nfa_sim(nfa_sim_ctrl, ((NFA *)peek(parser->symbol_stack))->parent);
+      ++line; // FIXME: scanner should update the line number on it's own
+      scanner->line_no = line;
+      status += run_nfa(nfa_sim);
+    }
+
+    if(nfa_sim_ctrl->match_idx) {
+      flush_matches(nfa_sim_ctrl);
+    }
+
+    fclose(fh);
+    free(current_target_file);
+  }
+
+  if((current_target_dir = list_shift(target_dirs))) {
+    process_dir(current_target_dir, target_files, target_dirs);
+    goto PROCESS_TARGET_FILES;
+  }
+
+/*
   while(target_idx < argc) {
     fh = fopen(argv[target_idx], "r");
     if(fh == NULL) {
@@ -200,7 +426,7 @@ main(int argc, char ** argv)
       nfa_sim = reset_nfa_sim(nfa_sim_ctrl, ((NFA *)peek(parser->symbol_stack))->parent);
       ++line; // FIXME: scanner should update the line number on it's own
       scanner->line_no = line;
-      run_nfa(nfa_sim);
+      status += run_nfa(nfa_sim);
     }
 
     if(nfa_sim_ctrl->match_idx) {
@@ -208,10 +434,12 @@ main(int argc, char ** argv)
     }
     ++target_idx;
   }
-
+*/
 CLEANUP:
-  fclose(fh);
+//  if(fh) fclose(fh);
 
+  list_free(target_files, NULL);
+  list_free(target_dirs, NULL);
   parser_free(parser);
   free_scanner(scanner);
 
@@ -219,5 +447,5 @@ CLEANUP:
     free_nfa_sim(nfa_sim_ctrl);
   }
 
-  return status;
+  return (status == 0);
 }

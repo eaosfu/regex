@@ -25,21 +25,85 @@ list_get_head(List * list)
 }
 
 
-unsigned int
-list_size(List * list)
+List *
+list_transfer_on_match(List * dst, List * src, VISIT_PROC2_pt compare, void * arg2)
 {
-  unsigned int size = 0;
-  if(list) {
-    size = list->size;
+  if(dst == NULL) {
+    return NULL;
   }
-  return size;
+
+  if(src == NULL && src->head == NULL) {
+    return dst;
+  }
+
+  ListItem * tmp = NULL;
+  ListItem ** iter = &(src->head);
+  void * res =  NULL;
+
+  while((*iter) != NULL) {
+    if((res = compare((*iter)->data, arg2)) != NULL) {
+      list_append(dst, res);
+      tmp = (*iter);
+      (*iter) = (*iter)->next;
+      free(tmp);
+      --(src->size);
+      iter = &(*iter);
+      continue;
+    }
+    iter = &((*iter)->next);
+  }
+
+  if(list_size(src) == 0) {
+    src->head = NULL;
+    src->tail = NULL;
+    src->iter = NULL;
+    src->iter_idx = -1;
+  }
+  else if(list_size(src) == 1) {
+    src->tail = src->head;
+    src->iter = src->head;
+    src->iter_idx = 0;
+  }
+
+  return dst;
 }
 
 
-static inline void
+List *
+list_transfer(List * dst, List * src)
+{
+  if(dst == NULL) {
+    return NULL;
+  }
+
+  if(src == NULL || src->head == NULL) {
+    return dst;
+  }
+
+  if(dst->head == NULL) {
+    dst->head = src->head;
+    dst->tail = src->tail;
+  }
+  else {
+    dst->tail->next = src->head;
+    dst->tail = src->tail;
+  }
+
+  dst->size += src->size;
+
+  src->head = src->tail = src->iter = NULL;
+  src->iter_idx = -1;
+  src->size = 0;
+
+  return dst;
+}
+
+
+static void
 release_to_pool(List * list, ListItem * item)
 {
   item->next = NULL;
+  item->data = NULL;
 
   if(list->pool != NULL) {
     item->next = list->pool;
@@ -73,7 +137,7 @@ new_list_item(List * list, void * data)
     item = allocate_from_pool(list);
   }
   else {
-    item = xmalloc(sizeof * item);
+    item = xmalloc(sizeof(*item));
   }
 
   item->data = data;
@@ -87,6 +151,7 @@ List *
 new_list()
 {
   List * new_list = xmalloc(sizeof * new_list);
+  new_list->iter_idx = -1;
   return new_list;
 }
 
@@ -103,11 +168,12 @@ list_append(List * list, void * data)
   }
 
   int idx = 0;
-  ListItem * iter = list->head;
+//  ListItem * iter = list->head;
 
-  if(iter == NULL) {
+  if(list->head == NULL) {
     list->head = new_list_item(list, data);
     list->tail = list->head;
+    list->iter = list->head;
   }
   else {
     list->tail->next = new_list_item(list, data);
@@ -136,10 +202,11 @@ list_push(List * list, void * data)
   list->head = new_node;
 
   if(list->size == 0) {
-    list->tail = list->head;
+    list->iter = list->tail = list->head;
+    list->iter_idx = 0;
   }
 
-  if(list->iter_idx != 0) {
+  if(list->iter_idx >= 0) {
     ++(list->iter_idx);
   }
 
@@ -215,6 +282,63 @@ list_insert_at(List * list, void * data, int idx)
   ++(list->size);
 
   return cur_idx;
+}
+
+
+ListItem *
+list_get_iterator(List * list)
+{
+  if(list == NULL || list->head == NULL) {
+    return NULL;
+  }
+
+  return list->iter;
+
+}
+
+
+int
+list_set_iterator(List * list, int indx)
+{
+  if(list == NULL || list->head == NULL || indx >= list_size(list)) {
+    return 0;
+  }
+
+  if(list->iter_idx == indx) {
+    return 1;
+  }
+  else if((list->iter_idx > indx) || (list->iter_idx < 0)) {
+    list->iter = list->head;
+    list->iter_idx = 0;
+  }
+
+  for(; list->iter_idx != indx; ++(list->iter_idx)) {
+    list->iter = list->iter->next;
+  }
+
+  return 1;
+}
+
+
+void *
+list_get_next(List * list)
+{
+  if(list == NULL || list->head == NULL || list->iter_idx >= list_size(list) || list->iter_idx < 0) {
+    return NULL;
+  }
+
+  ListItem * ret = NULL;
+  if(list->iter_idx == 0) {
+    ret = list->head;
+    list->iter = list->head->next;
+    ++(list->iter_idx);
+  }
+  else {
+    ret = list->iter;
+    list->iter = list->iter->next;
+    ++(list->iter_idx);
+  }
+  return (ret == NULL) ? NULL : ret->data;
 }
 
 
@@ -334,9 +458,11 @@ list_clear(List * list)
 
   list->head = NULL;
   list->tail = NULL;
+  list->iter = NULL;
 
   list->pool_size += list->size;
   list->size = 0;
+  list->iter_idx = -1;
 
   return;
 }
@@ -528,7 +654,8 @@ list_iterate_from_to(List * list, int from, int to, VISIT_PROC2_pt action, void 
   }
 
   ListItem ** li = &(list->iter);
-  for(int i = from; i <= to; ++i && ++(list->iter_idx)) {
+  //for(int i = from; i <= to; ++i && ++(list->iter_idx)) {
+  for(int i = from; i <= to; ++i, ++(list->iter_idx)) {
     action((void *)((*li)->data), arg2);
     (*li) = (*li)->next;
   }
