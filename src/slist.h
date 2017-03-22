@@ -26,8 +26,6 @@ typedef struct ListItem {
 } ListItem;
 
 
-#define LIST_LOCAL(t) List (t) = {.iter_idx=-1}
-
 List * new_list();
 List * list_chop(List *, unsigned int);
 List * list_deep_copy(ListItem *);

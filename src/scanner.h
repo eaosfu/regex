@@ -1,6 +1,8 @@
 #ifndef SCANNER_H_
 #define SCANNER_H_
 
+#include <stdlib.h>
+
 #include "misc.h"
 #include "stack.h"
 #include "token.h"

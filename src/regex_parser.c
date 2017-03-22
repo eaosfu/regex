@@ -1,9 +1,10 @@
-#include <stdio.h>
-#include <stdlib.h>
-#include <string.h>
 #include "misc.h"
 #include "errmsg.h"
 #include "regex_parser.h"
+
+#include <stdio.h>
+#include <stdlib.h>
+#include <string.h>
 
 #define REGEX (parser->scanner->buffer)
 #define READHEAD (parser->scanner->readhead)
@@ -29,7 +30,6 @@ init_parser(Scanner * scanner, ctrl_flags * cfl)
   parser->ctrl_flags      = cfl;
   parser->symbol_stack    = new_stack();
   parser->branch_stack    = new_stack();
-  parser->loop_nfas       = new_list();
   parser->nfa_ctrl        = new_nfa_ctrl();
   parser_consume_token(parser);
 
@@ -92,6 +92,7 @@ parser_backtrack(Parser * parser)
   unput(parser->scanner);
   parser_consume_token(parser);
 }
+
 
 static int
 merge_intervals(Parser * parser, int min, int max, NFA * target)
@@ -274,7 +275,6 @@ parse_quantifier_expression(Parser * parser)
     case PLUS: {
       parser_consume_token(parser);
       nfa = pop(parser->symbol_stack);
-      push(parser->loop_nfas, nfa);
       nfa = new_posclosure_nfa(nfa);
       push(parser->symbol_stack, nfa);
       parse_quantifier_expression(parser);
@@ -282,7 +282,6 @@ parse_quantifier_expression(Parser * parser)
     case KLEENE: {
       parser_consume_token(parser);
       nfa = pop(parser->symbol_stack);
-      push(parser->loop_nfas, nfa);
       nfa = new_kleene_nfa(nfa);
       push(parser->symbol_stack, nfa);
       parse_quantifier_expression(parser);
@@ -302,7 +301,8 @@ parse_quantifier_expression(Parser * parser)
       parser->tree_count += (parser->in_alternation) ? 0 : 1;
       parser->branch += 1;
       ++(parser->in_alternation);
-      parser->lowest_id_on_branch = parser->nfa_ctrl->next_seq_id;
+      //parser->lowest_id_on_branch = parser->nfa_ctrl->next_seq_id;
+      parser->lowest_id_on_branch = NEXT_NFA_ID(parser->nfa_ctrl);
       parser_consume_token(parser);
       // concatenate everything on the stack unitl we see an open paren
       // or until nothing is left on the stack
@@ -665,10 +665,14 @@ parse_literal_expression(Parser * parser)
 
        SET_ESCP_FLAG(&CTRL_FLAGS(parser));
 
-       for(int i = 0; i < len; ++i) {
-         c = src[i];
+       if(len > 1) {
+         nfa = concatenate_nfa(nfa, new_lliteral_nfa(parser->nfa_ctrl, src, len));
+       }
+       else {
+         c = src[0];
          nfa = concatenate_nfa(nfa, new_literal_nfa(parser->nfa_ctrl, c, NFA_LITERAL));
        }
+
        parser_consume_token(parser);
     }
   }
@@ -876,10 +880,6 @@ prescan_input(Parser * parser)
 {
   int line_len = parser->scanner->line_len;
 
-  if(line_len > MAX_REGEX_LENGTH || line_len <=1) {
-    return 0;
-  }
-
   // FIXME don't always use alloc. Have the scanner keep a large enough buffer
   // to hold several scanner's buffers ?
   char * tmp_buffer = malloc(parser->scanner->buf_len);
@@ -1044,7 +1044,13 @@ collect_adjacencies(Parser * parser, NFA * start, int total_collectables)
   List * l = parser->branch_stack;;
 
   // store pairs of adjacent intervals
-  List * adj_intvls_list = new_list(); //FIXME: currently not being used... still thinking about this
+  //FIXME: currently not being used... still thinking about this
+  //       the general idea is that by knowing which intervals connect directly
+  //       we can come up with some way of reducing the running time in the recognizer
+  //       by avoiding clones that would repeat a sequence of interval counts that
+  //       has already appeared while processing a given input position.
+  List * adj_intvls_list = new_list(); 
+
   List * tmp = new_list();
 
   __collect_adjacencies_helper(current, visiting, 0, NULL, NULL);
@@ -1052,7 +1058,7 @@ collect_adjacencies(Parser * parser, NFA * start, int total_collectables)
 
   for(int i = 0; i < list_size(l); ++i) {
     if(i > total_collectables) {
-      break; // should never hit this condition
+      break;
     }
     current = list_get_at(l, i);
     for(int j = 0; j < list_size(&(current->reachable)); ++j) {
@@ -1069,7 +1075,7 @@ collect_adjacencies(Parser * parser, NFA * start, int total_collectables)
           list_transfer(tmp, &(visiting->reachable)); // stash reachable list
           __collect_adjacencies_helper(visiting, visiting->out2, 1, NULL, adj_intvls_list);
           list_transfer(tmp, &(visiting->reachable));
-          list_transfer(&(visiting->reachable), tmp); // reattach full reachable list to visiting node
+          list_transfer(&(visiting->reachable), tmp); // reconstitute reachable-list for interval node
         }
         else if(visiting->value.type == NFA_SPLIT){
           __collect_adjacencies_helper(visiting, visiting->out1, 0, NULL, NULL);
@@ -1132,7 +1138,7 @@ parse_regex(Parser * parser)
 
     // give the last accepting state an id
     mark_nfa(peek(parser->symbol_stack));
-    parser->total_nfa_ids = get_next_seq_id(parser->nfa_ctrl);
+    parser->total_nfa_ids = NEXT_NFA_ID(parser->nfa_ctrl);
     insert_epsilon_start(parser);
     collect_adjacencies(parser, (((NFA *)peek(parser->symbol_stack))->parent),
       (parser->total_nfa_ids + parser->interval_count));
@@ -1150,7 +1156,6 @@ parser_free(Parser * parser)
   free_nfa(((NFA *)peek(parser->symbol_stack)));
   stack_delete((parser->symbol_stack), NULL);
   stack_delete((parser->branch_stack), NULL);
-  list_free((parser->loop_nfas), NULL);
   free(parser->nfa_ctrl);
   free(parser);
 }

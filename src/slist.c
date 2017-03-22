@@ -1,8 +1,8 @@
-#include <stddef.h>
-#include <stdlib.h>
 #include "slist.h"
 #include "misc.h"
 
+#include <stddef.h>
+#include <stdlib.h>
 #include <stdio.h>
 
 void *
@@ -91,7 +91,9 @@ list_transfer(List * dst, List * src)
 
   dst->size += src->size;
 
-  src->head = src->tail = src->iter = NULL;
+  src->head = NULL;
+  src->tail = NULL;
+  src->iter = NULL;
   src->iter_idx = -1;
   src->size = 0;
 
@@ -523,6 +525,7 @@ list_free(List * list, VISIT_PROC_pt delete_data)
 }
 
 
+// 'deep-copy' just means we copy data-pointers
 List *
 list_deep_copy(ListItem * list_node)
 {

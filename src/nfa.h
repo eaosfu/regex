@@ -1,8 +1,10 @@
 #ifndef NFA_H_
 #define NFA_H_
-#include <limits.h>
 #include "bits.h"
 #include "slist.h"
+
+#include <limits.h>
+
 
 #define NFA_ANY              0x00001
 #define NFA_LITERAL          0x00002
@@ -21,17 +23,17 @@
 #define NFA_IN_INTERVAL      0x04000
 #define NFA_LONG_LITERAL     0x10000
 #define NFA_PROGRESS         0x20000
+#define NFA_LITERAL_HEAD     0x40000
 
-#define MAX_NFA_STATES 512 // FIXME: get rid of this
-
-#define SIZE_OF_LOCALE 128
+#define SIZE_OF_LOCALE 128 // currently limited to ASCII.. technically 127 but 128 shouldn't hurt
 
 #define RANGE_BITVEC_WIDTH REGULAR_BITVEC_WIDTH
 #define SIZE_OF_RANGE (SIZE_OF_LOCALE/RANGE_BITVEC_WIDTH)
+#define NEXT_NFA_ID(ctrl)  (((ctrl) == NULL) ? -1 : (ctrl)->next_seq_id)
 
 #define DONE    0x01
 #define CYCLE   0x02
-#define GREEDY  0x04
+#define GREEDY  0x04 // FIXME: we're not currently using this anywhere..
 #define VISITED 0x08
 #define ACCEPTS 0x10
 
@@ -55,6 +57,8 @@
 #define CHECK_NFA_ACCEPTS_FLAG(n) ((n)->flags & ACCEPTS)
 #define CHECK_NFA_VISITED_FLAG(n) ((n)->flags & VISITED)
 
+// In future, this will need to be compplemented by some other data
+// structure in order to support more than just ASCII
 typedef unsigned int nfa_range[SIZE_OF_RANGE];
 
 
@@ -73,9 +77,7 @@ typedef struct NFA {
   struct NFA * parent;
   struct NFA * out1;
   struct NFA * out2;
-// FIXME: COMBINE THE FOLLOWING INTO A FLAG BITFIELD!
   int flags;
-// END COBINE FLAGS
   List reachable;
   unsigned int id;
   struct {
@@ -101,28 +103,24 @@ typedef struct NFA {
 } NFA;
 
 
-NFA * finalize_nfa(NFA *);
+NFACtrl * new_nfa_ctrl(void);
+
 NFA * new_qmark_nfa(NFA *);
 NFA * new_kleene_nfa(NFA *);
-NFACtrl * new_nfa_ctrl(void);
 NFA * new_posclosure_nfa(NFA *);
 NFA * new_range_nfa(NFACtrl *, int);
 NFA * concatenate_nfa(NFA *, NFA *);
 NFA * new_nfa(NFACtrl *, unsigned int);
 NFA * new_backreference_nfa(NFACtrl *, unsigned int);
 NFA * new_lliteral_nfa(NFACtrl *, char *, unsigned int);
-//NFA * new_interval_nfa(NFA *, unsigned int, unsigned int);
 NFA * new_interval_nfa(NFA *, unsigned int, unsigned int, NFA **, NFA **);
 NFA * new_literal_nfa(NFACtrl *, unsigned int, unsigned int);
 NFA * new_alternation_nfa(NFACtrl *, List *, unsigned int, NFA *);
 
-NFA * nfa_tie_branches(NFA *, List *, unsigned int);
 void mark_nfa(NFA *);
 void free_nfa(NFA *);
 void release_nfa(NFA *);
-int  get_next_seq_id(NFACtrl *);
 int  update_range_w_collation(char *, int, NFA *, int);
-void inject_capturegroup_markers(NFA *, NFA *, unsigned int);
 void update_range_nfa(unsigned int, unsigned int, NFA *, int);
 
 #endif

@@ -6,15 +6,24 @@
 void
 parser_fatal(const char * msg, const char * regex, const char * here)
 {
-  char err_msg[200] = {0};
+  #define err_buf_sz  201
+  char err_msg[err_buf_sz] = {0};
   int sz = snprintf(NULL, 0, "%s: %s: %s", program_name, msg, regex);
-  snprintf(&(err_msg[0]), sz, "%s: %s: %s", program_name, msg, regex);
-  fprintf(stderr, "%s\n", &(err_msg[0]));
-  sz = sz - 1 - strlen(regex) + (here - regex);
-  for(int i = 0; i < sz; ++i) {
-    fprintf(stderr, " ");
+  if(sz > err_buf_sz) {
+    sz = snprintf(NULL, 0, "%s: %s: %s", program_name, msg, "'regex is too long to be displayed'");
+    ++sz;
+    snprintf(&(err_msg[0]), sz, "%s: %s: %s\n", program_name, msg, "'regex is too long to be displayed'");
+    fprintf(stderr, "%s\n", &(err_msg[0]));
   }
-  fprintf(stderr, "^\n");
+  else {
+    snprintf(&(err_msg[0]), sz, "%s: %s: %s", program_name, msg, regex);
+    fprintf(stderr, "%s\n", &(err_msg[0]));
+    sz = sz - 1 - strlen(regex) + (here - regex);
+    for(int i = 0; i < sz; ++i) {
+      fprintf(stderr, " ");
+    }
+    fprintf(stderr, "^\n");
+  }
   exit(EXIT_FAILURE);
 }
 

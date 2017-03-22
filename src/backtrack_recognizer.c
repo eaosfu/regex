@@ -1,7 +1,4 @@
-#include <stdlib.h>
-#include <string.h>
-#include <stdio.h>
-
+// FIXME: separate nfa_sim managment from run_nfa/search related code
 #include "bits.h"
 #include "slist.h"
 #include "token.h"
@@ -10,6 +7,9 @@
 #include "scanner.h"
 #include <stddef.h>
 #include "backtrack_recognizer.h"
+
+#include <string.h>
+#include <stdio.h>
 
 
 #define INPUT_CHAR(sim)        (*((sim)->input_ptr))
@@ -23,54 +23,23 @@
 #define INST_LONG_TOKEN(sim)   (CASE_FOLD(sim) ? toupper(NEXT_IN_LLITERAL(sim)): NEXT_IN_LLITERAL(sim))
 #define NEXT_IN_LLITERAL(sim)  ((sim)->ip->value.lliteral[(sim)->ip->value.idx])
 
-/*
-#define RELEASE_ALL_THREADS(ctrl, thread)                               \
-({  while(list_size(((ctrl)->active_threads))) {                        \
-    list_push((ctrl)->thread_pool, list_shift((ctrl)->active_threads)); \
-  }                                                                     \
-  if(thread) list_push((ctrl)->thread_pool, (thread));                  \
-})
-*/
-
-//#define RELEASE_ALL_THREADS(ctrl, thread)                         
-void RELEASE_ALL_THREADS(NFASimCtrl * ctrl, NFASim *thread)
-{ 
- if(list_size(ctrl->active_threads)) {                              
-    if(list_size(ctrl->thread_pool)) {
-      ctrl->thread_pool->tail->next = ctrl->active_threads->head;      
-      ctrl->thread_pool->tail = ctrl->active_threads->tail;            
-      ctrl->thread_pool->size += list_size(ctrl->active_threads);  
-    }
-    else {
-      ctrl->thread_pool->head = ctrl->active_threads->head;
-      ctrl->thread_pool->tail = ctrl->active_threads->tail;            
-      ctrl->thread_pool->size += list_size(ctrl->active_threads);  
-    }
-    ctrl->active_threads->size = 0;                                  
-    ctrl->active_threads->iter_idx = -1;                             
-    ctrl->active_threads->iter = NULL;                               
-    ctrl->active_threads->head = NULL;                               
-    ctrl->active_threads->tail = NULL;                               
-  }
-  if(thread) list_append(ctrl->thread_pool, thread);
-}
 
 static void load_next(NFASim *, NFA *);
 static void load_start_states(NFASim ** sim, NFA * start_state);
 static void process_adjacents(NFASim *sim, NFA * nfa);
 
-/*
-static void
-print_dbg(NFASim * sim, NFA * nfa)
+
+static inline void
+RELEASE_ALL_THREADS(NFASimCtrl * ctrl, NFASim * thread)
 {
-  printf("[0x%x]; {%d, %d} -- [", nfa, nfa->value.min_rep, nfa->value.max_rep);
-  for(int i = 0; i < sim->ctrl->loop_record_cap; ++i) {
-    if(i == 0) printf("%d", (sim->loop_record)[i].count);
-    else printf(", %d", (sim->loop_record)[i].count);
+  if(list_size(ctrl->active_threads)) {
+    list_transfer(ctrl->thread_pool, ctrl->active_threads);
   }
-  printf("] -- %s\n", sim->input_ptr);
+  if(thread) {
+    list_append(ctrl->thread_pool, thread);
+  }
 }
-*/
+
 
 static inline void
 update_longest_match(Match * m, Match * nm)
@@ -98,7 +67,6 @@ update_match(NFASim * sim)
 }
 
 
-//static inline Match * __attribute__((always_inline))
 static Match *
 new_match(NFASimCtrl * ctrl)
 {
@@ -203,7 +171,6 @@ is_literal_in_range(nfa_range range, int c)
 }
 
 
-//static NFASim *
 static inline NFASim * __attribute__((always_inline))
 reset_thread(NFASimCtrl * ctrl, NFA * start_state, char * start_pos)
 {
@@ -338,7 +305,6 @@ load_next(NFASim * sim, NFA * nfa)
             ++(sim->tracking_intervals);
             end = nfa->value.split_idx - 1;
             if(CHECK_NFA_CYCLE_FLAG(nfa)) {
-// FIXME: to ensure 'last_interval_pos' this works properly should get rid of NFA_LONG_LITERALS
               if(ctrl->last_interval_pos == &INPUT_CHAR(sim)) {
                 sim->loop_record[nfa->id].count = 0;
                 --(sim->tracking_intervals);
@@ -385,9 +351,7 @@ load_next(NFASim * sim, NFA * nfa)
           }
 
           start = nfa->value.split_idx + 1; // list_get_at is zero based!
-//          end = nfa->value.split_idx- 1;
           tmp = list_get_at(&(nfa->reachable), nfa->value.split_idx);
-//          list_iterate_from_to(&(nfa->reachable), start, end, (void *)thread_clone, sim);
           list_iterate_from_to(&(nfa->reachable), start, far_end, (void *)thread_clone, sim);
           load_next(sim, tmp);
         }
@@ -430,7 +394,6 @@ static void inline
 process_adjacents(NFASim *sim, NFA * nfa)
 {
   for(int i = 1; i < list_size(&(nfa->reachable)); ++i) {
-    //thread_clone(sim, list_get_at(&(nfa->reachable), i));
     thread_clone(list_get_at(&(nfa->reachable), i), sim);
   }
   load_next(sim, list_get_at(&(nfa->reachable), 0));
@@ -456,7 +419,6 @@ check_match(NFASim * sim, int nfa_type)
 }
 
 
-//static inline int __attribute__((always_inline))
 static int
 thread_step(NFASim * sim)
 {
@@ -583,13 +545,19 @@ thread_step(NFASim * sim)
 }
 
 
-//static inline void __attribute__((always_inline))
 static void
 load_start_states(NFASim ** sim, NFA * start_state) {
   process_adjacents((*sim), start_state);
   if((*sim)->status == -1) {
     *sim = release_thread(*sim, start_state);
   }
+}
+
+
+
+static void
+find_keyword_start_pos(List * kwlist, List * res)
+{
 }
 
 
@@ -650,7 +618,6 @@ run_nfa(NFASim * thread)
     ctrl->match.start = NULL;
     ctrl->match.end = NULL;
     thread = reset_thread(ctrl, ctrl->start_state, (char *)input_pointer);
-//printf("\n");
   }
 RELEASE_ALL_THREADS:
   RELEASE_ALL_THREADS(ctrl,thread);
@@ -682,6 +649,7 @@ new_nfa_sim(Parser * parser, Scanner * scanner, ctrl_flags * cfl)
   sim->ctrl->ctrl_flags      = cfl;
   sim->ctrl->start_state     = sim->ip;
   list_push(sim->ctrl->thread_pool, sim);
+
   return sim->ctrl;
 }
 

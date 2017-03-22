@@ -66,6 +66,7 @@ typedef struct IntervalRecord {
   int count;
 } IntervalRecord;
 
+
 typedef struct CaptureGrpRecord {
   int next_id;
   char * end;
@@ -77,7 +78,6 @@ typedef struct Parser {
   Scanner    * scanner;
   Stack      * symbol_stack;
   Stack      * branch_stack;
-  List       * loop_nfas;
   NFA        * prev_interval;
   NFA        * prev_interval_head;
   NFACtrl    * nfa_ctrl;

@@ -1,13 +1,13 @@
+#include "misc.h"
+#include "scanner.h"
+#include "backtrack_recognizer.h"
+
 #include <getopt.h>
 #include <stddef.h>
 #include <stdlib.h>
 #include <string.h>
 #include <stdio.h>
 #include <libgen.h>
-
-#include "misc.h"
-#include "scanner.h"
-#include "backtrack_recognizer.h"
 
 #include <sys/types.h>
 #include <sys/stat.h>
@@ -19,7 +19,7 @@
 
 static ino_t stdout_ino;
 
-static const char short_options [] = {"EFf:ghinoqrsv"};
+static const char short_options [] = {"Ff:ghinoqrsv"}; // missing E and T options
 
 static struct option const long_options[] = {
   {"help"            , no_argument      , NULL, 'h'}, 
@@ -43,7 +43,7 @@ static struct option const long_options[] = {
 static void
 print_description(void)
 {
-  printf("\n%s: Use regular expressions to search ""for <pattern> in <files>\n\n",
+  printf("%s: Use regular expressions to search ""for <pattern> in <files>\n\n",
     program_name);
 }
 
@@ -53,13 +53,13 @@ print_usage(int exit_code)
 {
   printf("usage: %s [options] '<regex>'  file [file]...\n", program_name);
   printf("       %s [options] -f <pattern_file> file [file]...\n", program_name);
-  printf("       %s [options] -f <pattern_file> -E='exclude1 exclude2...' file [file]...\n", program_name);
+//  printf("       %s [options] -f <pattern_file> -E='exclude1 exclude2...' file [file]...\n", program_name);
   printf("\n");
   printf("options:\n"
 //"  -T, --threaded           when searching multiple files/directories do so in parallel\n"
 //"  -E, --exclude            list of files/directories to exclude from search\n"
 "  -F, --show-file-name     display filename where match was found\n"
-"  -f, --pattern-file       read regex pattern from a file\n"
+"  -f, --pattern-file       use first line from file as the regex pattern\n"
 "  -g, --global-match       find all matches on the input line\n"
 "                           by default the first match stops the search\n"
 "  -h, --help               display this help message\n"

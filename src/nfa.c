@@ -1,20 +1,9 @@
-#include <stdlib.h>
-#include <string.h>
 #include "stack.h"
 #include "nfa.h"
 #include "misc.h"
 
-#include <stdio.h>
-
-
-int
-get_next_seq_id(NFACtrl *ctrl)
-{
-  if(ctrl) {
-    return ctrl->next_seq_id;
-  }
-  return 0;
-}
+#include <stdlib.h>
+#include <string.h>
 
 NFACtrl *
 new_nfa_ctrl()
@@ -32,9 +21,6 @@ static inline void
 mark_interval_nfa(NFA * nfa)
 {
   if(nfa->id == 0) {
-    if(nfa->ctrl->next_interval_seq_id + 1 > MAX_NFA_STATES) {
-      fatal("Too many states. Maximum is 512\n");
-    }
     nfa->id = nfa->ctrl->next_interval_seq_id;
     ++(nfa->ctrl->next_interval_seq_id);
   }
@@ -45,9 +31,6 @@ void
 mark_nfa(NFA * nfa)
 {
   if(nfa->id == 0) {
-    if(nfa->ctrl->next_seq_id + 1 > MAX_NFA_STATES) {
-      fatal("Too many states. Maximum is 512\n");
-    }
     nfa->id = nfa->ctrl->next_seq_id;
     ++(nfa->ctrl->next_seq_id);
   }
@@ -188,7 +171,7 @@ new_range_nfa(NFACtrl * ctrl, int negate)
    return accept;
 }
 
-/*
+
 NFA *
 new_lliteral_nfa(NFACtrl * ctrl, char * src, unsigned int len)
 {
@@ -213,7 +196,6 @@ new_lliteral_nfa(NFACtrl * ctrl, char * src, unsigned int len)
 
   return accept;
 }
-*/
 
 
 NFA *
@@ -256,18 +238,15 @@ new_kleene_nfa(NFA * body)
   NFA * start  = new_nfa(body->ctrl, NFA_SPLIT);
   NFA * accept = new_nfa(body->ctrl, NFA_ACCEPTING);
 
-  //mark_interval_nfa(start);
-start->id = body->parent->id;
+  start->id = body->parent->id;
   start->value.literal = '?';
   start->out1 = accept;
   start->out2 = body->parent;
 
   body->value.type = NFA_SPLIT;
   body->value.literal = '*';
-//  body->out1 = body->parent;
   body->out2 = accept;
   // tighten loop
-
   NFA * target = body->parent;
   while((target->value.type == NFA_EPSILON) && (target = target->out2));
   body->out1 = target;
@@ -282,12 +261,9 @@ NFA *
 new_qmark_nfa(NFA * body)
 {
   NFA * start  = new_nfa(body->ctrl, NFA_SPLIT);
-//  NFA * start  = new_nfa(body->ctrl, NFA_QMARK);
   NFA * accept = new_nfa(body->ctrl, NFA_ACCEPTING);
   
-  
-  //mark_interval_nfa(start);
-start->id = body->parent->id;
+  start->id = body->parent->id;
   start->out1 = accept;
   start->out2 = body->parent;
   start->value.literal = '?';
@@ -308,16 +284,13 @@ new_posclosure_nfa(NFA * body)
   NFA * start  = new_nfa(body->ctrl, NFA_EPSILON);
   NFA * accept = new_nfa(body->ctrl, NFA_ACCEPTING);
 
-start->id = body->parent->id;
+  start->id = body->parent->id;
   // there is no direct transition to the accepting state
   start->out1 = start->out2 = body->parent;
 
   body->value.type = NFA_SPLIT;
-  //mark_interval_nfa(body);
   body->value.literal = '+';
-//  body->out1 = body->parent;
   // tighten loop
-
   NFA * target = body->parent;
   while((target->value.type == NFA_EPSILON) && (target = target->out2));
   body->out1 = target;
@@ -336,7 +309,6 @@ new_interval_nfa(NFA * target, unsigned int min, unsigned int max, NFA ** t_reac
   NFA * accept = new_nfa(target->ctrl, NFA_ACCEPTING);
   NFA * new_interval = new_nfa(target->ctrl, NFA_INTERVAL);
 
-
   if(min == 0) {
     start->value.type = NFA_SPLIT;
     start->value.literal = '?';
@@ -347,7 +319,7 @@ new_interval_nfa(NFA * target, unsigned int min, unsigned int max, NFA ** t_reac
   else {
     start->out1 = start->out2 = target->parent;
   }
-start->id = target->parent->id;
+  start->id = target->parent->id;
   target->value.type = NFA_EPSILON;
   target->out2 = new_interval;
 
@@ -369,6 +341,7 @@ start->id = target->parent->id;
 
   return accept;
 }
+
 
 static void *
 is_nfa_tree(void * arg, void *arg2)
@@ -404,14 +377,6 @@ is_nfa_tree(void * arg, void *arg2)
 NFA *
 new_alternation_nfa(NFACtrl * ctrl, List * branches_list, unsigned int num_branches, NFA * terminator)
 {
-#ifdef DEBUG_OR_TEST
-  if(ctrl == 0 || branches_list == 0) {
-    // should never hit this condiiton
-    fatal("No branches in alternation\n");
-  }
-#else
-#endif
-
   if(num_branches < 2) {
     return pop(branches_list);
   }
@@ -424,59 +389,16 @@ new_alternation_nfa(NFACtrl * ctrl, List * branches_list, unsigned int num_branc
 
   start->value.branches = list_chop(branches_list, num_branches);
 
-/*
-  ListItem ** li = &(start->value.branches->head);
-  List * tmp = new_list();
-
-  for(int i = 0; i < num_branches; ++i) {
-    if(((NFA *)(*li)->data)->parent->value.type == NFA_TREE) {
-      //FIXME: need better interface for this sort of list manipulation
-      ((NFA *)(*li)->data)->value.type = NFA_EPSILON;
-      ((NFA *)(*li)->data)->out2 = terminator->parent;
-      list_push(tmp, ((NFA *)(*li)->data)->parent->value.branches);
-      free(((NFA *)(*li)->data)->parent);// = terminator->parent;
-      ListItem * tmp_li = (*li);
-      *li = (*li)->next;
-      free(tmp_li);
-      --(start->value.branches->size);
-      li = &(*li);
-      continue;
-    }
-    ((NFA *)((*li)->data))->value.type = NFA_EPSILON;
-    ((NFA *)((*li)->data))->out2 = terminator->parent;
-    (*li)->data = ((NFA *)(*li)->data)->parent;
-    li = &((*li)->next);
-  }
-
-  // list fix up
-  if(list_size(start->value.branches) <= 1) {
-    if(list_size(start->value.branches) == 0) {
-      start->value.branches->head = NULL;
-      start->value.branches->tail = NULL;
-      start->value.branches->iter = NULL;
-      start->value.branches->iter_idx = -1;
-    }
-    else if(list_size(start->value.branches) == 1) {
-      start->value.branches->tail = start->value.branches->head;
-      start->value.branches->iter = start->value.branches->head;
-      start->value.branches->iter_idx = 0;
-    }
-  }
-*/
-
   List * tmp = new_list();
   list_transfer_on_match(tmp, start->value.branches, is_nfa_tree, terminator->parent);
 
   ListItem * li = start->value.branches->head;
-  //for(int i = 0; i < num_branches; ++i) {
   for(int i = 0; (i < num_branches) && (li != NULL); ++i) {
     ((NFA *)(li->data))->value.type = NFA_EPSILON;
     ((NFA *)(li->data))->out2 = terminator->parent;
     li->data = ((NFA *)li->data)->parent;
     li = li->next;
   }
-
-
 
   List * sub_tree = NULL;
   list_set_iterator(tmp, 0);
@@ -487,15 +409,6 @@ new_alternation_nfa(NFACtrl * ctrl, List * branches_list, unsigned int num_branc
 
   list_free(tmp, NULL);
 
-/*
-  ListItem * li = start->value.branches->head;
-  for(int i = 0; i < num_branches; ++i) {
-    ((NFA *)(li->data))->value.type = NFA_EPSILON;
-    ((NFA *)(li->data))->out2 = terminator->parent;
-    li->data = ((NFA *)li->data)->parent;
-    li = li->next;
-  }
-*/
   terminator->parent = start;
 
   return terminator;
@@ -537,6 +450,7 @@ concatenate_nfa(NFA * prev, NFA * next)
 
 
 static int g_states_added = 0;
+
 
 void *
 nfa_compare_equal(void * nfa1, void *nfa2)
@@ -602,7 +516,6 @@ free_nfa_helper(NFA * n, List * l, List * seen_states)
         for(int i = 0; i <= branch_count; ++i) {
           free_nfa_helper(list_shift(n->value.branches), l, seen_states);
         }
-        //list_free(&(n->value.branches), NULL);
         list_free((n->value.branches), NULL);
       }
       else {
