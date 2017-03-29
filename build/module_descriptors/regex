@@ -1,4 +1,4 @@
-DEPENDS+=slist token nfa scanner regex_parser misc backtrack_recognizer
+DEPENDS+=slist token nfa scanner regex_parser misc backtrack_recognizer mpat rbtree
 REGEX_CFLAGS:=
 REGEX_DFLAGS:=#try using -finline and -O3
 REGEX_SRC_DIR:= ${TOP_DIR}/src

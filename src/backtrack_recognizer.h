@@ -5,6 +5,7 @@
 #define MATCH_BUCKET_SIZE   1024
 
 #include "regex_parser.h"
+#include "mpat.h"
 
 typedef struct Match {
   const char * start;
@@ -48,6 +49,7 @@ typedef struct NFASimCtrl {
   List * thread_pool;
   List * active_threads;
   Scanner * scanner;
+  MPatObj * mpat_obj;
   ctrl_flags * ctrl_flags;
   Match match;
   char matches[MATCH_BUCKET_SIZE];
@@ -56,11 +58,13 @@ typedef struct NFASimCtrl {
 
 
 int  run_nfa(NFASim *);
+//int  run_nfa(NFASimCtrl *);
 int  get_states(NFASim *, NFA *, List *, int, int, unsigned int);
 void free_nfa_sim(NFASimCtrl *);
 void flush_matches(NFASimCtrl *);
 void * free_match_string(void *);
 NFASim * reset_nfa_sim(NFASimCtrl *, NFA *);
+//NFASimCtrl * reset_nfa_sim(NFASimCtrl *, NFA *);
 NFASimCtrl * new_nfa_sim(Parser *, Scanner *, ctrl_flags *);
 
 #endif

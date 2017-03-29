@@ -4,6 +4,7 @@
 #include "token.h"
 #include "stack.h"
 #include "scanner.h"
+#include "mpat.h" // should be moved the the 'compile' module
 
 #define CAPTURE_GROUP_MAX 9
 #define MAX_REGEX_LENGTH  256
@@ -81,6 +82,7 @@ typedef struct Parser {
   NFA        * prev_interval;
   NFA        * prev_interval_head;
   NFACtrl    * nfa_ctrl;
+  MPatObj    * mpat_obj;
   ctrl_flags * ctrl_flags;
 
   // Count open parens

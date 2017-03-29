@@ -1029,6 +1029,44 @@ __collect_adjacencies_helper(NFA * current, NFA * visiting, int outn, NFA * forb
   return;
 }
 
+// THIS SHOULD BE MOVED OUT INTO A 'COMPILE.C' module
+// same goes for the 'collect' functions
+static void
+compute_mpat_tables(Parser * parser, NFA * start)
+{
+  if(start == NULL) {
+    return;
+  }
+
+  List * patterns = new_list();
+  list_set_iterator(&(start->reachable), 0);
+  NFA * nfa = NULL;
+  while((nfa = list_get_next(&(start->reachable))) != NULL) {
+    switch(nfa->value.type) {
+      case NFA_LONG_LITERAL: {
+        list_append(patterns, nfa->value.lliteral);
+      } break;
+      default: {
+        // if we fall here we need to decide what to do... for exmaple
+        //  we may be able to expand the regex to a point and add it
+        //  to our 'patterns' list. but for now make so the the recognizer
+        //  simply avoid using the multi-pattern match algorithm.
+        goto FREE_PATTERNS_LIST;
+      }
+    }
+  }
+
+  if(list_size(patterns) != 0) {
+    parser->mpat_obj = new_mpat();
+    if(mpat_init(parser->mpat_obj, patterns) == 0) {
+      mpat_obj_free(&(parser->mpat_obj));
+    }
+  }
+
+FREE_PATTERNS_LIST:
+  list_free(patterns, NULL);
+}
+
 
 void
 collect_adjacencies(Parser * parser, NFA * start, int total_collectables)
@@ -1036,8 +1074,7 @@ collect_adjacencies(Parser * parser, NFA * start, int total_collectables)
   if(start == NULL) {
     return;
   }
-
-  NFA * current = start;
+NFA * current = start;
   NFA * visiting = start;
  
   // branch_stack no longer contains useful data so reuse it as a list
@@ -1055,6 +1092,14 @@ collect_adjacencies(Parser * parser, NFA * start, int total_collectables)
 
   __collect_adjacencies_helper(current, visiting, 0, NULL, NULL);
   list_append(l, current);
+
+  // the 'reachable' list in the start node now contains the first nodes the 
+  // recognizer will load... if these nodes are all fixed length strings we
+  // can help speed up the recognizer by building a set of tables the recognizer
+  // can use to perform a fast multi-pattern search. Doing this search enables
+  // the recognizer to quickly jump to skip over positions in the input that
+  // would never match the start of the regular expression
+  compute_mpat_tables(parser, current);
 
   for(int i = 0; i < list_size(l); ++i) {
     if(i > total_collectables) {
@@ -1156,6 +1201,7 @@ parser_free(Parser * parser)
   free_nfa(((NFA *)peek(parser->symbol_stack)));
   stack_delete((parser->symbol_stack), NULL);
   stack_delete((parser->branch_stack), NULL);
+  mpat_obj_free(&parser->mpat_obj);
   free(parser->nfa_ctrl);
   free(parser);
 }
