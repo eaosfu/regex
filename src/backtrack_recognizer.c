@@ -242,6 +242,8 @@ thread_clone(NFA * nfa, NFASim * sim)
     clone->tracking_intervals = sim->tracking_intervals;
   }
   else if(new_thread == 0) {
+    // FIXME: find a faster way of doing this -- perhaps set a dirty bit
+    //        and then check it in the NFA_INTERVAL case?
     memset(clone->loop_record, 0, sizeof(LoopRecord) * sim->ctrl->loop_record_cap);
   }
 
@@ -399,7 +401,7 @@ process_adjacents(NFASim *sim, NFA * nfa)
   load_next(sim, list_get_at(&(nfa->reachable), 0));
 }
 
-
+/*
 static int
 check_match(NFASim * sim, int nfa_type)
 {
@@ -417,7 +419,7 @@ check_match(NFASim * sim, int nfa_type)
     }
   }
 }
-
+*/
 
 static int
 thread_step(NFASim * sim)
@@ -683,8 +685,8 @@ run_nfa(NFASim * thread)
 RELEASE_ALL_THREADS:
   RELEASE_ALL_THREADS(ctrl,thread);
 
-  if((match_found == 0) && (CTRL_FLAGS(ctrl) & INVERT_MATCH_FLAG)
-  ||  match_found && (CTRL_FLAGS(ctrl) & SHOW_MATCH_LINE_FLAG)) {
+  if(((match_found == 0) && (CTRL_FLAGS(ctrl) & INVERT_MATCH_FLAG))
+  || (match_found && (CTRL_FLAGS(ctrl) & SHOW_MATCH_LINE_FLAG))) {
     ctrl->match.start = ctrl->buffer_start;
     ctrl->match.end   = ctrl->buffer_end - 1;
     new_match(ctrl);

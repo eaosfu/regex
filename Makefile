@@ -120,6 +120,7 @@ endef
 
 define make_test_btrec
   $(eval CFLAGS += -g)
+  $(eval CFLAGS += -Wall)
   $(call make_regex)
 #  $(call make_test_slist)
 #  test_btrec: regex test_slist
