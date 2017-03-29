@@ -554,12 +554,64 @@ load_start_states(NFASim ** sim, NFA * start_state) {
 }
 
 
-
+// run an initial scan on the input to see if we have a chance
+// at matching
 static void
-find_keyword_start_pos(List * kwlist, List * res)
+find_keyword_start_pos(NFASimCtrl * ctrl, NFASim ** sim)
 {
+  MPatObj * mpat_obj = ctrl->mpat_obj;
+  char * text_beg = (char *)ctrl->buffer_start;
+  char * text_end = (char *)ctrl->buffer_end;
+  mpat_search(mpat_obj, text_beg, text_end);
+  (*sim)->input_ptr = ctrl->buffer_end + 1;
+  if(mpat_match_count(mpat_obj) > 0) {
+    MatchRecord * mr = mpat_next_match(mpat_obj);
+    (*sim)->input_ptr = mr->beg;
+    load_start_states(sim, ctrl->start_state);
+  }
 }
 
+
+static void
+update_input_pointer(NFASimCtrl * ctrl, int current_run, const char ** input_pointer)
+{
+  if(ctrl->mpat_obj == NULL) {
+    if((current_run == 0) || (ctrl->match.end == 0)) {
+      // we either didn't match anything: current_match <-- 0 && ctrl->match.end <-- 0
+      // or we matched the empty string:  current_match <-- 1 && ctrl->match.end <-- 0
+      ++(*input_pointer);
+    }
+    else {
+      // we matched a nonempty string: current_match <-- 1 && ctrl->match.end <-- 1
+      // in thise case ctrl->match.end is the 'end position' of the latest match
+      *input_pointer = ctrl->match.end + 1;
+    }
+  }
+  else {
+    MatchRecord * mr = NULL;
+    if((current_run == 0) || (ctrl->match.end == 0)) {
+      // we either didn't match anything: current_match <-- 0 && ctrl->match.end <-- 0
+      // or we matched the empty string:  current_match <-- 1 && ctrl->match.end <-- 0
+      if((mr = mpat_next_match(ctrl->mpat_obj)) != NULL) {
+        (*input_pointer) = mr->beg;;
+      }
+      else {
+        (*input_pointer) = "\0"; // force the recognizer to quit
+      }
+    }
+    else {
+      // we matched a nonempty string: current_match <-- 1 && ctrl->match.end <-- 1
+      // in thise case ctrl->match.end is the 'end position' of the latest match
+      while((mr = mpat_next_match(ctrl->mpat_obj)) != NULL && (mr->beg <= (ctrl->match.end + 1)));
+      if(mr != NULL) {
+        *input_pointer = mr->beg;
+      }
+      else {
+        (*input_pointer) = "\0"; // force the recognizer to quit
+      }
+    }
+  }
+}
 
 int
 run_nfa(NFASim * thread)
@@ -571,8 +623,21 @@ run_nfa(NFASim * thread)
   thread->input_ptr          = ctrl->buffer_start;
   const char * input_pointer = ctrl->buffer_start;
 
-  load_start_states(&thread, ctrl->start_state);
-
+  
+  if(ctrl->mpat_obj != NULL) {
+    find_keyword_start_pos(ctrl, &thread);
+    if(thread == NULL) {
+      // there is no way we will ever match this line
+      goto RELEASE_ALL_THREADS;
+    }
+    // we can match the line
+    input_pointer = thread->input_ptr;
+  }
+  else {
+    // don't prescan the input
+    load_start_states(&thread, ctrl->start_state);
+  }
+  
   while((*input_pointer) != '\0') {
     while(thread) {
       thread_step(thread);
@@ -607,12 +672,8 @@ run_nfa(NFASim * thread)
     if((CTRL_FLAGS(ctrl) & (SHOW_MATCH_LINE_FLAG|INVERT_MATCH_FLAG)) == 0) {
       new_match(ctrl);
     }
-    if((current_run == 0) || (ctrl->match.end == 0)) {
-      ++input_pointer;
-    }
-    else {
-      input_pointer = ctrl->match.end + 1;
-    }
+
+    update_input_pointer(ctrl, current_run, &input_pointer);
     ctrl->last_interval_pos = 0;
     current_run = 0;
     ctrl->match.start = NULL;
@@ -628,6 +689,11 @@ RELEASE_ALL_THREADS:
     ctrl->match.end   = ctrl->buffer_end - 1;
     new_match(ctrl);
   }
+
+  if(ctrl->mpat_obj != NULL) {
+    mpat_clear_matches(ctrl->mpat_obj);
+  }
+
   return match_found;
 }
 
@@ -648,6 +714,7 @@ new_nfa_sim(Parser * parser, Scanner * scanner, ctrl_flags * cfl)
   sim->ctrl->thread_pool     = new_list();
   sim->ctrl->ctrl_flags      = cfl;
   sim->ctrl->start_state     = sim->ip;
+  sim->ctrl->mpat_obj     = parser->mpat_obj;
   list_push(sim->ctrl->thread_pool, sim);
 
   return sim->ctrl;

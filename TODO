@@ -101,33 +101,41 @@ TODO ITEMS LISTED IN ORDER:
             do some scanning and then revert to a previous scan state after they're done.
 
 (I) - CREATE a global memory management system so we can allocate from a memory pool instead of
-             always having to call malloc()
+             always having to call malloc()/free()
 
 (D) - UPDATE parser/simulator to handle backreferences
 
 (I) - UPDATE simulartor to handle interval expressions (i.e. <expression>{<RE_DUP_MIN>, <RE_DUP_MAX>}
              Actually I think redesigning the simulator would clean things up quite a bit.
-             One thing that might help is having a stack for nodes interval expression nodes.
+             One thing that might help is having a stack for interval expression nodes.
              If the simulator detects that we have transition to such a node then we reset back to
              that nodes parent as many times as need to be counted before declaring a match.
 
        (D) - UPDATE source and headesr so we can separate nfa_sim from regex_parser
 
-       (I) - UPDATE nfa.c so that individual 'interval expression' nodes have a sequentially assinged
+       (D) - UPDATE nfa.c so that individual 'interval expression' nodes have a sequentially assinged
                     ID and a pointer back to the beginning of the expression they affect. Since the ID is
                     sequentially assigned we can then store the 'reach count' in an array within the nfa_sim.
-                    The count can then be accessed by using the 'interval node''s ID as an index.
+                    The count can then be accessed by using the 'interval node' ID as an index.
                     When the simulator encounters one of these 'interval nodes' it automatically checks the
                     'reach count' (rc) and decrements it if rc > 0. Otherwise the nfa_sim follows the 'out2'*
                     pointer.
 
+                    - **UPDATE**: simulator was redisigned to follow a 'Thompson construction' style of nfa
+                                  processing. As a result several 'threads' (though this are not 'real' threads
+                                  as would be created by pthread_create) maintain their own 'state' including
+                                  how many times an interval expresion has been reached. All 'threads' reference
+                                  the min and max interval-count-limits in the nfa nodes produced by the parser and
+                                  no thread ever modifies these values.
+
                     * NOTE: 'out1' pointers for nfas that loop always point back to the affected expression's 
                             start state
 
-       (I) - UPDATE match():nfa_sim.c so that it detects interval node and performs the behaviour described
+
+       (D) - UPDATE match():nfa_sim.c so that it detects interval node and performs the behaviour described
                     in the bullet point above
 
-       (I) - UPDATE simulator to adapt its behaviour based on flags. currently it matches globally (i.e.
+       (P) - UPDATE simulator to adapt its behaviour based on flags. currently it matches globally (i.e.
                     tries to match everywhere in the target string rather than stopping on first match).
                     Behaviour like this needs to be controlled by flags:
 
@@ -144,6 +152,8 @@ TODO ITEMS LISTED IN ORDER:
                     all components in the regex engine 
 
 (D) - UPDATE nfa_sim.c so that it reads its input from a file rather than stdin.
+
+      - **UPDATE** nfa_sim.c now reads from a buffer passed to it from the caller.
 
 (P) - CREATE test cases for regex engine, implement test cases
 

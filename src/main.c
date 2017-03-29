@@ -14,8 +14,8 @@
 #include <unistd.h>
 
 #include <dirent.h>
-
 #include <errno.h>
+
 
 static ino_t stdout_ino;
 
@@ -112,34 +112,23 @@ set_program_name(char * name)
 
 
 static void
-_warn(const char * msg)
-{
-}
-
-
-static void
 stat_action(const char * pathname, const char * name, List * target_files, List * target_dirs, int rdir)
 {
   struct stat sb;
 
   int name_len = strlen(name);
-  if(pathname) {
-    // avoid adding '.' and '..' directories
-    if(name_len < 3) {
-      if(name[0] == '.') {
-        if(name_len == 2) {
-          if(name[1] == '.') {
-            return;
-          }
-        }
-        else {
+  // avoid adding '.' and '..' directories
+  if(name_len < 3) {
+    if(name[0] == '.') {
+      if(name_len == 2) {
+        if(name[1] == '.') {
           return;
         }
       }
+      else {
+        return;
+      }
     }
-  }
-  else if(name_len == 2) {
-    printf("Ooops: %s\n", name); exit(1);
   }
 
   char nm[PATH_MAX + NAME_MAX];
@@ -185,42 +174,23 @@ stat_action(const char * pathname, const char * name, List * target_files, List 
 
   switch(sb.st_mode & S_IFMT) {
     case S_IFREG: { // regular file
-      //list_append(target_files, (char *)name);
       list_append(target_files, fpth);
     } break;
     case S_IFDIR: { // directory
       if(rdir) {
-        //list_append(target_dirs, (char *)name);
         list_append(target_dirs, fpth);
       }
       else {
         fprintf(stderr, "%s: %s: Is a directory\n", program_name, name);
         // FIXME: move this to a 'recognizer_errmsg.h' file
+        free(fpth);
+        fpth = NULL;
       }
     } break;
-/*
-    case S_IFCHR: { // char device
-      printf("Searching through character devices is currently not supported, skipping %s\n",
-        name);
-    } break;
-    case S_IFSOCK: { // socket
-      fprintf(stderr, "Searching sockets is currently not supported, skipping: %s...\n",
-        name);
-    } break;
-    case S_IFIFO: { // FIFO
-      fprintf(stderr, "Searching FIFOs is currently not supported, skipping: %s...\n",
-        name);
-    } break;
-    case S_IFLNK: { // symbolic link
-      printf("Not sure what to do with symbolic links, skipping %s...\n", name);
-    } break;
-    case S_IFBLK: { // block device
-      printf("Not sure what to do with block devices, skipping %s...\n", name);
-    } break;
-*/
     default: { // should never reach this case
-      printf("%s is not a regular file or directory\n", name);
+      printf("%s is not a regular file or directory, skipping...\n", name);
       free(fpth);
+      fpth = NULL;
     }
   }
 }
@@ -229,7 +199,7 @@ stat_action(const char * pathname, const char * name, List * target_files, List 
 static void
 process_dir(char * pathname, List * target_files, List * target_dirs)
 {
-  // if we make it into this function then we are recursively visiting subdirectories
+  // if we make it into this function then we are visiting subdirectories
   DIR * dir = NULL;
   struct dirent * de;
   errno = 0;
@@ -253,9 +223,10 @@ process_dir(char * pathname, List * target_files, List * target_dirs)
   }
 
   if((dir = opendir(pathname))) {
-    while(de = readdir(dir)) {
+    while((de = readdir(dir)) != NULL) {
       stat_action(pathname, de->d_name, target_files, target_dirs, 1);
     }
+    closedir(dir);
   }
   else {
     fprintf(stderr, "No such file or directory: %s\n", pathname);
@@ -269,7 +240,7 @@ process_targets(int argc, char ** argv, int target_idx, List * target_files, Lis
   struct stat sb;
   while(target_idx < argc) {
     if(strlen(argv[target_idx]) == 1 && *(argv[target_idx]) == '-') {
-      printf("Searching stdin is currently not supported, skipping..\n");
+      printf("Searching stdin is currently not supported, skipping...\n");
       ++target_idx;
       continue;
     }
@@ -314,7 +285,8 @@ main(int argc, char ** argv)
       case 'F': { SET_SHOW_FILE_NAME_FLAG(&cfl);       } break;
       case 'n': { SET_SHOW_LINENO_FLAG(&cfl);          } break;
       case 'o': { CLEAR_SHOW_MATCH_LINE_FLAG(&cfl);    } break;
-      case 'r': { rdir = 1;                            } break;
+      case 'r': { rdir = 1; 
+                  SET_SHOW_FILE_NAME_FLAG(&cfl);       } break;
       default:  { exit_unknown_opt(opt, EXIT_FAILURE); } break;
     }
   }
@@ -398,6 +370,10 @@ PROCESS_TARGET_FILES:
       ++line; // FIXME: scanner should update the line number on it's own
       scanner->line_no = line;
       status += run_nfa(nfa_sim);
+      if(status != 0 && (cfl & SILENT_MATCH_FLAG)) {
+        // no need to keep searching if we've found a match
+        break;
+      }
     }
 
     if(nfa_sim_ctrl->match_idx) {
@@ -410,36 +386,14 @@ PROCESS_TARGET_FILES:
 
   if((current_target_dir = list_shift(target_dirs))) {
     process_dir(current_target_dir, target_files, target_dirs);
+    free(current_target_dir);
+    current_target_dir = NULL;
     goto PROCESS_TARGET_FILES;
   }
 
-/*
-  while(target_idx < argc) {
-    fh = fopen(argv[target_idx], "r");
-    if(fh == NULL) {
-      fatal("Unable to open file\n");
-    }
-    filename = argv[target_idx];
-    int line = 0;
-    while((scanner->line_len = getline(&(scanner->buffer), &(scanner->buf_len), fh)) > 0) {
-      reset_scanner(scanner, filename);
-      nfa_sim = reset_nfa_sim(nfa_sim_ctrl, ((NFA *)peek(parser->symbol_stack))->parent);
-      ++line; // FIXME: scanner should update the line number on it's own
-      scanner->line_no = line;
-      status += run_nfa(nfa_sim);
-    }
-
-    if(nfa_sim_ctrl->match_idx) {
-      flush_matches(nfa_sim_ctrl);
-    }
-    ++target_idx;
-  }
-*/
 CLEANUP:
-//  if(fh) fclose(fh);
-
-  list_free(target_files, NULL);
-  list_free(target_dirs, NULL);
+  list_free(target_files, (void *)free);
+  list_free(target_dirs, (void *)free);
   parser_free(parser);
   free_scanner(scanner);
 
