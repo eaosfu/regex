@@ -1,7 +1,11 @@
 #ifndef MPAT_H_
 #define MPAT_H_
 
+// FIXME: implementing an 'intrusive' version of this will
+//        greatly improve resource utilization
+//        -- see comment in 'record_match()'
 #include "rbtree.h"
+
 #include "slist.h"
 
 #define HASH   RBTreeCtrl

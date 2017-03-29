@@ -878,49 +878,45 @@ regex_parser_start(Parser * parser)
 static int
 prescan_input(Parser * parser)
 {
-  int line_len = parser->scanner->line_len;
-
   // FIXME don't always use alloc. Have the scanner keep a large enough buffer
   // to hold several scanner's buffers ?
   char * tmp_buffer = malloc(parser->scanner->buf_len);
   memcpy(tmp_buffer, parser->scanner->buffer, parser->scanner->buf_len);
 
 
-//  if(line_len > 0) {
-    Scanner * new_scanner_state = init_scanner(
-      get_filename(parser->scanner), // TEST
-      tmp_buffer,
-      parser->scanner->buf_len,
-      parser->scanner->line_len,
-      parser->scanner->ctrl_flags
-    );
+  Scanner * new_scanner_state = init_scanner(
+    get_filename(parser->scanner), // TEST
+    tmp_buffer,
+    parser->scanner->buf_len,
+    parser->scanner->line_len,
+    parser->scanner->ctrl_flags
+  );
 
-    scanner_push_state(&(parser->scanner), new_scanner_state);
+  scanner_push_state(&(parser->scanner), new_scanner_state);
 
-    char ** next = &(parser->scanner->readhead);
-    int eol = parser->scanner->eol_symbol;
+  char ** next = &(parser->scanner->readhead);
+  int eol = parser->scanner->eol_symbol;
 
-    if((*next)[0] != eol) {
-      char c = next_char(parser->scanner);
-      while(c != eol) {
-        switch(c) {
-          case '\\': {
-            c = next_char(parser->scanner);
-            if(isdigit(c)) {
-              mark_closure_map_backref(parser->cgrp_map, c - '0');
-            }
-            c = next_char(parser->scanner);
-            continue;
-          } break;
-          default: {
-            c = next_char(parser->scanner);
-          } break;
-        }
+  if((*next)[0] != eol) {
+    char c = next_char(parser->scanner);
+    while(c != eol) {
+      switch(c) {
+        case '\\': {
+          c = next_char(parser->scanner);
+          if(isdigit(c)) {
+            mark_closure_map_backref(parser->cgrp_map, c - '0');
+          }
+          c = next_char(parser->scanner);
+          continue;
+        } break;
+        default: {
+          c = next_char(parser->scanner);
+        } break;
       }
     }
-    new_scanner_state = scanner_pop_state(&(parser->scanner));
-    free_scanner(new_scanner_state);
-//  }
+  }
+  new_scanner_state = scanner_pop_state(&(parser->scanner));
+  free_scanner(new_scanner_state);
 
   return 1;
 }

@@ -136,26 +136,6 @@ mpat_obj_free(MPatObj ** mpat_obj)
 }
 
 
-static void *
-check_prefix_match(PREFIX * p, long k, long cmp)
-{
-  if(p == NULL) {
-    return NULL;
-  }
-/*
-  PREFIX_RECORD * pr = PREFIX_SEARCH(p, k);
-  if(pr != NULL) {
-    return (*((long *)pr->data) == cmp) ? p : NULL;
-  }
-*/
-  PrefixPattern * pfxp = (PrefixPattern *)k;
-printf("pfxp->key: %ld\n", pfxp->key);
-  return (pfxp->key == cmp) ? p : NULL;
-
-  return NULL;
-}
-
-
 // uses hash key K as key into HASH:rbtree
 // contains a list of all patterns whose suffix hashes to K
 static void
@@ -185,35 +165,6 @@ insert_hash_record(HASH * h, long key, char * pattern, long prefix_hash)
   HASH_APPEND_PATTERN(hr, pfxp);
 // END TEST
 //  rbtree_insert_reverse(r, pattern_len, pattern, 0);
-}
-
-
-// uses address of pattern string as key into PREFIX:rbtree
-// stores hash key K of pattern's prefix
-static void
-insert_prefix_record(PREFIX * p, long key, char * pattern)
-{
-  if(p == NULL) {
-    return;
-  }
-/*
-  long * k = malloc(sizeof(long));
-  if(k == NULL) {
-    fatal("Insufficient virtual memory\n");
-  }
-  (*k) = key;
-  rbtree_insert(p, (long)pattern, k, 0);
-*/
-
-  int pattern_len = strlen(pattern);
-  PrefixPattern * pfxp = malloc(sizeof(PrefixPattern) + pattern_len + 1);
-  if(pfxp == NULL) {
-    fatal("Insufficient virtual memory\n");
-  }
-  pfxp->key = key;
-  strncpy(pfxp->pattern, pattern, pattern_len);
-  (pfxp->pattern)[pattern_len] = '\0';
-  rbtree_insert(p, (long)pfxp, pfxp, 0);
 }
 
 
@@ -266,6 +217,7 @@ preprocess_patterns(MPatObj * mpat_obj, List * patterns)
   }
   else {
     mpat_obj->m = m;
+    // FIXME: we can do better than this
     mpat_obj->B = 2; // the paper this is based off of suggests B = 2 or 3 for good performance
   }
 
@@ -404,6 +356,10 @@ record_match(RBTreeCtrl * ml, char * b, char * e)
   RBTree * node = rbtree_insert(ml, key, NULL, 1);
 
   if(node->data == NULL) {
+    //FIXME: we need to improve resource utilization here.
+    //       this can be achieved by moving to an intrusive
+    //       data structure and having the 'user' keep track
+    //       of the 'resource pool'.
     MatchRecord * mr = malloc(sizeof(*mr));
     mr->beg = b;
     mr->end = e;
@@ -416,7 +372,6 @@ record_match(RBTreeCtrl * ml, char * b, char * e)
 
   return;
 }
-
 
 
 static void
@@ -433,14 +388,6 @@ print_match_record(MatchRecord * mr)
   printf("\n");
 }
 
-
-void *
-get_next_match(MPatObj * mpat_obj)
-{
-  if(mpat_obj == NULL || mpat_obj->match_list == NULL) {
-    return NULL;
-  }
-}
 
 // Multi-pattern search
 void

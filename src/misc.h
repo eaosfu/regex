@@ -1,8 +1,9 @@
 #ifndef MISC_H_
 #define MISC_H_
 
-#include <limits.h>
+#include <err.h>
 #include <ctype.h>
+#include <limits.h>
 
 // This should be long enough.
 char program_name[NAME_MAX];
@@ -67,7 +68,6 @@ char program_name[NAME_MAX];
 
 typedef unsigned int ctrl_flags;
 
-void warn(const char *);
 void fatal(const char *);
 void * xmalloc(unsigned int);
 void parser_fatal(const char *, const char *, const char *);
