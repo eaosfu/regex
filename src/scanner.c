@@ -190,7 +190,6 @@ get_cur_pos(Scanner * s)
   char * ret = NULL;
   if(s) {
     ret = s->buffer;
-    //if(s->readhead > s->buffer) {
     if(s->readhead > s->str_begin) {
       ret = s->readhead - 1;
     }
@@ -254,24 +253,20 @@ get_scanner_readhead(Scanner * s)
 }
 
 
-// TODO: reverse meaning of escp so that \(, \[, \+, etc.
-//       are treated as operators rather than literals
 Token *
 regex_scan(Scanner * s)
 {
   int c;
   int ret = 0;
   
-
-// FOR TESTING
+  // FIXME: would need to update how this is handled if we were to support
+  //        multiline matching... not supported for now...
   static int seen_newline = 0;
   if(seen_newline) {
     update_token(s->curtoken, 0, __EOF);
     return s->curtoken;
   }
-// FOR TESTING DONE
 
-  //while(ret != 1 && (c = next_char(s)) != s->eol_symbol) {
   while(ret != 1 && (c = next_char(s)) != '\0') {
     switch(c) {
       case '0' : // fallthrough
@@ -284,7 +279,7 @@ regex_scan(Scanner * s)
       case '7' : // fallthrough
       case '8' : // fallthrough
       case '9' : update_token(s->curtoken, c, ASCIIDIGIT);  ret = 1; break;
-      case '\n': { /* TESTING ONLY */seen_newline = 1; /*DONE TESTING*/}// fallthrough
+      case '\n': seen_newline = 1; // fallthrough
       case EOF: update_token(s->curtoken, 0, __EOF);        ret = 1; break;
       case '$': update_token(s->curtoken, c, DOLLAR);       ret = 1; break;
       case '^': update_token(s->curtoken, c, CIRCUMFLEX);   ret = 1; break;
@@ -309,8 +304,7 @@ regex_scan(Scanner * s)
             }
             else {
               switch(c) {
-                // Insert escape sequences like '\d', '\b', '\D'
-                // here
+                // FIXME: Insert escape sequences like '\d', '\b', '\D'
                 default: {
                   update_token(s->curtoken, c, ALPHA);
                 } break;

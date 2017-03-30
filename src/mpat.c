@@ -6,21 +6,8 @@
 #include <string.h>
 
 
-#ifdef DEBUG
-#define COMPUTE_SUFFIX_HASH(ptr)    (SHOW_SUFFIX_COMPUTE(ptr), ((*(ptr) << 5) + *((ptr) - 1)))
-#define SHOW_SUFFIX_COMPUTE(ptr)    (printf("SUFFIX_COMPUTE: '%c", *(ptr)), \
-                                     printf("%c':", *((ptr) - 1)), \
-                                     printf(" %ld\n", (long)((*(ptr) << 5) + *((ptr) - 1))))
-#define COMPUTE_PREFIX_HASH(ptr, m) (SHOW_PREFIX_COMPUTE(ptr, m), (*((ptr) - m + 1) << 8) + *((ptr) - m + 2))
-#define SHOW_PREFIX_COMPUTE(ptr, m) (printf("PREFIX COMPUTE (%s): '%c", (ptr - m + 1), (*((ptr) - m + 1))), \
-                                     printf("%c':",*((ptr) - m + 2)), \
-                                     printf(" %ld\n", (long)(*((ptr) - m + 1) << 8) + *((ptr) - m + 2)))
-#else
 #define COMPUTE_SUFFIX_HASH(ptr)    ((((long)(*(ptr)) << (long)5) + *((ptr) - 1)))
 #define COMPUTE_PREFIX_HASH(ptr, m) ((((long)(*((ptr) - m + 1) << 8)) + *((ptr) - m + 2)))
-#endif
-
-
 
 #define FREE_HASH(h, f) (rbtree_free((h), (f)))
 #define FREE_SHIFT(s, f) (rbtree_free((s), (f)))
@@ -37,32 +24,12 @@
 #define SHIFT_INSERT(s, k, ms) rbtree_insert((s), (k), (ms), 0)
 #define SHIFT_SEARCH(s, k) rbtree_search((s)->root, (k))
 #define HASH_SEARCH(h, k) rbtree_search((h)->root, k)
+#define HASH_APPEND_PATTERN(h, p) (list_append((List *)((h)->data), (p)))
 
-#ifdef DEBUG_INSERT
-#define HASH_APPEND_PATTERN(h, p) \
-  (\
-    printf("\tlist[0x%x]: pattern[0x%x]:%s\n", (int *)((h)->data), p, p),\
-    list_append((List *)((h)->data), (p))\
-  )
-#else
-  #define HASH_APPEND_PATTERN(h, p) (list_append((List *)((h)->data), (p)))
-#endif
- 
-#define PREFIX_SEARCH(p, k) (rbtree_search((p)->root, (k)))
-
-
-#ifdef debug
-#define SET_MIN_SHIFT(sr, shift) ({\
-  int current_shift = *((int *)((sr)->data)); \
-printf("\tcurrent shift: %d -- shift: %d\n", current_shift, shift); \
-  if(current_shift > (shift)) *((int *)((sr)->data)) = (shift);\
-})
-#else
 #define SET_MIN_SHIFT(sr, shift) ({\
   int current_shift = *((int *)((sr)->data)); \
   if(current_shift > (shift)) *((int *)((sr)->data)) = (shift);\
 })
-#endif\
 
 
 static void
@@ -99,7 +66,6 @@ free_hash(HASH * hash, VISIT_PROC_pt free_func)
             next->right = NULL;
           }
         }
-//        rbtree_free(cur->data, free_func); // don't delete constant values
         list_free(cur->data, free_func);
         free(cur);
         cur = next;
@@ -108,7 +74,6 @@ free_hash(HASH * hash, VISIT_PROC_pt free_func)
         cur = rbtree_min(cur->right);
       }
     }
-//    rbtree_free(root->data, free_func); // don't delete constant values
     list_free(root->data, free_func); // don't delete constant values
     free(root);
   }
@@ -146,13 +111,9 @@ insert_hash_record(HASH * h, long key, char * pattern, long prefix_hash)
   HASH_RECORD * hr = NULL;
   int pattern_len = (pattern == NULL) ? 0 : strlen(pattern);
   if((hr = HASH_SEARCH(h, key)) == NULL) {
-//RBTreeCtrl * pattern_list = new_rbtree();
     List * pattern_list = new_list();
     hr = rbtree_insert(h, key, pattern_list, 0);
   }
-  //HASH_APPEND_PATTERN(hr, pattern);
-//  RBTreeCtrl * r = hr->data;
-// TEST
   PrefixPattern * pfxp = malloc(sizeof(PrefixPattern) + pattern_len + 1);
   if(pfxp == NULL) {
     fatal("Insufficient virtual memory\n");
@@ -160,10 +121,7 @@ insert_hash_record(HASH * h, long key, char * pattern, long prefix_hash)
   pfxp->key = prefix_hash;
   strncpy(pfxp->pattern, pattern, pattern_len);
   (pfxp->pattern)[pattern_len] = '\0';
-  //rbtree_insert(r, pattern_len, pfxp, 0);
   HASH_APPEND_PATTERN(hr, pfxp);
-// END TEST
-//  rbtree_insert_reverse(r, pattern_len, pattern, 0);
 }
 
 
@@ -216,8 +174,10 @@ preprocess_patterns(MPatObj * mpat_obj, List * patterns)
   }
   else {
     mpat_obj->m = m;
-    // FIXME: we can do better than this
-    mpat_obj->B = 2; // the paper this is based off of suggests B = 2 or 3 for good performance
+    // the paper this is based off of suggests B = 2 or 3 for good performance
+    // FIXME: I think we can do better than hardcoding this... but leave it
+    //        for now.
+    mpat_obj->B = 2;
   }
 
   mpat_obj->default_shift = mpat_obj->m - mpat_obj->B + 1;
@@ -331,18 +291,6 @@ get_hash_patterns(MPatObj * mpat_obj, long k)
   return NULL;
 }
 
-/*
-static RBTreeCtrl *
-get_hash_patterns(MPatObj * mpat_obj, long k)
-{
-  HASH_RECORD * hr = HASH_SEARCH(mpat_obj->hash, k);
-  if(hr) {
-    return ((RBTreeCtrl *)hr->data);
-  }
-  return NULL;
-}
-*/
-
 
 static void 
 record_match(RBTreeCtrl * ml, char * b, char * e)
@@ -453,70 +401,7 @@ mpat_search(MPatObj * mpat_obj, char * text, char * text_end)
 
   return;
 }
-/*
-// Multi-pattern search
-void
-mpat_search(MPatObj * mpat_obj, char * text, char * text_end)
-{
-  if(mpat_obj == NULL || text == NULL) {
-    return;
-  }
 
-  int m = mpat_obj->m;
-  int B = mpat_obj->B;
-  int shift = 0;
-
-  char * ptr = text + m - 1;
-  char * prefix = NULL;
-  char * pattern = NULL;
-  PrefixPattern * ppattern = NULL; // FIXME: choose a different name
-  char * pat_ptr = NULL;
-  char * prev_pat_ptr = NULL;
-  char * subtxt_begin = NULL;
-  long suffix_hash;
-  long prefix_hash;
-
-
-  RBTree * p_iterator = NULL;
-  RBTreeCtrl * patterns = NULL;
-  while(ptr <= text_end) {
-    suffix_hash = COMPUTE_SUFFIX_HASH(ptr);
-    shift = get_shift(mpat_obj, suffix_hash);
-    if(shift == 0) {
-      shift = 1;
-      prefix_hash = COMPUTE_PREFIX_HASH(ptr, m);
-      patterns = get_hash_patterns(mpat_obj, suffix_hash);
-      p_iterator = rbtree_min(patterns->root);
-      char * tmp_ptr = ptr;
-      for(; p_iterator != NULL; p_iterator = rbtree_successor(p_iterator)) {
-        prefix = tmp_ptr - m + 1;
-        subtxt_begin = prefix;
-        ppattern = p_iterator->data;
-        if(ppattern->key != prefix_hash) continue;
-        pattern = ppattern->pattern;
-printf("pattern: %s vs. %s\n", pattern, text);
-        pat_ptr = pattern + B - 1;
-        prefix = prefix + B - 1;
-        while(*(pat_ptr++) == *(prefix++));
-        if(*(pat_ptr - 1) == '\0') {
-          record_match(mpat_obj->match_list, subtxt_begin, prefix - 2);
-        }
-        else {
-          if(pat_ptr < prev_pat_ptr) {
-            break;
-          }
-          else {
-            prev_pat_ptr = pat_ptr;
-          }
-        }
-      }
-    }
-    ptr += shift;
-  }
-
-  return;
-}
-*/
 
 int
 mpat_match_count(MPatObj * mpat_obj)

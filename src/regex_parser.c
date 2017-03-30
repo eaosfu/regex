@@ -885,7 +885,7 @@ prescan_input(Parser * parser)
 
 
   Scanner * new_scanner_state = init_scanner(
-    get_filename(parser->scanner), // TEST
+    get_filename(parser->scanner),
     tmp_buffer,
     parser->scanner->buf_len,
     parser->scanner->line_len,
