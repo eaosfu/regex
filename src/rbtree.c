@@ -1,6 +1,7 @@
+#include "rbtree.h"
+
 #include <stdio.h>
 #include <stdlib.h>
-#include "rbtree.h"
 
 
 
@@ -98,7 +99,6 @@ new_rbtree_node(RBTreeCtrl * tree, long key, void * data, int reuse_data)
         tree->pool_ptr = tree->pool_ptr->parent;
       }
     }
-//printf("HERE![0x%x] -- reuse data? %d -- node[0x%x]:[0x%x]\n", tree, reuse_data, tn, tn->data);
   }
   else {
     tn = xmalloc(sizeof(RBTree));
@@ -665,53 +665,3 @@ rbtree_remove(RBTree * t)
 
   return;
 }
-
-/*
-//
-// TEST
-//
-void
-rbtree_inorder(RBTree * t)
-{
-  if(t == NULL) {
-    return;
-  }
-
-  t = rbtree_min(t);
-  printf("%d", *((int *)t->data));
-  while((t = rbtree_successor(t)) != NULL) {
-    printf(" %d", *((int *)t->data));
-  }
-  printf("\n");
-}
-
-
-int
-main(void)
-{
-  //int d[] = {0}; int sz = 1;
-  //int d[] = {1, 2, 3, 4, 5, 6, 7, 8, 9, 10}; int sz = 10;
-  //int d[] = {10, 9, 81, 7, 15, 5, 14, 3, 2, 1}; int sz = 10;
-  //int d[] = {0, 10, 19, 81, 7, 15, 5, -1, 14, 3, 2, 1}; int sz = 11;
-  //int d[] = {0, 10, 19, 81, 7, 15, 5, -1, 14, 3, 2, 1, 0, 10, 19, 81, 7, 15, 5, -1, 14, 3, 2, 1}; int sz = 22;
-  int d[] = {100, 99, 98, 97, 3, 2, 1, 0}; int sz = 8;
-
-  RBTreeCtrl * tree = new_rbtree();
-
-  for(int i = 0; i < sz; ++i) {
-    rbtree_insert(tree, d[i], (void *)&(d[i]));
-  }
-
-  rbtree_inorder(tree->root);
-  printf("\n");
-
-  for(int i = 0; i < sz; ++i) {
-    printf("removing element with key: %d\n", d[i]);
-    rbtree_remove(rbtree_search(tree->root, d[i]));
-    rbtree_inorder(tree->root);
-  }
-
-  return 0;
-}
-
-*/

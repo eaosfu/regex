@@ -18,8 +18,10 @@
 #include <limits.h>
 #include <string.h>
 
+#define INPUT_IS_OUTPUT(stat) (((stat)->st_ino == stdout_stat.st_ino) &&\
+                               ((stat)->st_dev == stdout_stat.st_dev))
 
-static ino_t stdout_ino;
+static struct stat stdout_stat;
 static int fts_options = FTS_COMFOLLOW|FTS_LOGICAL; 
 static int recurse_dirs = 0;
 static int suppress_errors = 0;
@@ -38,76 +40,14 @@ static struct option const long_options[] = {
   {"silent"          , no_argument      , NULL, 'q'},
   {"no-messages"     , no_argument      , NULL, 's'},
   {"ignore-case"     , no_argument      , NULL, 'i'},
-//  {"exclude"         , no_argument      , NULL, 'E'},  // not implemented
+//  {"exclude"         , required_argument, NULL, 'E'},  // not implemented
 //  {"parallel"        , no_argument      , NULL, 'T'},  // not implemented
   {"recursive"       , no_argument      , NULL, 'r'},
   {0                 , 0                , 0   ,  0 }
 };
 
 
-static void
-get_stdout_ino()
-{
-  if(isatty(STDOUT_FILENO) == 0) {
-    struct stat sb;
-    if(fstat(STDOUT_FILENO, &sb) < 0) {
-      fatal("Internal error\n");
-    }
-    stdout_ino = sb.st_ino;
-  }
-}
-
-
-static void
-process_file(int cwd_fd, FTSENT * ftsent, Scanner * scanner, Parser * parser, NFASimCtrl * nfa_sim_ctrl, ctrl_flags * cfl, int from_command_line)
-{
-  int fd;
-  int openat_opts = O_RDONLY|O_NOCTTY;
-  openat_opts |= (from_command_line) ? 0 : O_NOFOLLOW;
-
-  fd = openat(cwd_fd, ftsent->fts_accpath, openat_opts);
-  if(fd == -1) {
-    warn("%s", ftsent->fts_accpath);
-  }
-  else {
-    if(ftsent->fts_statp->st_ino == stdout_ino) {
-      fprintf(stderr, "%s: input file '%s' is also the output\n", program_name, ftsent->fts_accpath);
-    }
-    else {
-      // do more file processing here
-      // this is where we want to call our matcher
-      int status = 0;
-      int line = 0;
-      FILE * fh = NULL;
-      NFASim  * nfa_sim     = NULL;
-
-      if((fh = fdopen(fd, "r")) == NULL) {
-        err(EXIT_FAILURE, "unable to open file: %s", ftsent->fts_accpath);
-      }
-
-      while((scanner->line_len = getline(&(scanner->buffer), &(scanner->buf_len), fh)) > 0) {
-        reset_scanner(scanner, ftsent->fts_accpath);
-        nfa_sim = reset_nfa_sim(nfa_sim_ctrl, ((NFA *)peek(parser->symbol_stack))->parent);
-        ++line; // FIXME: scanner should update the line number on it's own
-        scanner->line_no = line;
-        status += run_nfa(nfa_sim);
-        if(status != 0 && ((*cfl) & SILENT_MATCH_FLAG)) {
-          // no need to keep searching if we've found a match
-          break;
-        }
-      }
-      if(nfa_sim_ctrl->match_idx) {
-        flush_matches(nfa_sim_ctrl);
-      }
-      fclose(fh);
-    }
-  }
-  close(fd);
-  return;
-}
-
-
-// FIXME: remove this when 'stdin' processing is finally supported
+// FIXME: add support for reading from stdin
 static inline int __attribute__((always_inline))
 is_stdin(char * argv)
 {
@@ -122,38 +62,93 @@ is_stdin(char * argv)
 }
 
 
-void
-handle_search_targets(int cwd_fd, int idx, int argc, char ** argv, Scanner * scanner, Parser * parser, NFASimCtrl * nfa_sim, ctrl_flags * cfl)
+static inline void __attribute__((always_inline))
+get_stdout_stat()
 {
-  FTS * fts;
-  for(; idx < argc; ++idx) {
+  if(isatty(STDOUT_FILENO) == 0) {
+    if(fstat(STDOUT_FILENO, &stdout_stat) < 0) {
+      fatal("Internal error\n");
+    }
+  }
+}
 
-    if(is_stdin(argv[idx]))  {
+
+static void
+process_file(int cwd_fd, FTSENT * ftsent, NFASimCtrl * nfa_sim_ctrl, int from_command_line)
+{
+  int fd;
+  int openat_opts = O_RDONLY|O_NOCTTY;
+  openat_opts |= (from_command_line) ? 0 : O_NOFOLLOW;
+
+  fd = openat(cwd_fd, ftsent->fts_accpath, openat_opts);
+  if(fd == -1) {
+    warn("%s", ftsent->fts_accpath);
+  }
+  else {
+    if(INPUT_IS_OUTPUT(ftsent->fts_statp)) {
+      fprintf(stderr, "%s: input file '%s' is also the output\n", program_name, ftsent->fts_accpath);
+    }
+    else {
+      int status = 0;
+      int line = 0;
+      FILE * fh = NULL;
+      NFASim  * nfa_sim     = NULL;
+
+      if((fh = fdopen(fd, "r")) == NULL) {
+        err(EXIT_FAILURE, "unable to open file: %s", ftsent->fts_accpath);
+      }
+
+      Scanner * scanner = nfa_sim_ctrl->scanner;
+      while((scanner->line_len = getline(&(scanner->buffer), &(scanner->buf_len), fh)) > 0) {
+        reset_scanner(scanner, ftsent->fts_accpath);
+        nfa_sim = reset_nfa_sim(nfa_sim_ctrl);
+        ++line; // FIXME: scanner should update the line number on it's own
+        scanner->line_no = line;
+        status += run_nfa(nfa_sim);
+        if(status != 0 && (*(nfa_sim_ctrl->ctrl_flags) & SILENT_MATCH_FLAG)) {
+          // no need to keep searching if we've found a match
+          break;
+        }
+      }
+      if(nfa_sim_ctrl->match_idx != 0) {
+        flush_matches(nfa_sim_ctrl);
+      }
+      fclose(fh);
+    }
+  }
+  close(fd);
+  return;
+}
+
+
+void
+handle_search_targets(int cwd_fd, int idx, int argc, char ** argv, NFASimCtrl * nfa_sim_ctrl)
+{
+  FTS * fts = NULL;
+  FTSENT * ftsent = NULL;
+  char * fts_arg[2];
+  for(; idx < argc; ++idx) {
+    if(is_stdin(argv[idx])) {
       continue;
     }
-
-    char * fts_arg[2] = { argv[idx], 0};
-
+    fts_arg[0] = argv[idx];
+    fts_arg[1] = 0;
     if((fts = fts_open(fts_arg, fts_options, NULL)) != NULL) {
-      FTSENT * ftsent;
       while((ftsent = fts_read(fts)) != NULL) {
         switch(ftsent->fts_info) {
-          case FTS_SL: {
-            fprintf(stderr, "THIS IS A LINK -- %s\n", ftsent->fts_accpath);
-          } break;
           case FTS_NSOK:  // fall through
           case FTS_DEFAULT: {
+            // FIXME: add support for devices, FIFO, etc.
             // this isn't a dir or a regular file...
             fprintf(stderr, "%s: reading from devices not yet supported: skipping '%s'...\n",
                     program_name, ftsent->fts_accpath);
-            // if we make this far we can handle this type of file
           } break;
           case FTS_SLNONE:
           case FTS_F: {
             // FIXME - programmatically set the last argument to 'process_files' so we can
             //         let the user decide whether or not to read symbolic links not listed
             //         on the command line.
-            process_file(cwd_fd, ftsent, scanner, parser, nfa_sim, cfl, 0);
+            process_file(cwd_fd, ftsent, nfa_sim_ctrl, 0);
           } break;
           case FTS_NS:  // fall through
           case FTS_ERR: // fall through
@@ -163,8 +158,6 @@ handle_search_targets(int cwd_fd, int idx, int argc, char ** argv, Scanner * sca
             }
           } break;
           case FTS_D: {
-            // do we want to process the directories recursively?
-            // if not give a warning
             if(recurse_dirs == 0) {
               if(suppress_errors == 0) {
                 fprintf(stderr, "%s: %s is a directory\n", program_name, ftsent->fts_accpath);
@@ -172,11 +165,12 @@ handle_search_targets(int cwd_fd, int idx, int argc, char ** argv, Scanner * sca
               fts_set(fts, ftsent, FTS_SKIP);
               continue;
             }
-            // do nothing -- fts_open will eventually drop us into this directory
+            // do nothing
+            // fts_open will eventually drop us into this directory
           } break;
+          case FTS_SL: // fall through
           case FTS_DP: {
-            // do nothing -- fts_open only visits directories once
-            continue;
+            continue;// do nothing 
           } break;
           case FTS_DC: {
             if(suppress_errors == 0) {
@@ -184,27 +178,28 @@ handle_search_targets(int cwd_fd, int idx, int argc, char ** argv, Scanner * sca
                       program_name, ftsent->fts_accpath);
             }
           } break;
-          default: {
-            fprintf(stderr, "WHAT?: %s\n", ftsent->fts_accpath);
+          default: { // should never hit this case... at least on linux
+            if(suppress_errors == 0) {
+              fprintf(stderr, "unrecognized file type: %s, skipping...\n", ftsent->fts_accpath);
+            }
           }
         }
         // reset our errno in preparation for next iteration
         errno = 0;
       }
       if(errno != 0) {
-        // possible error from fts_read
-        err(EXIT_FAILURE, "HERE");
+        warn("%s", argv[idx]);
       }
     }
     else if(errno != 0) {
-      // this is probably a serious error... report and exit
-      err(EXIT_FAILURE, "HERE2");
+      warn("%s", argv[idx]);
     }
     // reset our errno in preparation for next iteration
     errno = 0;
   }
-
-  fts_close(fts);
+  if(fts != NULL) {
+    fts_close(fts);
+  }
 }
 
 
@@ -293,8 +288,6 @@ main(int argc, char ** argv)
   char * buffer         = NULL;
   size_t buf_len        = 0;
   unsigned int line_len = 0;
-//  List * target_files = new_list();
-//  List * target_dirs = new_list();
 
   set_program_name(argv[0]);
 
@@ -375,15 +368,18 @@ main(int argc, char ** argv)
     fclose(fh);
   }
 
-  get_stdout_ino();
+  get_stdout_stat();
 
   // if we've made it this far we have all we need to run the recognizer
   NFASimCtrl * nfa_sim_ctrl = new_nfa_sim(parser, scanner, &cfl);
 
-  handle_search_targets(AT_FDCWD, target_idx, argc, argv, scanner, parser, nfa_sim_ctrl, &cfl);
+  handle_search_targets(AT_FDCWD, target_idx, argc, argv, nfa_sim_ctrl);
 
 CLEANUP_ALL:
   if(nfa_sim_ctrl) {
+    // if we make this far there's no way nfa_sim_ctrl is unitialized,
+    // since the allocator calls exit() if memory can't be allocated...
+    #pragma GCC diagnostic ignored "-Wmaybe-uninitialized"
     free_nfa_sim(nfa_sim_ctrl);
   }
 

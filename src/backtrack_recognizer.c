@@ -1,16 +1,23 @@
 // FIXME: separate nfa_sim managment from run_nfa/search related code
-#include "bits.h"
 #include "slist.h"
 #include "token.h"
 #include "misc.h"
 #include "nfa.h"
 #include "scanner.h"
-#include <stddef.h>
 #include "backtrack_recognizer.h"
 
+#include <stddef.h>
 #include <string.h>
 #include <stdio.h>
 
+
+#define MATCH_GLOBALLY(ctrl)     (CTRL_FLAGS((ctrl)) & MGLOBAL_FLAG)
+#define INVERT_MATCH(ctrl)       (CTRL_FLAGS((ctrl)) & INVERT_MATCH_FLAG)
+#define SHOW_MATCH_LINE(ctrl)    (CTRL_FLAGS((ctrl)) & SHOW_MATCH_LINE_FLAG)
+#define INDIVIDUAL_MATCHES(ctrl) ((CTRL_FLAGS((ctrl)) & SILENT_OR_LINE_FLAG) == 0)
+#define BAIL_EARLY(ctrl)         (CTRL_FLAGS((ctrl)) & (INVERT_MATCH_FLAG|MGLOBAL_FLAG))
+#define SILENT_OR_LINE_FLAG      (SILENT_MATCH_FLAG|INVERT_MATCH_FLAG|SHOW_MATCH_LINE_FLAG)
+#define LINE_OR_INVERT(ctrl)     (CTRL_FLAGS((ctrl)) & (SHOW_MATCH_LINE_FLAG|INVERT_MATCH_FLAG))
 
 #define INPUT_CHAR(sim)        (*((sim)->input_ptr))
 #define INST_TYPE(sim)         ((sim)->ip->value.type)
@@ -22,7 +29,6 @@
 #define INST_TOKEN(sim)        (CASE_FOLD(sim) ? toupper(VALUE_LITERAL(sim)) : VALUE_LITERAL(sim))
 #define INST_LONG_TOKEN(sim)   (CASE_FOLD(sim) ? toupper(NEXT_IN_LLITERAL(sim)): NEXT_IN_LLITERAL(sim))
 #define NEXT_IN_LLITERAL(sim)  ((sim)->ip->value.lliteral[(sim)->ip->value.idx])
-
 
 static void load_next(NFASim *, NFA *);
 static void load_start_states(NFASim ** sim, NFA * start_state);
@@ -67,10 +73,19 @@ update_match(NFASim * sim)
 }
 
 
-static Match *
+static void
 new_match(NFASimCtrl * ctrl)
 {
-  Match * match = NULL;
+#define APPEND_NEWLINE(ctrl) ({                    \
+  (ctrl)->matches[(ctrl)->match_idx] = '\n',       \
+  ++((ctrl)->match_idx);                           \
+})
+
+#define APPEND_NULL(ctrl) ({                       \
+  (ctrl)->matches[(ctrl)->match_idx] = '\0',       \
+  (ctrl)->match.last_match_end = (ctrl)->match.end; \
+})
+
   if(((CTRL_FLAGS(ctrl) & SILENT_MATCH_FLAG) == 0)) {
     const char * filename = ctrl->filename;
     const char * begin    = ctrl->match.start;
@@ -87,22 +102,24 @@ new_match(NFASimCtrl * ctrl)
 
       int sz = end - begin + 1;
 
-      if((CTRL_FLAGS(ctrl) & SHOW_FILE_NAME_FLAG) && nm_len > 0) {
+      if((CTRL_FLAGS(ctrl) & SHOW_FILE_NAME_FLAG) && (nm_len > 0)) {
         sz += nm_len + 1; // add ':' after <filename>
       }
 
       if((CTRL_FLAGS(ctrl) & SHOW_LINENO_FLAG)) {
         int tmp = line_no;
-        while(tmp/10 > 0 && (tmp /=10) && ++w);
+        while((tmp/10 > 0) && (tmp /= 10) && (++w));
         sz += w + 1; // add ':' after <line number>
       }
 
+      // FIXME: WHAT HAPPENS WHEN THE INPUT IS WAY TOOO BIG!?
       // +1 for the '\0'
-      if((ctrl->match_idx + sz + 1) >= MATCH_BUCKET_SIZE) {
+      if((ctrl->match_idx + sz + 1) >= MATCH_BUFFER_SIZE) {
         flush_matches(ctrl);
       }
 
       if(ctrl->match.last_match_end) {
+        // if we reach this then the match buffer hans't been flushed
         if((ctrl->match.start - ctrl->match.last_match_end) == 0) {
           ctrl->match_idx -= 2;
         }
@@ -112,7 +129,7 @@ new_match(NFASimCtrl * ctrl)
       }
 
 
-      if((CTRL_FLAGS(ctrl) & SHOW_FILE_NAME_FLAG) && nm_len > 0) {
+      if((CTRL_FLAGS(ctrl) & SHOW_FILE_NAME_FLAG) && (nm_len > 0)) {
         snprintf(ctrl->matches + ctrl->match_idx, nm_len + 2, "%s:", filename);
         ctrl->match_idx += nm_len + 1;
         sz -= nm_len + 1;
@@ -124,15 +141,63 @@ new_match(NFASimCtrl * ctrl)
         sz -= w + 1;
       }
 
-      strncpy((ctrl->matches) + ctrl->match_idx, begin, sz);
-      ctrl->match_idx += sz;
-      ctrl->matches[ctrl->match_idx] = '\n';
-      ++(ctrl->match_idx);
-      ctrl->matches[ctrl->match_idx] = '\0';
-      ctrl->match.last_match_end = ctrl->match.end;
+      if((ctrl->match_idx + sz + 1) >= MATCH_BUFFER_SIZE) {
+        // we're in trouble here... our buffer isn't large enough to hold
+        // the output even after flushing it...
+        int fill_size = MATCH_BUFFER_SIZE - ctrl->match_idx - 1;
+        int remain_out = sz;
+        if(ctrl->match_idx != 0) {
+          // the match output was supposed to be precded by a filenmae, a linenumber
+          // or both... fill the rest of the buffer before flushing it
+          strncpy((ctrl->matches) + ctrl->match_idx, begin, fill_size);
+          ctrl->match_idx = MATCH_BUFFER_SIZE - 1;
+          APPEND_NULL(ctrl);
+          flush_matches(ctrl); // resets ctrl->match_idx to 0
+          begin += fill_size;
+          remain_out -= fill_size;
+          fill_size = MATCH_BUFFER_SIZE - 1;
+        }
+        // continue filling the buffer and flushing it until there's nothing left to
+        // print
+        while(remain_out > fill_size) {
+          strncpy((ctrl->matches) + ctrl->match_idx, begin, fill_size);
+          ctrl->match_idx = MATCH_BUFFER_SIZE - 1;
+          APPEND_NULL(ctrl);
+          flush_matches(ctrl); // resets ctrl->match_idx to 0
+          begin += fill_size;
+          remain_out -= fill_size;
+        }
+
+        // -1 for '\n', -1 for '\0'
+        fill_size = MATCH_BUFFER_SIZE - 2;
+
+        if(remain_out != 0) {
+          if(remain_out == MATCH_BUFFER_SIZE) {
+            strncpy(ctrl->matches, begin, MATCH_BUFFER_SIZE - 1);
+            ctrl->match_idx = MATCH_BUFFER_SIZE - 1;
+            APPEND_NULL(ctrl);
+            flush_matches(ctrl);
+            remain_out -= MATCH_BUFFER_SIZE - 1;
+          }
+          strncpy(ctrl->matches, begin, remain_out);
+          ctrl->match_idx = remain_out;
+          APPEND_NEWLINE(ctrl);
+          APPEND_NULL(ctrl);
+          flush_matches(ctrl);
+        }
+      }
+      else {
+        strncpy((ctrl->matches) + ctrl->match_idx, begin, sz);
+        ctrl->match_idx += sz;
+        APPEND_NEWLINE(ctrl);
+        APPEND_NULL(ctrl);
+      }
     }
   }
-  return match;
+
+#undef APPEND_NEWLINE
+#undef APPEND_NULL
+  return;
 }
 
 
@@ -193,6 +258,25 @@ reset_thread(NFASimCtrl * ctrl, NFA * start_state, char * start_pos)
   return sim;
 }
 
+/*
+static int
+check_match(NFASim * sim, int nfa_type)
+{
+  if(CTRL_FLAGS(sim->ctrl) & IGNORE_CASE_FLAG) {
+  }
+
+  switch(nfa_type) {
+    case NFA_LITERAL: {
+    } break;
+    case NFA_LONG_LITERAL: {
+    } break;
+    case NFA_RANGE: {
+    } break;
+    case NFA_ANY: {
+    }
+  }
+}
+*/
 
 static inline void *
 thread_clone(NFA * nfa, NFASim * sim)
@@ -241,13 +325,12 @@ thread_clone(NFA * nfa, NFASim * sim)
     memcpy(clone->loop_record, sim->loop_record, sizeof(LoopRecord) * sim->ctrl->loop_record_cap);
     clone->tracking_intervals = sim->tracking_intervals;
   }
-  else if(new_thread == 0) {
-    // FIXME: find a faster way of doing this -- perhaps set a dirty bit
-    //        and then check it in the NFA_INTERVAL case?
+  else if((new_thread == 0) && (clone->tracking_intervals != 0)) {
     memset(clone->loop_record, 0, sizeof(LoopRecord) * sim->ctrl->loop_record_cap);
+    clone->tracking_intervals = 0;
   }
 
-  if(clone->tracking_backrefs > 0 && new_thread == 0) {
+  if((clone->tracking_backrefs > 0) && (new_thread == 0)) {
     memcpy(clone->backref_match, sim->backref_match, sizeof(Match) * MAX_BACKREF_COUNT);
   }
 
@@ -290,8 +373,9 @@ load_next(NFASim * sim, NFA * nfa)
     } break;
     case NFA_INTERVAL: {
       ++(sim->interval_count);
-      int start, end, far_end= list_size(&(nfa->reachable)) - 1;
+      int start, end, far_end = list_size(&(nfa->reachable)) - 1;
       int count = ++((sim->loop_record[nfa->id]).count);
+      // check the status bit for loop count if dirty then memset it 0
       NFA * tmp = NULL;
       if(count < nfa->value.min_rep) {
         start = 1;
@@ -401,25 +485,6 @@ process_adjacents(NFASim *sim, NFA * nfa)
   load_next(sim, list_get_at(&(nfa->reachable), 0));
 }
 
-/*
-static int
-check_match(NFASim * sim, int nfa_type)
-{
-  if(CTRL_FLAGS(sim->ctrl) & IGNORE_CASE_FLAG) {
-  }
-
-  switch(nfa_type) {
-    case NFA_LITERAL: {
-    } break;
-    case NFA_LONG_LITERAL: {
-    } break;
-    case NFA_RANGE: {
-    } break;
-    case NFA_ANY: {
-    }
-  }
-}
-*/
 
 static int
 thread_step(NFASim * sim)
@@ -460,7 +525,7 @@ thread_step(NFASim * sim)
             break;
           }
         }
-        if(match && sim->ip->value.idx == 0) {
+        if(match && (sim->ip->value.idx == 0)) {
           process_adjacents(sim, sim->ip);
         }
         else {
@@ -615,15 +680,17 @@ update_input_pointer(NFASimCtrl * ctrl, int current_run, const char ** input_poi
   }
 }
 
+
 int
 run_nfa(NFASim * thread)
 {
-  int match_found            = 0;
+  int match_found            = 0; // a match was found at some point
   int current_run            = 0; // did we match in the current run?
   NFASimCtrl * ctrl          = thread->ctrl;
   ctrl->last_interval_pos    = 0;
   thread->input_ptr          = ctrl->buffer_start;
   const char * input_pointer = ctrl->buffer_start;
+  enum {NO_MATCH= -1, CONTINUE, MATCH};
 
   
   if(ctrl->mpat_obj != NULL) {
@@ -632,37 +699,37 @@ run_nfa(NFASim * thread)
       // there is no way we will ever match this line
       goto RELEASE_ALL_THREADS;
     }
-    // we can match the line
     input_pointer = thread->input_ptr;
   }
   else {
     // don't prescan the input
     load_start_states(&thread, ctrl->start_state);
   }
-  
   while((*input_pointer) != '\0') {
     while(thread) {
       thread_step(thread);
       switch(thread->status) {
-        case 1: {
+        case MATCH: {
           current_run = match_found = 1;
-          if((CTRL_FLAGS(ctrl) & (SILENT_MATCH_FLAG|INVERT_MATCH_FLAG|SHOW_MATCH_LINE_FLAG)) == 0) {
+          if(INDIVIDUAL_MATCHES(ctrl)) {
+            // the -o command-line option was specified
+            // the -q commane-line was NOT specified... if it had we'd
+            // BAIL_EARLY
             update_longest_match(&(ctrl->match), &(thread->match));
-            if(((CTRL_FLAGS(ctrl) & MGLOBAL_FLAG) == 0)) {
+            if(MATCH_GLOBALLY(ctrl) == 0) {
+              // the -g command-line option was specified
               new_match(ctrl);
               goto RELEASE_ALL_THREADS;
             }
           }
-          else if((CTRL_FLAGS(ctrl) & (INVERT_MATCH_FLAG|MGLOBAL_FLAG)) == 0) {
+          else if(BAIL_EARLY(ctrl) == 0) {
             goto RELEASE_ALL_THREADS;
           }
         } // fall through
-        case -1: {
-          // kill thread
+        case NO_MATCH: {
           thread = release_thread(thread, ctrl->start_state);
         } break;
-        case 0: {
-          // keep trying
+        case CONTINUE: {
           if(list_size(ctrl->active_threads) > 0) {
             list_append(ctrl->active_threads, thread);
             thread = list_shift(ctrl->active_threads);
@@ -671,7 +738,8 @@ run_nfa(NFASim * thread)
       }
     }
 
-    if((CTRL_FLAGS(ctrl) & (SHOW_MATCH_LINE_FLAG|INVERT_MATCH_FLAG)) == 0) {
+    if(LINE_OR_INVERT(ctrl) == 0) {
+      // the -o command-line option was specified
       new_match(ctrl);
     }
 
@@ -685,8 +753,8 @@ run_nfa(NFASim * thread)
 RELEASE_ALL_THREADS:
   RELEASE_ALL_THREADS(ctrl,thread);
 
-  if(((match_found == 0) && (CTRL_FLAGS(ctrl) & INVERT_MATCH_FLAG))
-  || (match_found && (CTRL_FLAGS(ctrl) & SHOW_MATCH_LINE_FLAG))) {
+  if(((match_found == 0) && INVERT_MATCH(ctrl))
+  || ((match_found == 1) && SHOW_MATCH_LINE(ctrl))) {
     ctrl->match.start = ctrl->buffer_start;
     ctrl->match.end   = ctrl->buffer_end - 1;
     new_match(ctrl);
@@ -724,7 +792,7 @@ new_nfa_sim(Parser * parser, Scanner * scanner, ctrl_flags * cfl)
 
 
 NFASim *
-reset_nfa_sim(NFASimCtrl * ctrl, NFA * start_state)
+reset_nfa_sim(NFASimCtrl * ctrl)
 {
   ctrl->match.last_match_end = NULL;
   ctrl->buffer_start         = get_cur_pos(ctrl->scanner);
@@ -750,6 +818,10 @@ reset_nfa_sim(NFASimCtrl * ctrl, NFA * start_state)
 void
 free_nfa_sim(NFASimCtrl * ctrl)
 {
+  if(ctrl == NULL) {
+    return;
+  }
+
   if(list_size((ctrl->active_threads))) {
     while(list_size((ctrl->active_threads))) {
       list_push(ctrl->thread_pool, list_shift(ctrl->active_threads));

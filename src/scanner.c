@@ -1,9 +1,10 @@
+#include "scanner.h"
+
 #include <stdio.h>
 #include <string.h>
 #include <error.h>
 #include <stdlib.h>
 #include <ctype.h>
-#include "scanner.h"
 
 // Need to modify how we declare this if we want to
 // be able to use this in a parallel environment

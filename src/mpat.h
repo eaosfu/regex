@@ -5,7 +5,6 @@
 //        greatly improve resource utilization
 //        -- see comment in 'record_match()'
 #include "rbtree.h"
-
 #include "slist.h"
 
 #define HASH   RBTreeCtrl

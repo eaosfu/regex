@@ -1,11 +1,11 @@
 #ifndef SCANNER_H_
 #define SCANNER_H_
 
-#include <stdlib.h>
-
 #include "misc.h"
 #include "stack.h"
 #include "token.h"
+
+#include <stdlib.h>
 
 typedef struct Scanner {
   int line_no;

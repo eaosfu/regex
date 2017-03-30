@@ -1,11 +1,14 @@
 #ifndef NFA_SIM_H_
 #define NFA_SIM_H_
 
-#define MAX_BACKREF_COUNT      9
-#define MATCH_BUCKET_SIZE   1024
-
 #include "regex_parser.h"
 #include "mpat.h"
+
+#include <stdio.h>
+
+
+#define MAX_BACKREF_COUNT      9
+#define MATCH_BUFFER_SIZE      BUFSIZ
 
 typedef struct Match {
   const char * start;
@@ -28,9 +31,7 @@ typedef struct NFASim {
   int tracking_backrefs;
   const char * input_ptr;
   NFA * ip;
-  NFA * start_state;
   Scanner * scanner;
-  int * loop_record_flags;
   Match match;
   Match backref_match[MAX_BACKREF_COUNT];
   LoopRecord loop_record[];
@@ -52,19 +53,17 @@ typedef struct NFASimCtrl {
   MPatObj * mpat_obj;
   ctrl_flags * ctrl_flags;
   Match match;
-  char matches[MATCH_BUCKET_SIZE];
+  char matches[MATCH_BUFFER_SIZE];
   const char * active_threads_sp[];
 } NFASimCtrl;
 
 
 int  run_nfa(NFASim *);
-//int  run_nfa(NFASimCtrl *);
 int  get_states(NFASim *, NFA *, List *, int, int, unsigned int);
 void free_nfa_sim(NFASimCtrl *);
 void flush_matches(NFASimCtrl *);
 void * free_match_string(void *);
-NFASim * reset_nfa_sim(NFASimCtrl *, NFA *);
-//NFASimCtrl * reset_nfa_sim(NFASimCtrl *, NFA *);
+NFASim * reset_nfa_sim(NFASimCtrl *);
 NFASimCtrl * new_nfa_sim(Parser *, Scanner *, ctrl_flags *);
 
 #endif
