@@ -287,7 +287,7 @@ main(int argc, char ** argv)
   const char * filename = NULL;
   char * buffer         = NULL;
   size_t buf_len        = 0;
-  unsigned int line_len = 0;
+  int line_len = 0;
 
   set_program_name(argv[0]);
 
@@ -361,7 +361,7 @@ main(int argc, char ** argv)
   }
 
   if(parse_regex(parser) == 0) {
-    goto CLEANUP_ALL;
+    goto CLEANUP_PARSER;
   }
 
   if(fh) {
@@ -375,13 +375,7 @@ main(int argc, char ** argv)
 
   handle_search_targets(AT_FDCWD, target_idx, argc, argv, nfa_sim_ctrl);
 
-CLEANUP_ALL:
-  if(nfa_sim_ctrl) {
-    // if we make this far there's no way nfa_sim_ctrl is unitialized,
-    // since the allocator calls exit() if memory can't be allocated...
-    #pragma GCC diagnostic ignored "-Wmaybe-uninitialized"
-    free_nfa_sim(nfa_sim_ctrl);
-  }
+  free_nfa_sim(nfa_sim_ctrl);
 
 CLEANUP_PARSER:
   parser_free(parser);
