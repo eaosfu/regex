@@ -53,8 +53,8 @@ define make_goal
       ${${FINAL_TARGET}_INCLUDE_FLAGS} ${${FINAL_TARGET}_LD_FLAGS}\
       ${FINAL_LINK_OBJ})
     $(eval generated_recipes += ${1})
-    $(eval undefine FINAL_LINK_OBJ)
-    $(eval undefine DEPENDS)
+    $(eval FINAL_LINK_OBJ:=)
+    $(eval DEPENDS:=)
   endif
 endef
 
