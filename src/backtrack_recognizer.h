@@ -7,7 +7,6 @@
 #include <stdio.h>
 
 
-#define MAX_BACKREF_COUNT      9
 #define MATCH_BUFFER_SIZE      BUFSIZ
 
 typedef struct Match {
@@ -33,7 +32,7 @@ typedef struct NFASim {
   NFA * ip;
   Scanner * scanner;
   Match match;
-  Match backref_match[MAX_BACKREF_COUNT];
+  Match backref_match[CGRP_MAX];
   LoopRecord loop_record[];
 } NFASim;
 

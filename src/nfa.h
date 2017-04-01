@@ -3,8 +3,6 @@
 #include "bits.h"
 #include "slist.h"
 
-#include <limits.h>
-
 
 #define NFA_ANY              0x00001
 #define NFA_LITERAL          0x00002
@@ -14,8 +12,7 @@
 #define NFA_ACCEPTING        0x00020
 #define NFA_BOL_ANCHOR       0x00040
 #define NFA_EOL_ANCHOR       0x00080
-#define NFA_NGLITERAL        0x00100 // negated literal as in [^abc]
-#define NFA_INTERVAL         0x00200 // negated literal as in [^abc]
+#define NFA_INTERVAL         0x00200
 #define NFA_BACKREFERENCE    0x00400 
 #define NFA_CAPTUREGRP_END   0x00800 
 #define NFA_CAPTUREGRP_BEGIN 0x01000 
@@ -25,15 +22,9 @@
 #define NFA_PROGRESS         0x20000
 #define NFA_LITERAL_HEAD     0x40000
 
-#define SIZE_OF_LOCALE 128 // currently limited to ASCII.. technically 127 but 128 shouldn't hurt
-
-#define RANGE_BITVEC_WIDTH REGULAR_BITVEC_WIDTH
-#define SIZE_OF_RANGE (SIZE_OF_LOCALE/RANGE_BITVEC_WIDTH)
-#define NEXT_NFA_ID(ctrl)  (((ctrl) == NULL) ? -1 : (ctrl)->next_seq_id)
-
 #define DONE    0x01
 #define CYCLE   0x02
-#define GREEDY  0x04 // FIXME: we're not currently using this anywhere..
+//#define GREEDY  0x04 // FIXME: we're not currently using this anywhere..
 #define VISITED 0x08
 #define ACCEPTS 0x10
 
@@ -57,9 +48,13 @@
 #define CHECK_NFA_ACCEPTS_FLAG(n) ((n)->flags & ACCEPTS)
 #define CHECK_NFA_VISITED_FLAG(n) ((n)->flags & VISITED)
 
+#define SIZE_OF_LOCALE 128 // currently limited to ASCII.. technically 127 but 128 shouldn't hurt
+#define SIZE_OF_RANGE (SIZE_OF_LOCALE/BITS_PER_BLOCK)
+#define NEXT_NFA_ID(ctrl)  (((ctrl) == NULL) ? -1 : (ctrl)->next_seq_id)
+
 // In future, this will need to be compplemented by some other data
 // structure in order to support more than just ASCII
-typedef unsigned int nfa_range[SIZE_OF_RANGE];
+typedef BIT_MAP_TYPE nfa_range[SIZE_OF_RANGE];
 
 
 typedef struct NFACtrl {

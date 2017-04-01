@@ -63,7 +63,8 @@ track_capture_group(Parser * parser, unsigned int type)
         right->parent->id;
     }
 
-    right->parent->id = parser->paren_stack[parser->paren_idx - 1] - 1;
+    // set the 'proper' id for the NFA_CAPTUREGRP_* node
+    right->parent->id = (parser->paren_stack)[parser->paren_idx - 1] - 1;
     push(parser->symbol_stack, concatenate_nfa(left, right));
   }
 
@@ -689,7 +690,7 @@ update_open_paren_accounting(Parser * parser)
   ++(parser->paren_count);
   parser->current_cgrp = ++(parser->cgrp_count);
 
-  parser->paren_stack[parser->paren_idx] = parser->cgrp_count;
+  (parser->paren_stack)[parser->paren_idx] = parser->cgrp_count;
   ++(parser->paren_idx);
 
   track_capture_group(parser, NFA_CAPTUREGRP_BEGIN);
@@ -768,7 +769,7 @@ validate_backref(Parser * parser)
   //   - backreference is in the capture-group it references
   //   - backreference precedes the capture-group.
   if((val == 0)
-  || (val > MAX_CGRP)
+  || (val > CGRP_MAX)
   || (parser->capgrp_record[val - 1].end == NULL)) {
     parser_fatal(INVALID_BACKREF_ERROR, REGEX, READHEAD);
   }
@@ -896,6 +897,7 @@ prescan_input(Parser * parser)
 
   char ** next = &(parser->scanner->readhead);
   int eol = parser->scanner->eol_symbol;
+  int paren_count = 0;
 
   if((*next)[0] != eol) {
     char c = next_char(parser->scanner);
@@ -909,12 +911,19 @@ prescan_input(Parser * parser)
           c = next_char(parser->scanner);
           continue;
         } break;
+        case '(' : {
+          ++paren_count;
+        } // fall through
         default: {
           c = next_char(parser->scanner);
         } break;
       }
     }
   }
+  if(paren_count != 0) {
+    parser->paren_stack = xmalloc(sizeof(int)*paren_count);
+  }
+
   new_scanner_state = scanner_pop_state(&(parser->scanner));
   free_scanner(new_scanner_state);
 
@@ -1199,5 +1208,6 @@ parser_free(Parser * parser)
   stack_delete((parser->branch_stack), NULL);
   mpat_obj_free(&parser->mpat_obj);
   free(parser->nfa_ctrl);
+  free(parser->paren_stack);
   free(parser);
 }

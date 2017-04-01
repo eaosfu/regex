@@ -137,12 +137,12 @@ update_range_nfa(unsigned int low, unsigned int high, NFA * range_nfa, int negat
 {
   if(negate) {
     for(int i = low; i <= high; ++i) {
-      clear_bit_array(*(range_nfa->value.range), RANGE_BITVEC_WIDTH, i);
+      clear_bit_array(BIT_MAP_TYPE, *(range_nfa->value.range), BITS_PER_BLOCK, i);
     }
   }
   else {
     for(int i = low; i <= high; ++i) {
-      set_bit_array(*(range_nfa->value.range), RANGE_BITVEC_WIDTH, i);
+      set_bit_array(BIT_MAP_TYPE, *(range_nfa->value.range), BITS_PER_BLOCK, i);
     }
   }
 }
@@ -160,7 +160,7 @@ new_range_nfa(NFACtrl * ctrl, int negate)
 
   if(negate) {
     for(int i = 0; i < SIZE_OF_RANGE; ++i) {
-      (*(start->value.range))[i] = 0xffffffff;
+      (*(start->value.range))[i] = ~((BIT_MAP_TYPE)0x0);
     }
   }
 

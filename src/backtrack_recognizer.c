@@ -227,8 +227,8 @@ is_literal_in_range(nfa_range range, int c)
 {
   int ret = 0;
   if(c > 0) {
-    unsigned int mask = set_bit(RANGE_BITVEC_WIDTH, c)|0;
-    if(range[get_bit_array_idx(c, RANGE_BITVEC_WIDTH)] & mask) {
+    BIT_MAP_TYPE mask = set_bit(BIT_MAP_TYPE, BITS_PER_BLOCK, c)|0;
+    if(range[get_bit_array_idx(c, BITS_PER_BLOCK)] & mask) {
       ret = 1;
     }
   }
@@ -331,7 +331,7 @@ thread_clone(NFA * nfa, NFASim * sim)
   }
 
   if((clone->tracking_backrefs > 0) && (new_thread == 0)) {
-    memcpy(clone->backref_match, sim->backref_match, sizeof(Match) * MAX_BACKREF_COUNT);
+    memcpy(clone->backref_match, sim->backref_match, sizeof(Match) * CGRP_MAX);
   }
 
   load_next(clone, nfa);
