@@ -1,6 +1,6 @@
 #include "misc.h"
 #include "scanner.h"
-#include "backtrack_recognizer.h"
+#include "recognizer.h"
 
 #include <libgen.h>
 #include <getopt.h>

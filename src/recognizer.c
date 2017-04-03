@@ -4,7 +4,7 @@
 #include "misc.h"
 #include "nfa.h"
 #include "scanner.h"
-#include "backtrack_recognizer.h"
+#include "recognizer.h"
 
 #include <stddef.h>
 #include <string.h>

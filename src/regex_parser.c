@@ -1052,6 +1052,7 @@ compute_mpat_tables(Parser * parser, NFA * start)
         list_append(patterns, nfa->value.lliteral);
       } break;
       default: {
+        // FIXME:
         // if we fall here we need to decide what to do... for exmaple
         //  we may be able to expand the regex to a point and add it
         //  to our 'patterns' list. but for now make so the the recognizer

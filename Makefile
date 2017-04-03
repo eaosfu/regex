@@ -12,7 +12,7 @@ RUN_SLIST_TEST := ./bin/test_slist
 MODULE_DESCRIPTORS:=${TOP_DIR}/build/module_descriptors
 
 test_targets    := test_slist test_all wrapper_funcs test_regex all
-product_targets := scanner misc nfa slist token regex_parser recognizer backtrack_recognizer
+product_targets := scanner misc nfa slist token regex_parser recognizer
 
 .PHONY: ${product_targets} ${test_targets}
 
@@ -88,14 +88,14 @@ define make_regex_parser
   $(call make_goal,regex_parser)
 endef
 
+#define make_recognizer
+#  $(call make_deps,recognizer)
+#  $(call make_goal,recognizer)
+#endef
+
 define make_recognizer
   $(call make_deps,recognizer)
   $(call make_goal,recognizer)
-endef
-
-define make_backtrack_recognizer
-  $(call make_deps,backtrack_recognizer)
-  $(call make_goal,backtrack_recognizer)
 endef
 
 define make_regex
