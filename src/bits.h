@@ -7,10 +7,13 @@
 #if ( __x86_64__ || __amd64__ || __ia_64__ )
   #define BITS_PER_BLOCK 64
   #define BIT_MAP_TYPE uint64_t
-#else
+#else // assuming a 32 bit arch
   #define BITS_PER_BLOCK 32
   #define BIT_MAP_TYPE uint32_t
 #endif
+
+// currently limited to ASCII.. technically 127 but 128 shouldn't hurt
+#define SIZE_OF_LOCALE 128
 
 
 // get_bit_array_idx

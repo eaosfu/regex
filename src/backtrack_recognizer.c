@@ -73,8 +73,8 @@ update_match(NFASim * sim)
 }
 
 
-static void
-new_match(NFASimCtrl * ctrl)
+static inline void __attribute__((always_inline))
+fill_output_buffer(NFASimCtrl * ctrl, const char * begin, int sz, int flush_buffer)
 {
 #define APPEND_NEWLINE(ctrl) ({                    \
   (ctrl)->matches[(ctrl)->match_idx] = '\n',       \
@@ -86,13 +86,83 @@ new_match(NFASimCtrl * ctrl)
   (ctrl)->match.last_match_end = (ctrl)->match.end; \
 })
 
+  if((ctrl->match_idx + sz + 1) >= MATCH_BUFFER_SIZE) {
+    // we're in trouble here... our buffer isn't large enough to hold
+    // the output even after flushing it...
+    int fill_size = MATCH_BUFFER_SIZE - ctrl->match_idx - 1;
+    int remain_out = sz;
+    if(ctrl->match_idx != 0) {
+      if(fill_size < 1) {
+        flush_matches(ctrl);
+        fill_size = MATCH_BUFFER_SIZE - 1;
+      }
+      else {
+        // the match output was supposed to be precded by a filenmae, a linenumber
+        // or both... fill the rest of the buffer before flushing it
+        strncpy((ctrl->matches) + ctrl->match_idx, begin, fill_size);
+        ctrl->match_idx = MATCH_BUFFER_SIZE - 1;
+        APPEND_NULL(ctrl);
+        flush_matches(ctrl); // resets ctrl->match_idx to 0
+        begin += fill_size;
+        remain_out -= fill_size;
+        fill_size = MATCH_BUFFER_SIZE - 1;
+      }
+    }
+    // continue filling and flushing buffer until there's nothing left to
+    // print
+    while(remain_out > fill_size) {
+      strncpy((ctrl->matches) + ctrl->match_idx, begin, fill_size);
+      ctrl->match_idx = MATCH_BUFFER_SIZE - 1;
+      APPEND_NULL(ctrl);
+      flush_matches(ctrl); // resets ctrl->match_idx to 0
+      begin += fill_size;
+      remain_out -= fill_size;
+    }
+    // -1 for '\n', -1 for '\0'
+    fill_size = MATCH_BUFFER_SIZE - 2;
+
+    if(remain_out != 0) {
+      if(remain_out == MATCH_BUFFER_SIZE) {
+        strncpy(ctrl->matches, begin, MATCH_BUFFER_SIZE - 1);
+        ctrl->match_idx = MATCH_BUFFER_SIZE - 1;
+        APPEND_NULL(ctrl);
+        flush_matches(ctrl);
+        remain_out -= MATCH_BUFFER_SIZE - 1;
+      }
+      strncpy(ctrl->matches, begin, remain_out);
+      ctrl->match_idx = remain_out;
+      APPEND_NEWLINE(ctrl);
+      APPEND_NULL(ctrl);
+      flush_matches(ctrl);
+    }
+  }
+  else {
+    strncpy((ctrl->matches) + ctrl->match_idx, begin, sz);
+    ctrl->match_idx += sz;
+    APPEND_NEWLINE(ctrl);
+    APPEND_NULL(ctrl);
+    if(flush_buffer) {
+      flush_matches(ctrl);
+    }
+  }
+  return;
+#undef APPEND_NEWLINE
+#undef APPEND_NULL
+}
+
+
+static void
+new_match(NFASimCtrl * ctrl)
+{
   if(((CTRL_FLAGS(ctrl) & SILENT_MATCH_FLAG) == 0)) {
     const char * filename = ctrl->filename;
     const char * begin    = ctrl->match.start;
     const char * end      = ctrl->match.end;
     int nm_len            = ctrl->filename_len;
     int line_no           = ctrl->scanner->line_no;
-    int w = 1;
+    int w                 = 1;
+    int flush_buffer      = 0;
+    int input_too_big     = 0;
     if(begin && (begin <= end)) {
 
       if((CTRL_FLAGS(ctrl) & SHOW_MATCH_LINE_FLAG)) {
@@ -112,12 +182,6 @@ new_match(NFASimCtrl * ctrl)
         sz += w + 1; // add ':' after <line number>
       }
 
-      // FIXME: WHAT HAPPENS WHEN THE INPUT IS WAY TOOO BIG!?
-      // +1 for the '\0'
-      if((ctrl->match_idx + sz + 1) >= MATCH_BUFFER_SIZE) {
-        flush_matches(ctrl);
-      }
-
       if(ctrl->match.last_match_end) {
         // if we reach this then the match buffer hans't been flushed
         if((ctrl->match.start - ctrl->match.last_match_end) == 0) {
@@ -128,75 +192,49 @@ new_match(NFASimCtrl * ctrl)
         }
       }
 
+      input_too_big = ((ctrl->match_idx + sz + 1) >= MATCH_BUFFER_SIZE);
+
+      // +1 for '\0'
+      if((ctrl->match_idx != 0) && input_too_big) {
+        flush_matches(ctrl);
+        input_too_big = ((ctrl->match_idx + sz + 1) >= MATCH_BUFFER_SIZE);
+      }
 
       if((CTRL_FLAGS(ctrl) & SHOW_FILE_NAME_FLAG) && (nm_len > 0)) {
-        snprintf(ctrl->matches + ctrl->match_idx, nm_len + 2, "%s:", filename);
-        ctrl->match_idx += nm_len + 1;
+        if(input_too_big) {
+          // if we get here then we've alread flushed the output buffer
+          // but still don't have enough space in the output buffer.
+          // call printf and let output buffer handle printing the match
+          printf("%s:", filename);
+          // since the match by itself may have fit into the output buffer we need
+          // to force flushing the output buffer to ensure we don't have an awkward
+          // delay between printing the filename and match
+          flush_buffer = 1;
+        }
+        else {
+          snprintf(ctrl->matches + ctrl->match_idx, nm_len + 2, "%s:", filename);
+          ctrl->match_idx += nm_len + 1;
+        }
         sz -= nm_len + 1;
       }
 
       if((CTRL_FLAGS(ctrl) & SHOW_LINENO_FLAG)) {
-        snprintf(ctrl->matches + ctrl->match_idx, nm_len + w + 1, "%d:", line_no);
-        ctrl->match_idx += w + 1;
+        // see comment immediately above... where filename is printed
+        if(input_too_big) {
+          printf("%d:", line_no);
+          flush_buffer = 1;
+        }
+        else {
+          snprintf(ctrl->matches + ctrl->match_idx, nm_len + w + 1, "%d:", line_no);
+          ctrl->match_idx += w + 1;
+        }
         sz -= w + 1;
       }
 
-      if((ctrl->match_idx + sz + 1) >= MATCH_BUFFER_SIZE) {
-        // we're in trouble here... our buffer isn't large enough to hold
-        // the output even after flushing it...
-        int fill_size = MATCH_BUFFER_SIZE - ctrl->match_idx - 1;
-        int remain_out = sz;
-        if(ctrl->match_idx != 0) {
-          // the match output was supposed to be precded by a filenmae, a linenumber
-          // or both... fill the rest of the buffer before flushing it
-          strncpy((ctrl->matches) + ctrl->match_idx, begin, fill_size);
-          ctrl->match_idx = MATCH_BUFFER_SIZE - 1;
-          APPEND_NULL(ctrl);
-          flush_matches(ctrl); // resets ctrl->match_idx to 0
-          begin += fill_size;
-          remain_out -= fill_size;
-          fill_size = MATCH_BUFFER_SIZE - 1;
-        }
-        // continue filling the buffer and flushing it until there's nothing left to
-        // print
-        while(remain_out > fill_size) {
-          strncpy((ctrl->matches) + ctrl->match_idx, begin, fill_size);
-          ctrl->match_idx = MATCH_BUFFER_SIZE - 1;
-          APPEND_NULL(ctrl);
-          flush_matches(ctrl); // resets ctrl->match_idx to 0
-          begin += fill_size;
-          remain_out -= fill_size;
-        }
-
-        // -1 for '\n', -1 for '\0'
-        fill_size = MATCH_BUFFER_SIZE - 2;
-
-        if(remain_out != 0) {
-          if(remain_out == MATCH_BUFFER_SIZE) {
-            strncpy(ctrl->matches, begin, MATCH_BUFFER_SIZE - 1);
-            ctrl->match_idx = MATCH_BUFFER_SIZE - 1;
-            APPEND_NULL(ctrl);
-            flush_matches(ctrl);
-            remain_out -= MATCH_BUFFER_SIZE - 1;
-          }
-          strncpy(ctrl->matches, begin, remain_out);
-          ctrl->match_idx = remain_out;
-          APPEND_NEWLINE(ctrl);
-          APPEND_NULL(ctrl);
-          flush_matches(ctrl);
-        }
-      }
-      else {
-        strncpy((ctrl->matches) + ctrl->match_idx, begin, sz);
-        ctrl->match_idx += sz;
-        APPEND_NEWLINE(ctrl);
-        APPEND_NULL(ctrl);
-      }
+      fill_output_buffer(ctrl, begin, sz, flush_buffer);
     }
   }
 
-#undef APPEND_NEWLINE
-#undef APPEND_NULL
   return;
 }
 
@@ -204,11 +242,11 @@ new_match(NFASimCtrl * ctrl)
 inline void
 flush_matches(NFASimCtrl * ctrl)
 {
-  if(((CTRL_FLAGS(ctrl) & SILENT_MATCH_FLAG) == 0)) {
+//  if(((CTRL_FLAGS(ctrl) & SILENT_MATCH_FLAG) == 0)) {
     printf("%s", ctrl->matches);
     ctrl->match_idx = 0;
     ctrl->match.last_match_end = 0;
-  }
+//  }
 }
 
 
@@ -784,7 +822,7 @@ new_nfa_sim(Parser * parser, Scanner * scanner, ctrl_flags * cfl)
   sim->ctrl->thread_pool     = new_list();
   sim->ctrl->ctrl_flags      = cfl;
   sim->ctrl->start_state     = sim->ip;
-  sim->ctrl->mpat_obj     = parser->mpat_obj;
+  sim->ctrl->mpat_obj        = parser->mpat_obj;
   list_push(sim->ctrl->thread_pool, sim);
 
   return sim->ctrl;
@@ -799,9 +837,9 @@ reset_nfa_sim(NFASimCtrl * ctrl)
   ctrl->buffer_end           = get_buffer_end(ctrl->scanner) - 1;
   ctrl->filename             = get_filename(ctrl->scanner);
   ctrl->filename_len         = strlen(ctrl->filename);
-  ctrl->match.start                  = NULL;
-  ctrl->match.end                    = NULL;
-  NFASim * sim = NULL;
+  ctrl->match.start          = NULL;
+  ctrl->match.end            = NULL;
+  NFASim * sim               = NULL;
   if(list_size(ctrl->thread_pool)) {
     sim = list_shift(ctrl->thread_pool);
     sim->match.end                  = NULL;

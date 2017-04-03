@@ -6,8 +6,17 @@
 
 #include <stdio.h>
 
-
-#define MATCH_BUFFER_SIZE      BUFSIZ
+// this needs to be >= 3
+//   -- 1 for the match
+//   -- 1 for '\n'
+//   -- 1 for '\0'
+#ifdef MATCH_BUFFER_SIZE
+  #if MATCH_BUFFER_SIZE < 3
+    #define MATCH_BUFFER_SIZE      3
+  #endif
+#else
+  #define MATCH_BUFFER_SIZE      BUFSIZ
+#endif
 
 typedef struct Match {
   const char * start;
@@ -23,7 +32,7 @@ typedef struct LoopRecord {
 
 typedef struct NFASim {
   struct NFASimCtrl * ctrl;
-  int size; // size of this struct plus size of loop_record
+  int size; // size of this struct + size of loop_record
   int status;
   int interval_count;
   int tracking_intervals;

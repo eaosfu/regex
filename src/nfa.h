@@ -48,7 +48,6 @@
 #define CHECK_NFA_ACCEPTS_FLAG(n) ((n)->flags & ACCEPTS)
 #define CHECK_NFA_VISITED_FLAG(n) ((n)->flags & VISITED)
 
-#define SIZE_OF_LOCALE 128 // currently limited to ASCII.. technically 127 but 128 shouldn't hurt
 #define SIZE_OF_RANGE (SIZE_OF_LOCALE/BITS_PER_BLOCK)
 #define NEXT_NFA_ID(ctrl)  (((ctrl) == NULL) ? -1 : (ctrl)->next_seq_id)
 

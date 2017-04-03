@@ -114,7 +114,7 @@ insert_hash_record(HASH * h, long key, char * pattern, long prefix_hash)
     List * pattern_list = new_list();
     hr = rbtree_insert(h, key, pattern_list, 0);
   }
-  PrefixPattern * pfxp = malloc(sizeof(PrefixPattern) + pattern_len + 1);
+  PrefixPattern * pfxp = malloc(sizeof(*pfxp) + pattern_len + 1);
   if(pfxp == NULL) {
     fatal("Insufficient virtual memory\n");
   }

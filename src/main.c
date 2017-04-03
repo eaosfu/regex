@@ -190,15 +190,13 @@ handle_search_targets(int cwd_fd, int idx, int argc, char ** argv, NFASimCtrl * 
       if(errno != 0) {
         warn("%s", argv[idx]);
       }
+      fts_close(fts);
     }
     else if(errno != 0) {
       warn("%s", argv[idx]);
     }
     // reset our errno in preparation for next iteration
     errno = 0;
-  }
-  if(fts != NULL) {
-    fts_close(fts);
   }
 }
 
