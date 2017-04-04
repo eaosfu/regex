@@ -16,6 +16,12 @@
 #define SIZE_OF_LOCALE 128
 
 
+#define set_high_bit(t, w) ((t)0x01 << ((w) - 1))
+
+
+#define set_all_bits(t) (~(t)0x0)
+
+
 // get_bit_array_idx
 //
 // 'v' bit-vector
@@ -37,8 +43,6 @@
 #define get_bit_array_bucket(a, w, v) \
   ((a)[get_bit_array_idx((v),(w))])
   
-
-#define set_high_bit(t, w) ((t)0x01 << ((w) - 1))
 
 // set_bit
 //
@@ -69,10 +73,10 @@
   ((a)[get_bit_array_idx((v),(w))] |= (set_bit(t, (w), (v))))
 
 
+// check if bit is set in bucket
 #define check_bit_array(t, a, w, v) \
  ((a)[get_bit_array_idx((v), (w))] & set_bit(t, (w), (v)))
 
-#define set_all_bits(t, w) (((set_high_bit(t, w) - 1) << 1) | (t)(0x1b))
 
 // clear_bit_array
 //
@@ -84,7 +88,7 @@
 // bit. 
 //
 #define clear_bit_array(t, a, w, v) \
-  ((a)[get_bit_array_idx((v),(w))] &= (set_all_bits(t, w) ^ (set_bit(t, (w), (v)))))
+  ((a)[get_bit_array_idx((v),(w))] &= (set_all_bits(t) ^ (set_bit(t, (w), (v)))))
 
 
 #endif
