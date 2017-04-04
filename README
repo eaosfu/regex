@@ -1,0 +1,120 @@
+BUIDLING:
+================================================================================
+
+  user@host: make all
+
+Assuming no errors are encountered this will drop the executable named 
+'recognizer' into the project's 'bin' directory.
+
+RUNNING:
+================================================================================
+You can use the recognizer in much the same way you would GNU grep. One nice
+thing about this recognizer, however, is that you do NOT need to escape special
+special meta-characters unless you wish to match them. For example to match the
+string 'aa' with grep you would write:
+
+  grep '\(a\)\1' <input_file>
+  grep -o '\(a\)\1' <input_file>
+
+The equivalent expression can be written as:
+
+  ./bin/recognizer '(a)\1' <input_file>
+  ./bin/recognizer -g -o '(a)\1' <input_file>
+
+Conversely, in order to match meta-characters they must be escaed in
+'recognizer' but not with GNU grep. In other words, to match the string '(a)'
+
+  grep '(a)' <input_file>
+  grep -o '(a)' <input_file>
+
+Whereas, you would write:
+
+  ./bin/recognizer '\(a\)' <input_file>
+  ./bin/recognizer -g -o '\(a\)' <input_file>
+
+Notice the extra '-g' option passed to recognizer whenever the '-o' option is
+passed. This is necessary to force recognizer to match all occurrences of the
+pattern on an input line. Otherwise recognizer will move onto the next line
+after the first occurrence has been found. As an example, omitting the '-g'
+flag when specifying the '-o' on the following regex and 'input_file':
+
+  user@host: cat input_file
+  user@host: axxa
+  user@host: ./bin/recognizer -o 'a' input_file
+  a
+  user@host: 
+
+only prints out the first 'a' in 'input_file'. Passing the '-g' along with the
+'-o' flag prints out all occurrences of the pattern in 'input_file':
+
+  user@host: ./bin/recognizer -o -g 'a' input_file
+  a
+  a
+  user@host:
+
+NOTES:
+================================================================================
+The following character classes are supported:
+
+ - [:alnum:]  # Match alphanumeric characters. This is the same as [0-9A-Za-z]
+ - [:alpha:]  # Match alphabetic characters. This is the same as [A-Za-z]
+ - [:blank:]  # Match the characters: space and tab
+ - [:cntrl:]  # Matches characters with octal codes 000 through 037
+ - [:digit:]  # Matches digits 0 through 9. This is the same as [0-9]
+ - [:graph:]  # Combines [:alnum:] and [:punct:]
+ - [:lower:]  # lower-case alphabetic characters: This is the same as [a-z]
+ - [:space:]  # Match tab, newline, vertical tab, form feed, carriage return,
+                and space
+ - [:print:]  # Same as [:graph:] but adds space
+ - [:upper:]  # Upper-case alphabetic characters: This is the same as [a-z]
+ - [:xdigit:] # Match hexadecimal digits: 0 1 2 3 4 5 6 7 8 9 A B C D E F a
+                                          b c d e f
+ - [:punct:]  # Matches:  ! " # $ % & ' ( ) * + , - . / : ; < = > ? @ [ \ ] ^ _
+                          ` { | } ~
+
+Missing shorthand expressions:
+The following expressions are currently treated as string matches:
+
+ - \b  # Match the empty string at the endge of a word
+ - \B  # Match the empty string provided it's not at the edge of a word
+ - \<  # Match the empty string at the beginning of word.
+ - \>  # Match the empty string at the end of word.
+ - \w  # Match word constituent, it is a synonym for '[_[:alnum:]]'.
+ - \W  # Match non-word constituent, it is a synonym for '[^_[:alnum:]]'.
+ - \s  # Match whitespace, it is a synonym for '[[:space:]]'.
+ - \S  # Match non-whitespace, it is a synonym for '[^[:space:]]'.
+
+KNOWN ISSUES:
+================================================================================
+Currently only the ASCII character set is supported.
+----------------------------------------------------
+Support for UTF-8 will come some time in the future.
+
+Interval expressions/Counted Loops:
+-----------------------------------
+More work needs to be done to improve the performance of 'interval-expressions'
+i.e. expressions of the form <sub-expression>{Min,Max} (these are also referred
+to as 'counted loops').
+
+In particular when written like 'a{2,2}a{0,10}'. To avoid bad performance one
+should try to re-write such expressions like: 'a{2,12}'.
+
+The engine should be able to perform this type of transformation internally not
+too far in the future.
+
+-------------------------------
+
+Testing:
+--------
+To check the matching accuracy of 'recognizer' I compare against the GNU grep
+2.26 ouput running on Linux Debian 4.7.0-1-amd64 output. Since this output is
+generated when the test is run, you may see a large number of failures. For
+example the stock version of BSD grep that comes with OS X 10.8 doesn't generate
+the same output, hence a large number of failures.
+
+This could be fixed by including test files. But there are 700+ tests and
+I'm the only one developing this thing on my personal machine so I'm ok
+with this current setup.
+
+In future I'll look to see if there are standard test suites already written
+to test regex engines, or simply adopt the ones used by GNU grep.
