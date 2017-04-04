@@ -797,6 +797,8 @@ parse_sub_expression(Parser * parser)
 {
   NFA * right = NULL;
   NFA * left  = NULL;
+  int negate = 0;
+  unsigned int type;
 RETRY_PARSE:
   switch(parser->lookahead.type) {
     case DOT:        // fallthrough
@@ -843,10 +845,69 @@ RETRY_PARSE:
       parser->lookahead.type = ALPHA;
       goto RETRY_PARSE;
     } break;
-    case CLOSEPAREN: // fallthrough
+    case WORD_BOUNDARY: {
+      negate = 1;
+    } // fall-through
+    case NOT_WORD_BOUNDARY: {
+      type = (negate == 1) ? NFA_WORD_BOUNDARY : NFA_NOT_WORD_BOUNDARY;
+      right = new_literal_nfa(parser->nfa_ctrl, 0, type);
+      push(parser->symbol_stack, right);
+      parser_consume_token(parser);
+      parse_quantifier_expression(parser);
+      parse_sub_expression(parser);
+      right = pop(parser->symbol_stack);
+      left = pop(parser->symbol_stack);
+      push(parser->symbol_stack, concatenate_nfa(left, right));
+    } break;
+    case AT_WORD_BEGIN:  {
+      negate = 1; 
+    } // fall-through
+    case AT_WORD_END: {
+      // Match the empty string at the end of word.
+      // during recognition.. check lookahead for [[:space:]]
+      type = (negate == 0) ? NFA_WORD_END_ANCHOR : NFA_WORD_BEGIN_ANCHOR;
+      right = new_literal_nfa(parser->nfa_ctrl, 0, type);
+      push(parser->symbol_stack, right);
+      parser_consume_token(parser);
+      parse_quantifier_expression(parser);
+      parse_sub_expression(parser);
+      right = pop(parser->symbol_stack);
+      left = pop(parser->symbol_stack);
+      push(parser->symbol_stack, concatenate_nfa(left, right));
+    } break;
+    case NOT_WORD_CONSTITUENT: // synonym for '[^_[:alnum:]]'
+      negate = 1;
+    // fall-through
+    case WORD_CONSTITUENT: { // synonym for '[_[:alnum:]]'.
+      right = new_range_nfa(parser->nfa_ctrl, negate);
+      update_range_w_collation("alnum", 5, right->parent, negate);
+      update_range_nfa('_', '_', right->parent, negate);
+      push(parser->symbol_stack, right);
+      parser_consume_token(parser);
+      parse_quantifier_expression(parser);
+      parse_sub_expression(parser);
+      right = pop(parser->symbol_stack);
+      left = pop(parser->symbol_stack);
+      push(parser->symbol_stack, concatenate_nfa(left, right));
+    } break;
+    case NOT_WHITESPACE: // synonym for '[[:space:]]'
+    negate = 1;
+    // fall-through
+    case WHITESPACE: { // synonym for '[^[:space:]]'.
+      right = new_range_nfa(parser->nfa_ctrl, negate);
+      update_range_w_collation("space", 5, right->parent, negate);
+      push(parser->symbol_stack, right);
+      parser_consume_token(parser);
+      parse_quantifier_expression(parser);
+      parse_sub_expression(parser);
+      right = pop(parser->symbol_stack);
+      left = pop(parser->symbol_stack);
+      push(parser->symbol_stack, concatenate_nfa(left, right));
+    } break;
+    case CLOSEPAREN:
       if(parser->paren_count == 0) {
         parser_fatal(MISSING_OPEN_PAREN_ERROR, REGEX, READHEAD);
-      }
+      } // fallthrough
     default: {
       // epsilon production
     } break;
@@ -865,7 +926,18 @@ regex_parser_start(Parser * parser)
   || parser->lookahead.type == DOLLAR
   || parser->lookahead.type == DOT
   || parser->lookahead.type == OPENBRACKET
-  || parser->lookahead.type == OPENPAREN) {
+  || parser->lookahead.type == OPENPAREN
+// TEST
+  || parser->lookahead.type == WORD_BOUNDARY
+  || parser->lookahead.type == NOT_WORD_BOUNDARY
+  || parser->lookahead.type == AT_WORD_BEGIN
+  || parser->lookahead.type == AT_WORD_END
+  || parser->lookahead.type == WORD_CONSTITUENT
+  || parser->lookahead.type == NOT_WORD_CONSTITUENT
+  || parser->lookahead.type == WHITESPACE
+  || parser->lookahead.type == NOT_WHITESPACE
+// END TEST
+  ) {
     parse_sub_expression(parser);
   }
   else {
@@ -940,7 +1012,7 @@ compare(void * a, void * b)
   return NULL;
 }
 
-
+// FIXME: handle equivalent anchors, like '\<\b\<' to be just '\b'
 static void
 __collect_adjacencies_helper(NFA * current, NFA * visiting, int outn, NFA * forbidden, List * adj_intvls_list)
 {

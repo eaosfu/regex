@@ -17,10 +17,13 @@
 #define NFA_CAPTUREGRP_END   0x00800 
 #define NFA_CAPTUREGRP_BEGIN 0x01000 
 #define NFA_TREE             0x02000 
-#define NFA_IN_INTERVAL      0x04000
-#define NFA_LONG_LITERAL     0x10000
-#define NFA_PROGRESS         0x20000
-#define NFA_LITERAL_HEAD     0x40000
+#define NFA_LONG_LITERAL     0x04000
+#define NFA_PROGRESS         0x08000
+
+#define NFA_WORD_BEGIN_ANCHOR 0x00100
+#define NFA_WORD_END_ANCHOR   ~(NFA_WORD_BEGIN_ANCHOR)
+#define NFA_WORD_BOUNDARY     0x10000
+#define NFA_NOT_WORD_BOUNDARY ~(NFA_WORD_BOUNDARY)
 
 #define DONE    0x01
 #define CYCLE   0x02
@@ -54,7 +57,6 @@
 // In future, this will need to be compplemented by some other data
 // structure in order to support more than just ASCII
 typedef BIT_MAP_TYPE nfa_range[SIZE_OF_RANGE];
-
 
 typedef struct NFACtrl {
   struct NFACtrl * ctrl_id;

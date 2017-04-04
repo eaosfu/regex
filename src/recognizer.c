@@ -5,11 +5,14 @@
 #include "nfa.h"
 #include "scanner.h"
 #include "recognizer.h"
+#include "collations.h"
 
 #include <stddef.h>
 #include <string.h>
 #include <stdio.h>
 
+extern int ncoll;
+extern named_collations collations[];
 
 #define MATCH_GLOBALLY(ctrl)     (CTRL_FLAGS((ctrl)) & MGLOBAL_FLAG)
 #define INVERT_MATCH(ctrl)       (CTRL_FLAGS((ctrl)) & INVERT_MATCH_FLAG)
@@ -257,6 +260,36 @@ free_match_string(void * m)
     free(m);
   }
   return ((void *)NULL);
+}
+
+
+static inline int
+is_literal_space(int c)
+{
+  int ret = 0;
+  if(c > 0) {
+    if(((collations[COLL_SPACE].ranges[0].low <= c) && (collations[COLL_SPACE].ranges[0].high >= c))
+    || ((collations[COLL_SPACE].ranges[1].low <= c) && (collations[COLL_SPACE].ranges[1].high >= c))) {
+      ret = 1;
+    }
+  }
+  return ret;
+}
+
+
+static inline int
+is_literal_word_constituent(int c)
+{
+  int ret = 0;
+  if(c > 0) {
+    if(((collations[COLL_ALNUM].ranges[0].low <= c) && (collations[COLL_ALNUM].ranges[0].high >= c))
+    || ((collations[COLL_ALNUM].ranges[1].low <= c) && (collations[COLL_ALNUM].ranges[1].high >= c))
+    || ((collations[COLL_ALNUM].ranges[2].low <= c) && (collations[COLL_ALNUM].ranges[2].high >= c))) {
+      ret = 1;
+    }
+  }
+
+  return ret;
 }
 
 
@@ -633,6 +666,66 @@ thread_step(NFASim * sim)
         else {
           sim->status = -1;
         }
+      } break;
+      case NFA_WORD_BEGIN_ANCHOR: {
+        sim->status = -1;
+        if(sim->input_ptr == sim->scanner->buffer) {
+          // we're at BOL
+          if(is_literal_word_constituent(INPUT(sim))) {
+            // the current character is a [_[:alnum:]]
+            process_adjacents(sim, sim->ip);
+          }
+        }
+        else {
+          if(is_literal_word_constituent(INPUT(sim)) == 0) {
+            // the current character is a [[:space:]]
+            ++(sim->input_ptr);
+            if(is_literal_word_constituent(INPUT(sim))) {
+              // the current character is a [_[:alnum:]]
+              process_adjacents(sim, sim->ip);
+            }
+          }
+        }
+      } break;
+      case NFA_WORD_END_ANCHOR: {
+        sim->status = -1;
+        if(is_literal_word_constituent(INPUT(sim)) == 0) {
+          if(sim->input_ptr != sim->scanner->buffer) {
+            int c = *(sim->input_ptr - 1);
+            if(is_literal_word_constituent(c)) {
+              process_adjacents(sim, sim->ip);
+            }
+          }
+        }
+      } break;
+      case NFA_WORD_BOUNDARY: {
+        sim->status = -1;
+        int c;
+        if(sim->input_ptr == sim->scanner->buffer) {
+          c = *(sim->input_ptr + 1);
+          if(is_literal_word_constituent(c)) {
+            process_adjacents(sim, sim->ip);
+          }
+        }
+        else if(INPUT(sim) == EOL(sim)) {
+          c = *(sim->input_ptr - 1);
+          if(is_literal_word_constituent(c)) {
+            process_adjacents(sim, sim->ip);
+          }
+        }
+        else {
+          if(is_literal_word_constituent(INPUT(sim)) == 0) {
+            if(is_literal_word_constituent(*(sim->input_ptr - 1))
+            || is_literal_word_constituent(*(sim->input_ptr + 1))) {
+              ++(sim->input_ptr);
+              process_adjacents(sim, sim->ip);
+            }
+          }
+        }
+      } break;
+      case NFA_NOT_WORD_BOUNDARY: {
+        // FIXME:
+        sim->status = -1;
       } break;
       case NFA_ACCEPTING: {
         sim->status = 1;

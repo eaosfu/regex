@@ -269,17 +269,17 @@ regex_scan(Scanner * s)
 
   while(ret != 1 && (c = next_char(s)) != '\0') {
     switch(c) {
-      case '0' : // fallthrough
-      case '1' : // fallthrough
-      case '2' : // fallthrough
-      case '3' : // fallthrough
-      case '4' : // fallthrough
-      case '5' : // fallthrough
-      case '6' : // fallthrough
-      case '7' : // fallthrough
-      case '8' : // fallthrough
+      case '0' : // fall-through
+      case '1' : // fall-through
+      case '2' : // fall-through
+      case '3' : // fall-through
+      case '4' : // fall-through
+      case '5' : // fall-through
+      case '6' : // fall-through
+      case '7' : // fall-through
+      case '8' : // fall-through
       case '9' : update_token(s->curtoken, c, ASCIIDIGIT);  ret = 1; break;
-      case '\n': seen_newline = 1; // fallthrough
+      case '\n': seen_newline = 1; // fall-through
       case EOF: update_token(s->curtoken, 0, __EOF);        ret = 1; break;
       case '$': update_token(s->curtoken, c, DOLLAR);       ret = 1; break;
       case '^': update_token(s->curtoken, c, CIRCUMFLEX);   ret = 1; break;
@@ -304,7 +304,30 @@ regex_scan(Scanner * s)
             }
             else {
               switch(c) {
-                // FIXME: Insert escape sequences like '\d', '\b', '\D'
+                case 'b': {
+                  update_token(s->curtoken, c, WORD_BOUNDARY);
+                } break;
+                case 'B': {
+                  update_token(s->curtoken, c, NOT_WORD_BOUNDARY);
+                } break;
+                case '<': {
+                  update_token(s->curtoken, c, AT_WORD_BEGIN);
+                } break;
+                case '>': {
+                  update_token(s->curtoken, c, AT_WORD_END);
+                } break;
+                case 'w': {
+                  update_token(s->curtoken, c, WORD_CONSTITUENT);
+                } break;
+                case 'W': {
+                  update_token(s->curtoken, c, NOT_WORD_CONSTITUENT);
+                } break;
+                case 'S': {
+                  update_token(s->curtoken, c, NOT_WHITESPACE);
+                } break;
+                case 's': {
+                  update_token(s->curtoken, c, WHITESPACE);
+                } break;
                 default: {
                   update_token(s->curtoken, c, ALPHA);
                 } break;

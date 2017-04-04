@@ -12,7 +12,7 @@ RUN_SLIST_TEST := ./bin/test_slist
 MODULE_DESCRIPTORS:=${TOP_DIR}/build/module_descriptors
 
 test_targets    := test_slist test_all wrapper_funcs test_regex all
-product_targets := scanner misc nfa slist token regex_parser recognizer
+product_targets := scanner misc nfa slist token regex_parser recognizer rbtree mpat collations
 
 .PHONY: ${product_targets} ${test_targets}
 
@@ -58,6 +58,12 @@ define make_goal
   endif
 endef
 
+
+define make_collations
+  $(call make_deps,collations)
+  $(call make_goal,collations)
+endef
+
 define make_scanner
   $(call make_deps,scanner)
   $(call make_goal,scanner)
@@ -68,7 +74,7 @@ define make_misc
   $(call make_goal,misc)
 endef
 
-define nfa
+define make_nfa
   $(call make_deps,nfa)
   $(call make_goal,nfa)
 endef
@@ -92,6 +98,16 @@ endef
 #  $(call make_deps,recognizer)
 #  $(call make_goal,recognizer)
 #endef
+
+define make_mpat
+  $(call make_deps,mpat)
+  $(call make_goal,mpat)
+endef
+
+define make_rbtree
+  $(call make_deps,rbtree)
+  $(call make_goal,rbtree)
+endef
 
 define make_recognizer
   $(call make_deps,recognizer)
