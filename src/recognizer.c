@@ -673,6 +673,7 @@ thread_step(NFASim * sim)
           sim->status = -1;
         }
       } break;
+/* uncomment when these are fully implemented
       case NFA_WORD_BEGIN_ANCHOR: {
         sim->status = -1;
         if(sim->input_ptr == sim->scanner->buffer) {
@@ -733,6 +734,7 @@ thread_step(NFASim * sim)
         // FIXME:
         sim->status = -1;
       } break;
+*/
       case NFA_ACCEPTING: {
         sim->status = 1;
       } break;

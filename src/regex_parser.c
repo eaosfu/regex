@@ -846,6 +846,7 @@ RETRY_PARSE:
       parser->lookahead.type = ALPHA;
       goto RETRY_PARSE;
     } break;
+/*  uncomment when these are fully implemented
     case WORD_BOUNDARY: {
       negate = 1;
     } // fall-through
@@ -905,6 +906,7 @@ RETRY_PARSE:
       left = pop(parser->symbol_stack);
       push(parser->symbol_stack, concatenate_nfa(left, right));
     } break;
+*/
     case CLOSEPAREN:
       if(parser->paren_count == 0) {
         parser_fatal(MISSING_OPEN_PAREN_ERROR, REGEX, READHEAD);
