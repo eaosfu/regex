@@ -19,6 +19,7 @@ typedef struct Parser {
   Scanner    * scanner;
   Stack      * symbol_stack;
   Stack      * branch_stack;
+  List       * synth_patterns;
   NFA        * prev_interval;
   NFA        * prev_interval_head;
   NFACtrl    * nfa_ctrl;

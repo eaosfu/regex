@@ -8,7 +8,7 @@
 void *
 list_get_tail(List * list)
 {
-  if(list) {
+  if((list != NULL) && (list->tail != NULL)) {
     return list->tail->data;
   }
   return NULL;
@@ -18,7 +18,7 @@ list_get_tail(List * list)
 void *
 list_get_head(List * list)
 {
-  if(list) {
+  if((list != NULL) && (list->head != NULL)) {
     return list->head->data;
   }
   return NULL;

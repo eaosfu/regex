@@ -30,6 +30,7 @@ init_parser(Scanner * scanner, ctrl_flags * cfl)
   parser->ctrl_flags      = cfl;
   parser->symbol_stack    = new_stack();
   parser->branch_stack    = new_stack();
+  parser->synth_patterns  = new_list();
   parser->nfa_ctrl        = new_nfa_ctrl();
   parser_consume_token(parser);
 
@@ -954,6 +955,10 @@ prescan_input(Parser * parser)
   // FIXME don't always use alloc. Have the scanner keep a large enough buffer
   // to hold several scanner's buffers ?
   char * tmp_buffer = malloc(parser->scanner->buf_len);
+
+  if(tmp_buffer == NULL) {
+    fatal("Insufficient virtual memory\n");
+  }
   memcpy(tmp_buffer, parser->scanner->buffer, parser->scanner->buf_len);
 
 
@@ -1106,6 +1111,68 @@ __collect_adjacencies_helper(NFA * current, NFA * visiting, int outn, NFA * forb
   return;
 }
 
+
+static int
+synthesize_pattern(List * patterns, char * root, NFA * nfa, int i)
+{
+  static int print = 0;
+  int ret = 0;
+  switch(nfa->value.type) {
+    case NFA_LITERAL: {
+      root[i] = nfa->value.literal;
+      print = 1;
+      ret = synthesize_pattern(patterns, root, nfa->out2, ++i);
+    } break;
+    case NFA_EPSILON: {
+      ret = synthesize_pattern(patterns, root, nfa->out2, i);
+    } break;
+    case NFA_TREE: {
+      NFA * tmp = NULL;
+      List * l = nfa->value.branches;
+      list_set_iterator(l, 0);
+      for(tmp = list_get_next(l); tmp != NULL; tmp = list_get_next(l)) {
+        ret = synthesize_pattern(patterns, root, tmp, i);
+      }
+    } break;
+    case NFA_CAPTUREGRP_BEGIN:
+    case NFA_CAPTUREGRP_END: {
+      ret = synthesize_pattern(patterns, root, nfa->out2, i);
+    } break;
+    case NFA_SPLIT: {
+      // don't follow loops
+      if(nfa->value.literal == '?') {
+        ret = synthesize_pattern(patterns, root, nfa->out1, i);
+        ret = synthesize_pattern(patterns, root, nfa->out2, i);
+      }
+    } break;
+    case NFA_LONG_LITERAL: {
+      strncpy(root + i, nfa->value.lliteral, nfa->value.len);
+      i += nfa->value.len;
+      print = 1;
+      ret = synthesize_pattern(patterns, root, nfa->out2, i);
+    } break;
+    case NFA_ACCEPTING: {
+      print = 1;
+    } break;
+    default: {
+      print = 1;
+    }
+  }
+
+  if(ret != -1) {
+    if(print) {
+      char * synth_pat = strndup(root, i);
+      list_append(patterns, synth_pat);
+      print = 0;
+    }
+    root[i] = 0;
+    ret = (i == 0) ? 0 : --i;
+  }
+
+  return ret;
+}
+
+
 // THIS SHOULD BE MOVED OUT INTO A 'COMPILE.C' module
 // same goes for the 'collect' functions
 static void
@@ -1115,34 +1182,43 @@ compute_mpat_tables(Parser * parser, NFA * start)
     return;
   }
 
-  List * patterns = new_list();
+  char * synth_pattern = xmalloc(strlen(parser->scanner->buffer));
+
   list_set_iterator(&(start->reachable), 0);
   NFA * nfa = NULL;
   while((nfa = list_get_next(&(start->reachable))) != NULL) {
     switch(nfa->value.type) {
       case NFA_LONG_LITERAL: {
-        list_append(patterns, nfa->value.lliteral);
+        strncpy(synth_pattern, nfa->value.lliteral, nfa->value.len);
+        synthesize_pattern(parser->synth_patterns, synth_pattern, nfa->out2, nfa->value.len);
+      } break;
+      case NFA_LITERAL: {
+        synthesize_pattern(parser->synth_patterns, synth_pattern, nfa, 0);
+      } break;
+      case NFA_ACCEPTING: {
+        // do nothing
       } break;
       default: {
         // FIXME:
         // if we fall here we need to decide what to do... for exmaple
         //  we may be able to expand the regex to a point and add it
-        //  to our 'patterns' list. but for now make so the the recognizer
-        //  simply avoid using the multi-pattern match algorithm.
+        //  to our 'patterns' list. but for now make it so the recognizer
+        //  simply avoids using the multi-pattern match algorithm.
         goto FREE_PATTERNS_LIST;
       }
     }
   }
 
-  if(list_size(patterns) != 0) {
+  if(list_size(parser->synth_patterns) != 0) {
     parser->mpat_obj = new_mpat();
-    if(mpat_init(parser->mpat_obj, patterns) == 0) {
+    if(mpat_init(parser->mpat_obj, parser->synth_patterns) == 0) {
       mpat_obj_free(&(parser->mpat_obj));
     }
   }
 
 FREE_PATTERNS_LIST:
-  list_free(patterns, NULL);
+  free(synth_pattern);
+  return;
 }
 
 
@@ -1152,7 +1228,8 @@ collect_adjacencies(Parser * parser, NFA * start, int total_collectables)
   if(start == NULL) {
     return;
   }
-NFA * current = start;
+
+  NFA * current = start;
   NFA * visiting = start;
  
   // branch_stack no longer contains useful data so reuse it as a list
@@ -1177,7 +1254,7 @@ NFA * current = start;
   // can use to perform a fast multi-pattern search. Doing this search enables
   // the recognizer to quickly jump to skip over positions in the input that
   // would never match the start of the regular expression
-  compute_mpat_tables(parser, current);
+  compute_mpat_tables(parser, start);
 
   for(int i = 0; i < list_size(l); ++i) {
     if(i > total_collectables) {
@@ -1279,6 +1356,7 @@ parser_free(Parser * parser)
   free_nfa(((NFA *)peek(parser->symbol_stack)));
   stack_delete((parser->symbol_stack), NULL);
   stack_delete((parser->branch_stack), NULL);
+  list_free(parser->synth_patterns, (void *)free);
   mpat_obj_free(&parser->mpat_obj);
   free(parser->nfa_ctrl);
   free(parser->paren_stack);

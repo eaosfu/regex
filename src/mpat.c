@@ -191,11 +191,9 @@ MPatObj *
 new_mpat()
 {
   MPatObj * mpat_obj = malloc(sizeof(*mpat_obj));
-
   if(mpat_obj == NULL) {
     fatal("Insufficient virtual memory\n");
   }
-
   mpat_obj->hash = NEW_HASH_TABLE();
   mpat_obj->shift = NEW_SHIFT_TABLE();
   mpat_obj->match_list = new_rbtree();
@@ -308,6 +306,10 @@ record_match(RBTreeCtrl * ml, char * b, char * e)
     //       data structure and having the 'user' keep track
     //       of the 'resource pool'.
     MatchRecord * mr = malloc(sizeof(*mr));
+    if(mr == NULL) {
+      fatal("Insufficient virtual memory\n");
+    }
+
     mr->beg = b;
     mr->end = e;
     node->data = mr;
