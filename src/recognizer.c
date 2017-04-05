@@ -264,10 +264,10 @@ free_match_string(void * m)
 
 
 static inline int
-is_literal_space(int c)
+is_literal_space(unsigned int c)
 {
   int ret = 0;
-  if(c > 0) {
+  if(c < SIZE_OF_LOCALE) {
     if(((collations[COLL_SPACE].ranges[0].low <= c) && (collations[COLL_SPACE].ranges[0].high >= c))
     || ((collations[COLL_SPACE].ranges[1].low <= c) && (collations[COLL_SPACE].ranges[1].high >= c))) {
       ret = 1;
@@ -278,10 +278,10 @@ is_literal_space(int c)
 
 
 static inline int
-is_literal_word_constituent(int c)
+is_literal_word_constituent(unsigned int c)
 {
   int ret = 0;
-  if(c > 0) {
+  if(c < SIZE_OF_LOCALE) {
     if(((collations[COLL_ALNUM].ranges[0].low <= c) && (collations[COLL_ALNUM].ranges[0].high >= c))
     || ((collations[COLL_ALNUM].ranges[1].low <= c) && (collations[COLL_ALNUM].ranges[1].high >= c))
     || ((collations[COLL_ALNUM].ranges[2].low <= c) && (collations[COLL_ALNUM].ranges[2].high >= c))) {
@@ -294,12 +294,12 @@ is_literal_word_constituent(int c)
 
 
 static inline int
-is_literal_in_range(nfa_range range, int c)
+is_literal_in_range(nfa_range range, unsigned int c)
 {
   int ret = 0;
-  if(c > 0) {
-    BIT_MAP_TYPE mask = set_bit(BIT_MAP_TYPE, BITS_PER_BLOCK, c)|0;
-    if(range[get_bit_array_idx(c, BITS_PER_BLOCK)] & mask) {
+  if(c < SIZE_OF_LOCALE) {
+    BIT_MAP_TYPE mask = z_set_bit(BIT_MAP_TYPE, BITS_PER_BLOCK, c);
+    if(range[z_get_bit_array_idx(c, BITS_PER_BLOCK)] & mask) {
       ret = 1;
     }
   }
@@ -431,6 +431,12 @@ static void
 load_next(NFASim * sim, NFA * nfa)
 {
   NFASimCtrl * ctrl = sim->ctrl;
+
+  if((INPUT(sim) == '\0') && (nfa->value.type != NFA_ACCEPTING)) {
+    sim->status = -1;
+    return;
+  }
+
   switch(nfa->value.type) {
     case NFA_CAPTUREGRP_BEGIN: {
       sim->tracking_backrefs = 1;

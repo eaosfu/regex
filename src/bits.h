@@ -15,10 +15,11 @@
 // currently limited to ASCII.. technically 127 but 128 shouldn't hurt
 #define SIZE_OF_LOCALE 128
 
-
+// turn the most-significant-bit on
 #define set_high_bit(t, w) ((t)0x01 << ((w) - 1))
 
 
+// turn on all the bits
 #define set_all_bits(t) (~(t)0x0)
 
 
@@ -90,5 +91,19 @@
 #define clear_bit_array(t, a, w, v) \
   ((a)[get_bit_array_idx((v),(w))] &= (set_all_bits(t) ^ (set_bit(t, (w), (v)))))
 
+
+// This perform the same functions as the ones listed above but take a 0 indexed
+// array whereas the ones above take a 1 indexed array
+#define z_get_bit_array_idx(v, w) \
+  (((v))/(w))
+
+#define z_set_bit(t, w, v)\
+  ((t)0x1 << (v - (z_get_bit_array_idx(v, w) * w)))
+
+#define z_clear_bit_array(t, a, w, v)\
+  ((a)[z_get_bit_array_idx((v),(w))] &= (set_all_bits(t) ^ (z_set_bit(t, (w), (v)))))
+
+#define z_set_bit_array(t, a, w, v)\
+  ((a)[z_get_bit_array_idx((v),(w))] |= (z_set_bit(t, (w), (v))))
 
 #endif

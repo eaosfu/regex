@@ -105,12 +105,12 @@ update_range_nfa(unsigned int low, unsigned int high, NFA * range_nfa, int negat
 {
   if(negate) {
     for(int i = low; i <= high; ++i) {
-      clear_bit_array(BIT_MAP_TYPE, *(range_nfa->value.range), BITS_PER_BLOCK, i);
+      z_clear_bit_array(BIT_MAP_TYPE, *(range_nfa->value.range), BITS_PER_BLOCK, i);
     }
   }
   else {
     for(int i = low; i <= high; ++i) {
-      set_bit_array(BIT_MAP_TYPE, *(range_nfa->value.range), BITS_PER_BLOCK, i);
+      z_set_bit_array(BIT_MAP_TYPE, *(range_nfa->value.range), BITS_PER_BLOCK, i);
     }
   }
 }
