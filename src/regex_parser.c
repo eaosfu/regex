@@ -798,8 +798,6 @@ parse_sub_expression(Parser * parser)
 {
   NFA * right = NULL;
   NFA * left  = NULL;
-  int negate = 0;
-  unsigned int type;
 RETRY_PARSE:
   switch(parser->lookahead.type) {
     case DOT:        // fallthrough
