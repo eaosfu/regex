@@ -10,6 +10,7 @@ use Getopt::Long;
 use Term::ANSIColor;
 FindBin::again();
 
+our $ME = $0; 
 # options
 my $verbose = 0;
 my $memcheck = 0;
@@ -38,6 +39,8 @@ sub handle_options {
     "memcheck" => \$memcheck,
     "bindir"   => \$bin_dir,
   );
+  die "$ME: unable to process option: $@\n" if($@);
+
 =comment come back to this later
   if(!defined($bin_dir)) {
     # Are we in a git project?
@@ -145,7 +148,7 @@ sub gen_regex_output {
     $exp_file = "$regex_input/regex_$args->{$_}{inout_file_suffix}";
     $out_file = "$output_dir/regex_$args->{$_}{inout_file_suffix}";
     $cmd      = "$regex_bin -g -o -f $exp_file $target > $out_file";
-print "$cmd\n";
+    print "$cmd\n" if($verbose);
     eval{`$cmd 2> /dev/null`};
     die "Error running grep command: $cmd: $!\n" if($@);
   }
@@ -243,8 +246,7 @@ sub run_memcheck {
     $exp_file = "$regex_input/regex_$args->{$_}{inout_file_suffix}";
     $cmd      = "$valgrind_cmd $regex_bin -g -f $exp_file $target";
 
-    #print "$cmd\n" if($verbose);
-    print "$cmd\n";
+    print "$cmd\n" if($verbose);
 
     eval{
       $result = `$cmd 1> /dev/null 2>&1; echo \$?`
@@ -282,9 +284,9 @@ sub main {
   gen_regex_output($regex_bin, $regex_output_dir, $regex_input_dir, \%input);
   diff_results(\%input);
 
-#  if($memcheck) {
+  if($memcheck) {
     run_memcheck($regex_bin, $regex_input_dir, \%input);
-#  }
+  }
 }
 
 

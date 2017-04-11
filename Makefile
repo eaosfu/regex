@@ -9,6 +9,14 @@ PERL_TEST := ./tests//test.pl
 BASH := /bin/bash
 RUN_SLIST_TEST := ./bin/test_slist
 
+ifdef MEMCHECK
+$(eval RUN_MEMCHECK =--memcheck)
+endif
+
+ifdef VERBOSE
+$(eval TEST_VERBOSE = --verbose)
+endif
+
 MODULE_DESCRIPTORS:=${TOP_DIR}/build/module_descriptors
 
 test_targets    := test_slist test_all wrapper_funcs test_regex regex_alloc
@@ -141,6 +149,7 @@ define make_test_slist
   $(eval CFLAGS +=-g)
   $(call make_deps,test_slist)
   $(call make_goal,test_slist)
+  $(shell ${RUN_SLIST_TEST})
 endef
 
 define make_regex_alloc
@@ -155,22 +164,8 @@ define make_test_all
   $(eval CFLAGS +=-g)
   $(eval CFLAGS +=-Wall)
   $(call make_regex)
-  $(call make_test_slist)
-  test_all: clean regex test_slist
-		${RUN_SLIST_TEST}
-		${PERL} ${PERL_TEST}
-endef
-
-define make_test_regex
-  $(eval $(call make_clean))
-  $(eval CFLAGS +=-g)
-  $(eval CFLAGS += -Wall)
-  $(call make_regex)
-#  $(call make_test_slist)
-#  test_regex: regex test_slist
-  test_regex: clean regex
-#		${RUN_SLIST_TEST}
-		${PERL} ${PERL_TEST}
+  test_all: clean regex
+		${PERL} ${PERL_TEST} ${RUN_MEMCHECK} ${TEST_VERBOSE}
 endef
 
 define make_all
