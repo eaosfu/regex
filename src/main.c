@@ -162,8 +162,8 @@ handle_search_targets(int cwd_fd, int idx, int argc, char ** argv, NFASimCtrl * 
               if(suppress_errors == 0) {
                 fprintf(stderr, "%s: %s is a directory\n", program_name, ftsent->fts_accpath);
               }
+              fts_set(fts, ftsent, FTS_SKIP);
             }
-            fts_set(fts, ftsent, FTS_SKIP);
             continue;
             // do nothing
             // fts_open will eventually drop us into this directory
