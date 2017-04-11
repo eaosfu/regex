@@ -346,6 +346,10 @@ mpat_search(MPatObj * mpat_obj, char * text, char * text_end)
     return;
   }
 
+  if((text_end - text) < mpat_obj->m) {
+    return;
+  }
+
   int m = mpat_obj->m;
   int B = mpat_obj->B;
   int shift = 0;
@@ -380,8 +384,8 @@ mpat_search(MPatObj * mpat_obj, char * text, char * text_end)
           pattern = hr->pattern;
           pat_ptr = pattern + B - 1;
           prefix = prefix + B - 1;
-          while(*(pat_ptr++) == *(prefix++));
-          if(*(pat_ptr - 1) == '\0') {
+          while((*pat_ptr != '\0') && *(pat_ptr++) == *(prefix++));
+          if(*(pat_ptr) == '\0') {
             record_match(mpat_obj->match_list, subtxt_begin, prefix - 2);
           }
           else {
