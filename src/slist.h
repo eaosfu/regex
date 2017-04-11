@@ -63,5 +63,13 @@ void list_free_items(List *, VISIT_PROC_pt);
     (l2) = tmp;            \
   } while(0);
 
+
+#define list_for_each(tmp, list, start, finish) \
+  list_set_iterator((list), (start));   \
+  for((tmp) = list_get_next((list)); \
+      (tmp != NULL) && ((list)->iter_idx <= (finish)); \
+      (tmp) = list_get_next((list))\
+  )
+
 #endif
 

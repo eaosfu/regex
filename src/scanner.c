@@ -61,6 +61,7 @@ get_line_no(Scanner * s)
   return 0;
 }
 
+
 static inline void
 update_flags(Scanner * s)
 {
@@ -304,6 +305,7 @@ regex_scan(Scanner * s)
             }
             else {
               switch(c) {
+/* FIXME: Uncomment when these are fully implemented
                 case 'b': {
                   update_token(s->curtoken, c, WORD_BOUNDARY);
                 } break;
@@ -328,6 +330,7 @@ regex_scan(Scanner * s)
                 case 's': {
                   update_token(s->curtoken, c, WHITESPACE);
                 } break;
+*/
                 default: {
                   update_token(s->curtoken, c, ALPHA);
                 } break;

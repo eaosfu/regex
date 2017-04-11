@@ -798,6 +798,8 @@ parse_sub_expression(Parser * parser)
 {
   NFA * right = NULL;
   NFA * left  = NULL;
+  int negate;
+  unsigned int type;
 RETRY_PARSE:
   switch(parser->lookahead.type) {
     case DOT:        // fallthrough
@@ -844,7 +846,7 @@ RETRY_PARSE:
       parser->lookahead.type = ALPHA;
       goto RETRY_PARSE;
     } break;
-/*  uncomment when these are fully implemented
+/*  FIXME: uncomment when these are fully implemented
     case WORD_BOUNDARY: {
       negate = 1;
     } // fall-through
@@ -928,7 +930,7 @@ regex_parser_start(Parser * parser)
   || parser->lookahead.type == DOT
   || parser->lookahead.type == OPENBRACKET
   || parser->lookahead.type == OPENPAREN
-// TEST
+/* FIXME: uncomment when these are fully implemented
   || parser->lookahead.type == WORD_BOUNDARY
   || parser->lookahead.type == NOT_WORD_BOUNDARY
   || parser->lookahead.type == AT_WORD_BEGIN
@@ -937,7 +939,7 @@ regex_parser_start(Parser * parser)
   || parser->lookahead.type == NOT_WORD_CONSTITUENT
   || parser->lookahead.type == WHITESPACE
   || parser->lookahead.type == NOT_WHITESPACE
-// END TEST
+*/
   ) {
     parse_sub_expression(parser);
   }
@@ -1145,12 +1147,6 @@ synthesize_pattern(List * patterns, char * root, NFA * nfa, int i)
         ret = synthesize_pattern(patterns, root, nfa->out2, i);
       }
     } break;
-    case NFA_LONG_LITERAL: {
-      strncpy(root + i, nfa->value.lliteral, nfa->value.len);
-      i += nfa->value.len;
-      print = 1;
-      ret = synthesize_pattern(patterns, root, nfa->out2, i);
-    } break;
     case NFA_ACCEPTING: {
       print = 1;
     } break;
@@ -1188,10 +1184,6 @@ compute_mpat_tables(Parser * parser, NFA * start)
   NFA * nfa = NULL;
   while((nfa = list_get_next(&(start->reachable))) != NULL) {
     switch(nfa->value.type) {
-      case NFA_LONG_LITERAL: {
-        strncpy(synth_pattern, nfa->value.lliteral, nfa->value.len);
-        synthesize_pattern(parser->synth_patterns, synth_pattern, nfa->out2, nfa->value.len);
-      } break;
       case NFA_LITERAL: {
         synthesize_pattern(parser->synth_patterns, synth_pattern, nfa, 0);
       } break;

@@ -139,7 +139,7 @@ new_range_nfa(NFACtrl * ctrl, int negate)
    return accept;
 }
 
-
+/*
 NFA *
 new_lliteral_nfa(NFACtrl * ctrl, char * src, unsigned int len)
 {
@@ -164,7 +164,19 @@ new_lliteral_nfa(NFACtrl * ctrl, char * src, unsigned int len)
 
   return accept;
 }
+*/
+NFA *
+new_lliteral_nfa(NFACtrl * ctrl, char * src, unsigned int len)
+{
+  NFA * right = NULL;
+  NFA * left =  new_literal_nfa(ctrl, src[0], NFA_LITERAL);
+  for(int i = 1; i < len; ++i) {
+    right =  new_literal_nfa(ctrl, src[i], NFA_LITERAL);
+    left = concatenate_nfa(left, right);
+  }
 
+  return left;
+}
 
 NFA *
 new_literal_nfa(NFACtrl * ctrl, unsigned int literal, unsigned int type)

@@ -102,7 +102,20 @@ should try to re-write such expressions like: 'a{2,12}'.
 The engine should be able to perform this type of transformation internally not
 too far in the future.
 
--------------------------------
+Recursive directory search:
+---------------------------
+My version of the code uses the bsd fts library that comes preinstalled on
+Debian unfortunately this seems to be less memory efficient than the glib
+version of fts that Grep uses. Consequently, we are less frugal with
+memory usage than grep when searching directories.
+
+NOTE:
+the effect fts has can been plainly seen by running the recognizer once under
+'valgrind --tool=exp-dhat <exp|exp2|...> <file>', duplicating <file> and
+and re-running the recognizer on both files under valgrind. Diffing the
+two dhat outputs will clearly show fts-allocations are the only thing that
+changes.
+
 
 Testing:
 --------

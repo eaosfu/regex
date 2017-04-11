@@ -15,16 +15,17 @@ typedef struct CaptureGrpRecord {
 
 
 typedef struct Parser {
-  Token lookahead;
   Scanner    * scanner;
   Stack      * symbol_stack;
-  Stack      * branch_stack;
-  List       * synth_patterns;
-  NFA        * prev_interval;
-  NFA        * prev_interval_head;
+  Token        lookahead;
   NFACtrl    * nfa_ctrl;
   MPatObj    * mpat_obj;
   ctrl_flags * ctrl_flags;
+  Stack      * branch_stack;
+  List       * synth_patterns;
+  int        * paren_stack;
+  NFA        * prev_interval;
+  NFA        * prev_interval_head;
 
   // Count open parens
   int paren_count;
@@ -37,8 +38,6 @@ typedef struct Parser {
   int current_cgrp;
   int in_new_cgrp;
   int paren_idx;
-  //int paren_stack[CGRP_MAX];
-  int * paren_stack;
 
   // Alternation Stuff
   int in_alternation;

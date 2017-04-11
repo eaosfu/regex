@@ -261,7 +261,7 @@ mpat_init(MPatObj * mpat_obj, List * patterns)
 }
 
 
-static inline long __attribute__((always_inline))
+static long
 get_shift(MPatObj * mpat_obj, long k)
 {
   if(mpat_obj->min_key > k || mpat_obj->max_key < k) {

@@ -39,9 +39,9 @@ typedef enum {
 } symbol_type;
 
 typedef struct Token {
+  unsigned int value;
   symbol_type type;
   unsigned int length;
-  unsigned int value;
 } Token;
 
 Token * new_token();

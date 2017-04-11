@@ -17,8 +17,7 @@
 #define NFA_CAPTUREGRP_END   0x00800 
 #define NFA_CAPTUREGRP_BEGIN 0x01000 
 #define NFA_TREE             0x02000 
-#define NFA_LONG_LITERAL     0x04000
-#define NFA_PROGRESS         0x08000
+#define NFA_PROGRESS         0x04000
 
 #define NFA_WORD_BEGIN_ANCHOR 0x00100
 #define NFA_WORD_END_ANCHOR   ~(NFA_WORD_BEGIN_ANCHOR)
@@ -27,9 +26,8 @@
 
 #define DONE    0x01
 #define CYCLE   0x02
-//#define GREEDY  0x04 // FIXME: we're not currently using this anywhere..
-#define VISITED 0x08
-#define ACCEPTS 0x10
+#define VISITED 0x04
+#define ACCEPTS 0x08
 
 #define SET_NFA_DONE_FLAG(n)      ((n)->flags |= DONE)
 #define CLEAR_NFA_DONE_FLAG(n)    ((n)->flags &= ~DONE)
@@ -69,7 +67,7 @@ typedef struct NFACtrl {
 
 
 typedef struct NFA {
-  struct NFACtrl * ctrl;
+  struct NFACtrl * ctrl; // must remain at top
   struct NFA * parent;
   struct NFA * out1;
   struct NFA * out2;

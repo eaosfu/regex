@@ -31,7 +31,7 @@ new_rbtree()
 }
 
 
-static inline void __attribute__((always_inline))
+static void
 reset_pool_ptr(RBTree ** ptr)
 {
   while(((*ptr) != NULL) && (*ptr)->left == NULL) {

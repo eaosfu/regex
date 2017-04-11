@@ -5,6 +5,7 @@
 #include <stdlib.h>
 #include <stdio.h>
 
+
 void *
 list_get_tail(List * list)
 {
@@ -161,7 +162,6 @@ new_list()
 
 // Insert item at end of list
 // return the index at which item was inserted
-//ListItem *
 int
 list_append(List * list, void * data)
 {
@@ -170,7 +170,6 @@ list_append(List * list, void * data)
   }
 
   int idx = 0;
-//  ListItem * iter = list->head;
 
   if(list->head == NULL) {
     list->head = new_list_item(list, data);
@@ -191,7 +190,6 @@ list_append(List * list, void * data)
 
 // insert new data item at the head of the list
 // return the new size of the list
-//ListItem *
 int
 list_push(List * list, void * data)
 {
@@ -246,7 +244,6 @@ list_shift(List * list)
 // insert new data into list at index idx. If it idx > list->size
 // data is inserted at the end of the list;
 // return the index the new item was inserted into
-//ListItem *
 int
 list_insert_at(List * list, void * data, int idx)
 {
@@ -388,7 +385,6 @@ list_remove_at(List * list, int idx)
   release_to_pool(list, removed_item);
   
   return removed_data;
-  
 }
 
 
@@ -657,7 +653,6 @@ list_iterate_from_to(List * list, int from, int to, VISIT_PROC2_pt action, void 
   }
 
   ListItem ** li = &(list->iter);
-  //for(int i = from; i <= to; ++i && ++(list->iter_idx)) {
   for(int i = from; i <= to; ++i, ++(list->iter_idx)) {
     action((void *)((*li)->data), arg2);
     (*li) = (*li)->next;

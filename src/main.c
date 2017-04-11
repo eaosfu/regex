@@ -48,7 +48,7 @@ static struct option const long_options[] = {
 
 
 // FIXME: add support for reading from stdin
-static inline int __attribute__((always_inline))
+static int
 is_stdin(char * argv)
 {
   if(strlen(argv) == 1 && *argv == '-')  {
@@ -62,7 +62,7 @@ is_stdin(char * argv)
 }
 
 
-static inline void __attribute__((always_inline))
+static void
 get_stdout_stat()
 {
   if(isatty(STDOUT_FILENO) == 0) {
@@ -73,10 +73,11 @@ get_stdout_stat()
 }
 
 
-static void
+static int
 process_file(int cwd_fd, FTSENT * ftsent, NFASimCtrl * nfa_sim_ctrl, int from_command_line)
 {
   int fd;
+  int status = 0;
   int openat_opts = O_RDONLY|O_NOCTTY;
   openat_opts |= (from_command_line) ? 0 : O_NOFOLLOW;
 
@@ -89,10 +90,8 @@ process_file(int cwd_fd, FTSENT * ftsent, NFASimCtrl * nfa_sim_ctrl, int from_co
       fprintf(stderr, "%s: input file '%s' is also the output\n", program_name, ftsent->fts_accpath);
     }
     else {
-      int status = 0;
       int line = 0;
       FILE * fh = NULL;
-      NFASim  * nfa_sim     = NULL;
 
       if((fh = fdopen(fd, "r")) == NULL) {
         err(EXIT_FAILURE, "unable to open file: %s", ftsent->fts_accpath);
@@ -101,10 +100,10 @@ process_file(int cwd_fd, FTSENT * ftsent, NFASimCtrl * nfa_sim_ctrl, int from_co
       Scanner * scanner = nfa_sim_ctrl->scanner;
       while((scanner->line_len = getline(&(scanner->buffer), &(scanner->buf_len), fh)) > 0) {
         reset_scanner(scanner, ftsent->fts_accpath);
-        nfa_sim = reset_nfa_sim(nfa_sim_ctrl);
+        reset_nfa_sim(nfa_sim_ctrl);
         ++line; // FIXME: scanner should update the line number on it's own
         scanner->line_no = line;
-        status += run_nfa(nfa_sim);
+        status += run_nfa(nfa_sim_ctrl);
         if(status != 0 && (*(nfa_sim_ctrl->ctrl_flags) & SILENT_MATCH_FLAG)) {
           // no need to keep searching if we've found a match
           break;
@@ -117,16 +116,17 @@ process_file(int cwd_fd, FTSENT * ftsent, NFASimCtrl * nfa_sim_ctrl, int from_co
     }
   }
   close(fd);
-  return;
+  return status;
 }
 
 
-void
+static int
 handle_search_targets(int cwd_fd, int idx, int argc, char ** argv, NFASimCtrl * nfa_sim_ctrl)
 {
   FTS * fts = NULL;
   FTSENT * ftsent = NULL;
   char * fts_arg[2];
+  int status  = 0;
   for(; idx < argc; ++idx) {
     if(is_stdin(argv[idx])) {
       continue;
@@ -148,7 +148,7 @@ handle_search_targets(int cwd_fd, int idx, int argc, char ** argv, NFASimCtrl * 
             // FIXME - programmatically set the last argument to 'process_files' so we can
             //         let the user decide whether or not to read symbolic links not listed
             //         on the command line.
-            process_file(cwd_fd, ftsent, nfa_sim_ctrl, 0);
+            status += process_file(cwd_fd, ftsent, nfa_sim_ctrl, 0);
           } break;
           case FTS_NS:  // fall through
           case FTS_ERR: // fall through
@@ -162,9 +162,9 @@ handle_search_targets(int cwd_fd, int idx, int argc, char ** argv, NFASimCtrl * 
               if(suppress_errors == 0) {
                 fprintf(stderr, "%s: %s is a directory\n", program_name, ftsent->fts_accpath);
               }
-              fts_set(fts, ftsent, FTS_SKIP);
-              continue;
             }
+            fts_set(fts, ftsent, FTS_SKIP);
+            continue;
             // do nothing
             // fts_open will eventually drop us into this directory
           } break;
@@ -187,17 +187,18 @@ handle_search_targets(int cwd_fd, int idx, int argc, char ** argv, NFASimCtrl * 
         // reset our errno in preparation for next iteration
         errno = 0;
       }
-      if(errno != 0) {
+      if(errno != 0 && suppress_errors == 0) {
         warn("%s", argv[idx]);
       }
       fts_close(fts);
     }
-    else if(errno != 0) {
+    else if(errno != 0 && suppress_errors == 0) {
       warn("%s", argv[idx]);
     }
     // reset our errno in preparation for next iteration
     errno = 0;
   }
+  return status;
 }
 
 
@@ -371,7 +372,7 @@ main(int argc, char ** argv)
   // if we've made it this far we have all we need to run the recognizer
   NFASimCtrl * nfa_sim_ctrl = new_nfa_sim(parser, scanner, &cfl);
 
-  handle_search_targets(AT_FDCWD, target_idx, argc, argv, nfa_sim_ctrl);
+  status = handle_search_targets(AT_FDCWD, target_idx, argc, argv, nfa_sim_ctrl);
 
   free_nfa_sim(nfa_sim_ctrl);
 

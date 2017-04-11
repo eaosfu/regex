@@ -11,8 +11,8 @@ RUN_SLIST_TEST := ./bin/test_slist
 
 MODULE_DESCRIPTORS:=${TOP_DIR}/build/module_descriptors
 
-test_targets    := test_slist test_all wrapper_funcs test_regex all
-product_targets := scanner misc nfa slist token regex_parser recognizer rbtree mpat collations
+test_targets    := test_slist test_all wrapper_funcs test_regex regex_alloc
+product_targets := scanner misc nfa slist token regex_parser recognizer rbtree mpat collations all
 
 .PHONY: ${product_targets} ${test_targets}
 
@@ -26,9 +26,14 @@ $(eval TO_UPPER=$(shell echo $(basename $(notdir ${1}))| tr a-z A-Z))
   ifneq (${${TO_UPPER}_TARGET}, $(filter ${${TO_UPPER}_TARGET}, ${generated_recipes}))
     ${${TO_UPPER}_TARGET}:;\
       ${CC} -o ${${TO_UPPER}_TARGET}\
-      ${CFLAGS} ${${TO_UPPER}_CFLAGS} ${${TO_UPPER}_SRC}\
-      ${DFLAGS} \
-      ${${TO_UPPER}_INCLUDE_FLAGS} ${${TO_UPPER}_LD_FLAGS}\
+      ${CFLAGS}\
+      ${DFLAGS}\
+      ${LFLAGS}\
+      ${${TO_UPPER}_CFLAGS}\
+      ${${TO_UPPER}_DFLAGS}\
+      ${${TO_UPPER}_LD_FLAGS}\
+      ${${TO_UPPER}_INCLUDE_FLAGS}\
+      ${${TO_UPPER}_SRC}\
       ${${TO_UPPER}_LINK_OBJS}
     $(eval generated_recipes += ${${TO_UPPER}_TARGET})
   endif
@@ -45,19 +50,32 @@ define make_deps
 endef
 
 define make_goal
+  $(eval include ${MODULE_DESCRIPTORS}/${1})
+  $(eval TO_UPPER=$(shell echo $(basename $(notdir ${1}))| tr a-z A-Z))
   ifneq (${1}, $(filter ${1}, ${generated_recipes}))
     $(eval ${1}: ${FINAL_LINK_OBJ};\
       ${CC} -o ${${FINAL_TARGET}_TARGET}\
-      ${CFLAGS} ${${FINAL_TARGET}_CFLAGS} ${${FINAL_TARGET}_SRC}\
-      ${DFLAGS} \
-      ${${FINAL_TARGET}_INCLUDE_FLAGS} ${${FINAL_TARGET}_LD_FLAGS}\
-      ${FINAL_LINK_OBJ})
+      ${DFLAGS}\
+      ${LFLAGS}\
+      ${CFLAGS}\
+      ${${FINAL_TARGET}_CFLAGS}\
+      ${${FINAL_TARGET}_DFLAGS}\
+      ${${FINAL_TARGET}_LD_FLAGS}\
+      ${${FINAL_TARGET}_INCLUDE_FLAGS}\
+      ${${FINAL_TARGET}_SRC}\
+      ${FINAL_LINK_OBJ}\
+      ${${TO_UPPER}_LINK_OBJS})
     $(eval generated_recipes += ${1})
     $(eval FINAL_LINK_OBJ:=)
     $(eval DEPENDS:=)
   endif
 endef
 
+
+define make_wrapper_funcs
+  $(call make_deps,wrapper_funcs)
+  $(call make_goal,wrapper_funcs)
+endef
 
 define make_collations
   $(call make_deps,collations)
@@ -120,15 +138,22 @@ define make_regex
 endef
 
 define make_test_slist
-  $(eval CFLAGS += -g)
+  $(eval CFLAGS +=-g)
   $(call make_deps,test_slist)
   $(call make_goal,test_slist)
 endef
 
+define make_regex_alloc
+  $(eval $(call make_clean))
+  $(eval CFLAGS=-g -rdynamic)
+  $(call make_deps,regex_alloc)
+  $(call make_goal,regex_alloc)
+endef
+
 define make_test_all
   $(eval $(call make_clean))
-  $(eval CFLAGS += -g)
-  $(eval CFLAGS += -Wall)
+  $(eval CFLAGS +=-g)
+  $(eval CFLAGS +=-Wall)
   $(call make_regex)
   $(call make_test_slist)
   test_all: clean regex test_slist
@@ -137,8 +162,8 @@ define make_test_all
 endef
 
 define make_test_regex
-	$(eval $(call make_clean))
-  $(eval CFLAGS += -g)
+  $(eval $(call make_clean))
+  $(eval CFLAGS +=-g)
   $(eval CFLAGS += -Wall)
   $(call make_regex)
 #  $(call make_test_slist)
@@ -151,8 +176,8 @@ endef
 define make_all
   $(eval CFLAGS += -O3)
   $(eval CFLAGS += -Wall)
-	$(eval $(call make_clean))
-	$(call make_regex)
+  $(eval $(call make_clean))
+  $(call make_regex)
   all: clean regex
 endef
 

@@ -18,12 +18,12 @@ typedef struct RBTreeCtrl {
 
 typedef struct RBTree {
   struct RBTreeCtrl * ctrl;
-  void * data;
-  int color;
   long key;
-  struct RBTree * parent;
   struct RBTree * left;
   struct RBTree * right;
+  struct RBTree * parent;
+  void * data;
+  int color;
 } RBTree;
 
 

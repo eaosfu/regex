@@ -1,9 +1,12 @@
 DEPENDS+= slist misc wrapper_funcs
-CFLAGS += -Wl,--wrap=xmalloc,--wrap=free -Wall
+CFLAGS:= -Wl,--wrap=xmalloc,--wrap=free -Wall
 TEST_SLIST_CFLAGS:=
 TEST_SLIST_SRC_DIR:= ${TOP_DIR}/tests/test_slist
 TEST_SLIST_SRC:=${TEST_SLIST_SRC_DIR}/test_slist.c
 TEST_SLIST_TARGET:=${BIN_DIR}/test_slist
 TEST_SLIST_LD_FLAGS:=
+TEST_SLIST_DFLAGS:=
 TEST_SLIST_INCLUDE_FLAGS:=
 TEST_SLIST_LINK_OBJS:=
+# set the global DFLAGS var
+DFLAGS+=-DLIST_BACK_TRACE
