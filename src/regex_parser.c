@@ -245,7 +245,7 @@ parse_interval_expression(Parser * parser)
         // if we hit this point then min == 0 and max == 0 which is
         // essentially a 'don't match' operation; so pop the nfa
         // off of the symbol_stack
-        release_nfa(target);
+        nfa_dealloc(parser->nfa_ctrl->alloc, target);
         if(parser->in_alternation) {
           --(parser->subtree_branch_count);
         }
@@ -977,10 +977,12 @@ prescan_input(Parser * parser)
   char ** next = &(parser->scanner->readhead);
   int eol = parser->scanner->eol_symbol;
   int paren_count = 0;
+  int token_count = 0;
 
   if((*next)[0] != eol) {
     char c = next_char(parser->scanner);
     while(c != eol) {
+      ++token_count;
       switch(c) {
         case '\\': {
           c = next_char(parser->scanner);
@@ -1005,6 +1007,10 @@ prescan_input(Parser * parser)
 
   new_scanner_state = scanner_pop_state(&(parser->scanner));
   free_scanner(new_scanner_state);
+
+  // token_count holds a rough approximate of the total number
+  // of nfa nodes we will need for this regex
+  nfa_alloc_init(parser->nfa_ctrl, token_count);
 
   return 1;
 }
@@ -1141,7 +1147,7 @@ synthesize_pattern(List * patterns, char * root, NFA * nfa, int i)
       ret = synthesize_pattern(patterns, root, nfa->out2, i);
     } break;
     case NFA_SPLIT: {
-      // don't follow loops
+      // don't follow loops (i.e. ignore '+' and '*')
       if(nfa->value.literal == '?') {
         ret = synthesize_pattern(patterns, root, nfa->out1, i);
         ret = synthesize_pattern(patterns, root, nfa->out2, i);
@@ -1201,13 +1207,6 @@ compute_mpat_tables(Parser * parser, NFA * start)
     }
   }
 
-  if(list_size(parser->synth_patterns) != 0) {
-    parser->mpat_obj = new_mpat();
-    if(mpat_init(parser->mpat_obj, parser->synth_patterns) == 0) {
-      mpat_obj_free(&(parser->mpat_obj));
-    }
-  }
-
 FREE_PATTERNS_LIST:
   free(synth_pattern);
   return;
@@ -1247,17 +1246,20 @@ collect_adjacencies(Parser * parser, NFA * start, int total_collectables)
   // the recognizer to quickly jump to skip over positions in the input that
   // would never match the start of the regular expression
   compute_mpat_tables(parser, start);
-
-  for(int i = 0; i < list_size(l); ++i) {
+int i = 0;
+//  for(int i = 0; i < list_size(l); ++i) {
+  list_for_each(current, l, 0, list_size(l)) {
     if(i > total_collectables) {
       break;
     }
-    current = list_get_at(l, i);
+//    current = list_get_at(l, i);
     for(int j = 0; j < list_size(&(current->reachable)); ++j) {
+//    list_for_each(visiting, &(current->reachable), 0, list_size(&(current->reachable))) {
       visiting = list_get_at(&(current->reachable),j);
       if(CHECK_NFA_DONE_FLAG(visiting)) {
         continue;
       }
+      SET_NFA_DONE_FLAG(visiting);
       if(current != visiting && visiting->value.type != NFA_ACCEPTING) {
         SET_NFA_VISITED_FLAG(visiting);
         if(visiting->value.type == NFA_INTERVAL) {
@@ -1277,13 +1279,10 @@ collect_adjacencies(Parser * parser, NFA * start, int total_collectables)
           __collect_adjacencies_helper(visiting, visiting->out2, 0, NULL, NULL);
         }
         CLEAR_NFA_VISITED_FLAG(visiting);
-
-        if(list_search(l, visiting, compare) == NULL) {
-          list_append(l, visiting);
-          SET_NFA_DONE_FLAG(visiting);
-        }
+        list_append(l, visiting);
       }
     }
+    ++i;
   }
 
   free(adj_intvls_list);
@@ -1345,11 +1344,11 @@ parse_regex(Parser * parser)
 void
 parser_free(Parser * parser)
 {
-  free_nfa(((NFA *)peek(parser->symbol_stack)));
+//  free_nfa(((NFA *)peek(parser->symbol_stack)));
+  free_nfa(&(parser->nfa_ctrl));
   stack_delete((parser->symbol_stack), NULL);
   stack_delete((parser->branch_stack), NULL);
   list_free(parser->synth_patterns, (void *)free);
-  mpat_obj_free(&parser->mpat_obj);
   free(parser->nfa_ctrl);
   free(parser->paren_stack);
   free(parser);

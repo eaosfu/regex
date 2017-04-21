@@ -855,28 +855,25 @@ load_start_states(NFASimCtrl * ctrl, NFA * start_state, const char * lookahead)
 }
 
 
-// run an initial scan on the input to see if we have a chance
-// at matching
 static void
 find_keyword_start_pos(NFASimCtrl * ctrl)
 {
-  MPatObj * mpat_obj = ctrl->mpat_obj;
+  void * kw_search_obj = ctrl->kw_search_obj;
   char * text_beg = (char *)ctrl->buffer_start;
   char * text_end = (char *)ctrl->buffer_end;
-  mpat_search(mpat_obj, text_beg, text_end);
+  ctrl->kw_search(kw_search_obj, text_beg, text_end);
   ctrl->cur_pos = ctrl->buffer_end + 1;
-  if(mpat_match_count(mpat_obj) > 0) {
-    MatchRecord * mr = mpat_next_match(mpat_obj);
+  if(ctrl->kw_match_count(kw_search_obj) > 0) {
+    MatchRecord * mr = ctrl->kw_next_match(kw_search_obj);
     ctrl->cur_pos = mr->beg;
     load_start_states(ctrl, ctrl->start_state, ctrl->cur_pos);
   }
 }
 
-
 static void
 update_input_pointer(NFASimCtrl * ctrl, int current_run, const char ** input_pointer)
 {
-  if(ctrl->mpat_obj == NULL) {
+  if(ctrl->kw_search_obj == NULL) {
     if((current_run == 0) || (ctrl->match.end == 0)) {
       // we either didn't match anything: current_match <-- 0 && ctrl->match.end <-- 0
       // or we matched the empty string:  current_match <-- 1 && ctrl->match.end <-- 0
@@ -893,7 +890,7 @@ update_input_pointer(NFASimCtrl * ctrl, int current_run, const char ** input_poi
     if((current_run == 0) || (ctrl->match.end == 0)) {
       // we either didn't match anything: current_match <-- 0 && ctrl->match.end <-- 0
       // or we matched the empty string:  current_match <-- 1 && ctrl->match.end <-- 0
-      if((mr = mpat_next_match(ctrl->mpat_obj)) != NULL) {
+      if((mr = ctrl->kw_next_match(ctrl->kw_search_obj)) != NULL) {
         (*input_pointer) = mr->beg;;
       }
       else {
@@ -902,8 +899,8 @@ update_input_pointer(NFASimCtrl * ctrl, int current_run, const char ** input_poi
     }
     else {
       // we matched a nonempty string: current_match <-- 1 && ctrl->match.end <-- 1
-      // in thise case ctrl->match.end is the 'end position' of the latest match
-      while((mr = mpat_next_match(ctrl->mpat_obj)) != NULL && (mr->beg <= (ctrl->match.end + 1)));
+      // in this case ctrl->match.end is the 'end position' of the latest match
+      while((mr = ctrl->kw_next_match(ctrl->kw_search_obj)) != NULL && (mr->beg <= (ctrl->match.end)));
       if(mr != NULL) {
         *input_pointer = mr->beg;
       }
@@ -926,7 +923,7 @@ run_nfa(NFASimCtrl * ctrl)
 
   NFASim * thread = NULL;
 
-  if(ctrl->mpat_obj != NULL) {
+  if(ctrl->kw_search_obj != NULL) {
     find_keyword_start_pos(ctrl);
     input_pointer = ctrl->cur_pos;
     thread = sim_pool_shift(&(ctrl->active_threads));
@@ -1002,8 +999,8 @@ RELEASE_ALL_THREADS:
     new_match(ctrl);
   }
 
-  if(ctrl->mpat_obj != NULL) {
-    mpat_clear_matches(ctrl->mpat_obj);
+  if(ctrl->kw_search_obj != NULL) {
+    ctrl->kw_clear_matches(ctrl->kw_search_obj);
   }
 
   return match_found;
@@ -1024,7 +1021,6 @@ new_nfa_sim(Parser * parser, Scanner * scanner, ctrl_flags * cfl)
   sim->ctrl->loop_record_cap = parser->interval_count;
   sim->ctrl->ctrl_flags      = cfl;
   sim->ctrl->start_state     = sim->ip;
-  sim->ctrl->mpat_obj        = parser->mpat_obj;
 
   sim->ctrl->thread_pool.head     = sim;
   sim->ctrl->thread_pool.tail     = sim;
@@ -1032,6 +1028,34 @@ new_nfa_sim(Parser * parser, Scanner * scanner, ctrl_flags * cfl)
   sim->ctrl->active_threads.tail  = NULL;
   sim->ctrl->next_threads.head    = NULL;
   sim->ctrl->next_threads.tail    = NULL;
+
+  NFASimCtrl * ctrl = sim->ctrl;;
+  int kw_count = list_size(parser->synth_patterns);
+  if(kw_count != 0) {
+    if(kw_count == 1) {
+      ctrl->kw_search_obj = new_bm_obj();
+      const char * kw = list_get_head(parser->synth_patterns);
+      bm_init_obj(ctrl->kw_search_obj, kw, strlen(kw));
+      ctrl->kw_search = bm_search;
+      ctrl->kw_clear_matches = bm_clear_matches;
+      ctrl->kw_free_search_obj = bm_obj_free;
+      ctrl->kw_next_match = bm_next_match;
+      ctrl->kw_match_count = bm_match_count;
+    }
+    else {
+      ctrl->kw_search_obj = new_mpat();
+      if(mpat_init(ctrl->kw_search_obj, parser->synth_patterns) == 0) {
+        mpat_obj_free((MPatObj **)&(ctrl->kw_search_obj));
+      }
+      else {
+        ctrl->kw_search = mpat_search;
+        ctrl->kw_clear_matches = mpat_clear_matches;
+        ctrl->kw_free_search_obj = mpat_obj_free;
+        ctrl->kw_next_match = mpat_next_match;
+        ctrl->kw_match_count = mpat_match_count;
+      }
+    }
+  }
 
   return sim->ctrl;
 }
@@ -1066,6 +1090,10 @@ free_nfa_sim(NFASimCtrl * ctrl)
     while((tmp = sim_pool_shift(&(ctrl->thread_pool))) != NULL) {
       free(tmp);
     }
+  }
+
+  if(ctrl->kw_search_obj) {
+    ctrl->kw_free_search_obj(&(ctrl->kw_search_obj));
   }
   free(ctrl);
 }

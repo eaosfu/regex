@@ -7,6 +7,9 @@
 #include "mpat.h" // should be moved the the 'compile' module
 #include "cgrps.h"
 
+#include "mpat.h"
+#include "boyer_moore.h"
+
 
 typedef struct CaptureGrpRecord {
   int next_id;
@@ -19,7 +22,6 @@ typedef struct Parser {
   Stack      * symbol_stack;
   Token        lookahead;
   NFACtrl    * nfa_ctrl;
-  MPatObj    * mpat_obj;
   ctrl_flags * ctrl_flags;
   Stack      * branch_stack;
   List       * synth_patterns;

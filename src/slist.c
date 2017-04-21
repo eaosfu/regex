@@ -57,12 +57,12 @@ list_transfer_on_match(List * dst, List * src, VISIT_PROC2_pt compare, void * ar
   if(list_size(src) == 0) {
     src->head = NULL;
     src->tail = NULL;
-    src->iter = NULL;
+    *(src->iter) = NULL;
     src->iter_idx = -1;
   }
   else if(list_size(src) == 1) {
     src->tail = src->head;
-    src->iter = src->head;
+    *(src->iter) = src->head;
     src->iter_idx = 0;
   }
 
@@ -94,7 +94,7 @@ list_transfer(List * dst, List * src)
 
   src->head = NULL;
   src->tail = NULL;
-  src->iter = NULL;
+  *(src->iter) = NULL;
   src->iter_idx = -1;
   src->size = 0;
 
@@ -153,8 +153,9 @@ new_list_item(List * list, void * data)
 List *
 new_list()
 {
-  List * new_list = xmalloc(sizeof * new_list);
+  List * new_list = xmalloc(sizeof(*new_list));
   new_list->iter_idx = -1;
+  new_list->iter = &(new_list->head);
   return new_list;
 }
 
@@ -174,7 +175,7 @@ list_append(List * list, void * data)
   if(list->head == NULL) {
     list->head = new_list_item(list, data);
     list->tail = list->head;
-    list->iter = list->head;
+    list->iter = &(list->head);
   }
   else {
     list->tail->next = new_list_item(list, data);
@@ -202,7 +203,8 @@ list_push(List * list, void * data)
   list->head = new_node;
 
   if(list->size == 0) {
-    list->iter = list->tail = list->head;
+    list->iter = &(list->head);
+    list->tail = list->head;
     list->iter_idx = 0;
   }
 
@@ -291,7 +293,7 @@ list_get_iterator(List * list)
     return NULL;
   }
 
-  return list->iter;
+  return *(list->iter);
 
 }
 
@@ -307,12 +309,12 @@ list_set_iterator(List * list, int indx)
     return 1;
   }
   else if((list->iter_idx > indx) || (list->iter_idx < 0)) {
-    list->iter = list->head;
+    list->iter = &(list->head);
     list->iter_idx = 0;
   }
 
   for(; list->iter_idx != indx; ++(list->iter_idx)) {
-    list->iter = list->iter->next;
+    list->iter = &((*(list->iter))->next);
   }
 
   return 1;
@@ -329,12 +331,12 @@ list_get_next(List * list)
   ListItem * ret = NULL;
   if(list->iter_idx == 0) {
     ret = list->head;
-    list->iter = list->head->next;
+    list->iter = &(list->head->next);
     ++(list->iter_idx);
   }
   else {
-    ret = list->iter;
-    list->iter = list->iter->next;
+    ret = *(list->iter);
+    list->iter = &((*(list->iter))->next);
     ++(list->iter_idx);
   }
   return (ret == NULL) ? NULL : ret->data;
@@ -378,7 +380,7 @@ list_remove_at(List * list, int idx)
 
   void * removed_data = removed_item->data;
 
-  if(removed_data == list->iter) {
+  if(removed_data == *(list->iter)) {
     list->iter_idx = -1;
   }
 
@@ -456,7 +458,7 @@ list_clear(List * list)
 
   list->head = NULL;
   list->tail = NULL;
-  list->iter = NULL;
+  list->iter = &(list->head);
 
   list->pool_size += list->size;
   list->size = 0;
@@ -632,7 +634,7 @@ list_chop(List * list, unsigned int sz)
   return chopped;
 }
 
-
+/*
 void
 list_iterate_from_to(List * list, int from, int to, VISIT_PROC2_pt action, void *arg2)
 {
@@ -640,19 +642,19 @@ list_iterate_from_to(List * list, int from, int to, VISIT_PROC2_pt action, void 
     return;
   }
 
-  if(list->iter == NULL || list->iter_idx < 0 || from < list->iter_idx || list->iter_idx > to) {
+  if(*(list->iter) == NULL || list->iter_idx < 0 || from < list->iter_idx || list->iter_idx > to) {
     list->iter_idx = 0;
-    list->iter = list->head;
+    *(list->iter) = list->head;
   }
 
   if(list->iter_idx < from) {
     while(list->iter_idx != from) {
       ++(list->iter_idx);
-      list->iter = list->iter->next;
+      *(list->iter) = (*(list->iter))->next;
     }
   }
 
-  ListItem ** li = &(list->iter);
+  ListItem ** li = list->iter;
   for(int i = from; i <= to; ++i, ++(list->iter_idx)) {
     action((void *)((*li)->data), arg2);
     (*li) = (*li)->next;
@@ -660,7 +662,7 @@ list_iterate_from_to(List * list, int from, int to, VISIT_PROC2_pt action, void 
 
   return;
 }
-
+*/
 
 void
 list_iterate(List * list, VISIT_PROC_pt action)

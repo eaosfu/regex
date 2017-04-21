@@ -2,7 +2,7 @@
 #define NFA_H_
 #include "bits.h"
 #include "slist.h"
-
+#include <stddef.h>
 
 #define NFA_ANY              0x00001
 #define NFA_LITERAL          0x00002
@@ -56,13 +56,13 @@
 // structure in order to support more than just ASCII
 typedef BIT_MAP_TYPE nfa_range[SIZE_OF_RANGE];
 
+
 typedef struct NFACtrl {
   struct NFACtrl * ctrl_id;
   unsigned int next_seq_id;
   unsigned int next_interval_seq_id;
   List * free_range;
-  struct NFA * free_nfa;
-  struct NFA * last_free_nfa;
+  struct NFAlloc * alloc;
 } NFACtrl;
 
 
@@ -97,6 +97,23 @@ typedef struct NFA {
 } NFA;
 
 
+typedef struct NFAPool {
+  unsigned int free : 1;
+  struct NFAPool * next;
+  struct NFAPool * prev;
+  struct NFA nfa;
+} NFAPool;
+
+
+typedef struct NFAlloc {
+  struct NFAPool * free;
+  struct NFAPool * pool;
+  struct NFAlloc * next;
+  struct NFAlloc * prev;
+  int pool_size;
+} NFAlloc;
+
+
 NFACtrl * new_nfa_ctrl(void);
 
 NFA * new_qmark_nfa(NFA *);
@@ -112,9 +129,17 @@ NFA * new_literal_nfa(NFACtrl *, unsigned int, unsigned int);
 NFA * new_alternation_nfa(NFACtrl *, List *, unsigned int, NFA *);
 
 void mark_nfa(NFA *);
-void free_nfa(NFA *);
-void release_nfa(NFA *);
+//void free_nfa(NFA *);
+void free_nfa(NFACtrl **);
+//void release_nfa(NFA *);
 int  update_range_w_collation(char *, int, NFA *, int);
 void update_range_nfa(unsigned int, unsigned int, NFA *, int);
+
+
+void nfa_alloc_init(NFACtrl *, int);
+void nfa_dealloc(NFAlloc *, NFA *);
+void nfa_free_alloc(NFAlloc **);
+NFA * nfa_alloc(NFAlloc **);
+
 
 #endif

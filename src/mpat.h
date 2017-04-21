@@ -4,6 +4,7 @@
 // FIXME: implementing an 'intrusive' version of this will
 //        greatly improve resource utilization
 //        -- see comment in 'record_match()'
+#include "match_record.h"
 #include "rbtree.h"
 #include "slist.h"
 
@@ -15,12 +16,6 @@ typedef struct PrefixPattern {
    long key;
    char pattern[];
 } PrefixPattern;
-
-
-typedef struct MatchRecord {
-  char * beg;
-  char * end;
-} MatchRecord;
 
 
 typedef struct MPatObj {

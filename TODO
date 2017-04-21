@@ -12,6 +12,9 @@ FORMAT:
 TOP ITEM:
 /////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
+- Implement an efficient Boyer-Moore algo for single pattern search
+- Implement set of nfa_allocator/nfa_deallocator routines
+- Improve how recognizer makes use of fixed_string pattern searches
 
 
 /////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -111,7 +114,7 @@ TODO ITEMS LISTED IN ORDER:
              If the simulator detects that we have transition to such a node then we reset back to
              that nodes parent as many times as need to be counted before declaring a match.
 
-       (D) - UPDATE source and headesr so we can separate nfa_sim from regex_parser
+       (D) - UPDATE source and headers so we can separate nfa_sim from regex_parser
 
        (D) - UPDATE nfa.c so that individual 'interval expression' nodes have a sequentially assinged
                     ID and a pointer back to the beginning of the expression they affect. Since the ID is
@@ -135,7 +138,7 @@ TODO ITEMS LISTED IN ORDER:
        (D) - UPDATE match():nfa_sim.c so that it detects interval node and performs the behaviour described
                     in the bullet point above
 
-       (P) - UPDATE simulator to adapt its behaviour based on flags. currently it matches globally (i.e.
+       (D) - UPDATE simulator to adapt its behaviour based on flags. currently it matches globally (i.e.
                     tries to match everywhere in the target string rather than stopping on first match).
                     Behaviour like this needs to be controlled by flags:
 
@@ -171,7 +174,7 @@ TODO ITEMS LISTED IN ORDER:
 
 (I) - UPDATE fatal():misc.c and warn():misc.c so they can take printf style argument list
 
-(I) - UPDATE -- find a way to pack the final nfa into an array rather than following pointers
+(I) - UPDATE -- pack the final nfa into an array rather than following pointers
 
 (I) - UDPATE uses of 'symbol_type' to 'token_type'
 

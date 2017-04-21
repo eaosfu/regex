@@ -1,5 +1,5 @@
-#include "stack.h"
 #include "nfa.h"
+#include "stack.h"
 #include "misc.h"
 #include "collations.h"
 
@@ -44,31 +44,16 @@ mark_nfa(NFA * nfa)
 NFA *
 new_nfa(NFACtrl * ctrl, unsigned int type)
 {
-  NFA * nfa = NULL;
-  if(ctrl->free_nfa) {
-    nfa = ctrl->free_nfa;
-    if(ctrl->free_nfa == ctrl->last_free_nfa) {
-      ctrl->free_nfa = ctrl->last_free_nfa = NULL;
-    }
-    else {
-      if(nfa->value.literal == '|') {
-        ctrl->last_free_nfa->out2 = nfa->out1;
-        ctrl->last_free_nfa = nfa->out1;
-      }
-      ctrl->free_nfa = nfa->out2;
-    }
-    if(nfa->value.type == NFA_RANGE) {
-      list_push((*(NFACtrl**)nfa)->free_range, nfa->value.range);
-      nfa->value.range = 0;
-    }
+  if(ctrl == NULL || ctrl->alloc == NULL) {
+    return NULL;
   }
-  else {
-    nfa = xmalloc(sizeof * nfa);
-  }
+
+  NFA * nfa = nfa_alloc(&(ctrl->alloc));
   nfa->id = 0;
   nfa->ctrl = ctrl;
   nfa->value.type = type;
   nfa->parent = nfa->out1 = nfa->out2 = NULL;
+
   return nfa;
 }
 
@@ -339,7 +324,8 @@ is_nfa_tree(void * arg, void *arg2)
         nfa->out2 = arg2;
       }
       ret = nfa->parent->value.branches;
-      free(nfa->parent);
+      //free(nfa->parent);
+      nfa_dealloc(nfa->ctrl->alloc, nfa->parent);
     }
   }
   return ret;
@@ -421,7 +407,7 @@ concatenate_nfa(NFA * prev, NFA * next)
     discard_node->parent = discard_node->out1 = discard_node->out2 = NULL;
     discard_node->value.literal = 0;
     discard_node->parent = discard_node;
-    release_nfa(discard_node);
+    nfa_dealloc(discard_node->ctrl->alloc, discard_node);
   }
 
   return next;
@@ -449,113 +435,15 @@ nfa_compare_equal(void * nfa1, void *nfa2)
   return ret;
 }
 
-
 void
-release_nfa(NFA * nfa)
+free_nfa(NFACtrl ** ctrl)
 {
-  if(nfa) {
-    if((*(NFACtrl **)nfa)->free_nfa) {
-      nfa->out2 = (*(NFACtrl **)nfa)->free_nfa;
-    }
-    else { // first 'free_nfa'
-      nfa->out1 = nfa->out2 = NULL;
-      (*(NFACtrl **)nfa)->last_free_nfa = nfa;
-    }
-    nfa->value.type = NFA_LITERAL;
-    (*(NFACtrl **)nfa)->free_nfa = nfa->parent;
-  }
-  return;
-}
-
-
-void *
-free_nfa_wrapper(void * arg)
-{
-  free(arg);
-  return NULL;
-}
-
-
-void
-free_nfa_helper(NFA * n, List * l, List * seen_states)
-{
-  if(n == NULL) {
+  if(ctrl == NULL || *ctrl == NULL) {
     return;
   }
 
-  if(!list_search(seen_states, n, nfa_compare_equal)) {
-    list_push(seen_states, n);
-    n->value.type &= ~NFA_PROGRESS;
-    if(n->value.type & ~(NFA_SPLIT|NFA_TREE)) {
-      list_push(l, n);
-      ++g_states_added;
-    }
-    else {
-      if(n->value.type & NFA_TREE) {
-        int branch_count = list_size(n->value.branches);
-        for(int i = 0; i <= branch_count; ++i) {
-          free_nfa_helper(list_shift(n->value.branches), l, seen_states);
-        }
-        list_free((n->value.branches), NULL);
-      }
-      else {
-        free_nfa_helper(n->out1, l, seen_states);
-        if(n->out2) {
-          free_nfa_helper(n->out2, l, seen_states);
-        }
-      }
-    }
-  }
-}
-
-
-// walk the NFA collecting every node in the graph
-// mark a node as 'special' if its type is NOT one of:
-//   -- NFA_LITERAL    # matches a literal
-//   -- NFA_NGLITERAL  # negates matching a literal
-// all other nodes encountered are classified as 'simple'
-void
-free_nfa(NFA * nfa)
-{
-  if(nfa == NULL) {
-    return;
-  }
-
-  List * cur_state_set  = new_list(); 
-  List * next_state_set = new_list();
-  List * seen_states    = new_list();
-  NFACtrl * ctrl = nfa->ctrl;
-  int total_states = 0;
-  // step 1 - load the set of next states;
-  // step 2 - delete NFAs in set of current states
-  // step 3 - move NFA's in set of next states into set of current states
-  // repeat until all states have been deleted
-  g_states_added = 0;
-  free_nfa_helper(nfa->parent, next_state_set, seen_states);
-  nfa->out2 = (*(NFACtrl **)nfa)->free_nfa;
-  while(g_states_added > 0) {
-    total_states += g_states_added;
-    g_states_added = 0;
-    list_swap(cur_state_set, next_state_set);
-    list_clear(next_state_set);
-    while((nfa = list_shift(cur_state_set))) {
-      if((nfa = nfa->out2)){
-        free_nfa_helper(nfa, next_state_set, seen_states);
-      }
-    }
-  }
- 
-  NFA * del_nfa = NULL;
-  while((del_nfa = list_shift(seen_states))) {
-    if(del_nfa->value.type & NFA_RANGE) {
-      free(del_nfa->value.range);
-    }
-    list_free_items(&(del_nfa->reachable), NULL);
-
-    free(del_nfa);
-  }
-  list_free(cur_state_set, NULL);
-  list_free(next_state_set, NULL);
-  list_free(seen_states, NULL);
-  list_free((ctrl->free_range), &free_nfa_wrapper);
+  nfa_free_alloc(&((*ctrl)->alloc));
+  list_free((*ctrl)->free_range, (void *)free);
+  free(*ctrl);
+  *ctrl = NULL;
 }

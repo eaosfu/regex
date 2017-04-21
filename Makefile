@@ -79,6 +79,20 @@ define make_goal
   endif
 endef
 
+define make_match_record
+  $(call make_deps,match_record)
+  $(call make_goal,match_record)
+endef
+
+define make_booyer_moore
+  $(call make_deps,booyer_moore)
+  $(call make_goal,booyer_moore)
+endef
+
+define make_nfa_alloc
+  $(call make_deps,nfa_alloc)
+  $(call make_goal,nfa_alloc)
+endef
 
 define make_wrapper_funcs
   $(call make_deps,wrapper_funcs)

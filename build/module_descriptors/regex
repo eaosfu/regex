@@ -1,4 +1,4 @@
-DEPENDS+=slist token nfa scanner regex_parser misc recognizer mpat rbtree collations
+DEPENDS+=slist token nfa scanner regex_parser misc recognizer mpat rbtree collations nfa_alloc boyer_moore match_record
 REGEX_CFLAGS:=
 REGEX_DFLAGS:=#try using -finline and -O3
 REGEX_SRC_DIR:= ${TOP_DIR}/src

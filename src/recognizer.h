@@ -2,7 +2,7 @@
 #define NFA_SIM_H_
 
 #include "regex_parser.h"
-#include "mpat.h"
+//#include "mpat.h"
 
 #include <stdio.h>
 
@@ -68,7 +68,12 @@ typedef struct NFASimCtrl {
   SimPoolList active_threads;
   SimPoolList next_threads;
   Scanner * scanner;
-  MPatObj * mpat_obj;
+  void * kw_search_obj;
+  int (*kw_match_count)();
+  void (*kw_search)();
+  void (*kw_clear_matches)();
+  void (*kw_free_search_obj)();
+  MatchRecord * (*kw_next_match)();
   ctrl_flags * ctrl_flags;
   Match match;
   char matches[MATCH_BUFFER_SIZE];
