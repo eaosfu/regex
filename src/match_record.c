@@ -97,20 +97,22 @@ match_record_free(MatchRecordObj ** obj)
 
   match_record_clear(*obj);
 
-  MatchRecord * last = (*obj)->pool->prev;
-  MatchRecord ** pool = &((*obj)->pool);
+  if ( (*obj)->pool != NULL ) {
+    MatchRecord * last = (*obj)->pool->prev;
+    MatchRecord ** pool = &((*obj)->pool);
 
-  while((*pool) != last) {
+    while((*pool) != last) {
+      (*pool)->prev = NULL;
+      *pool = (*pool)->next;
+      (*pool)->prev->next = NULL;
+      free((*pool)->prev);
+    }
+
     (*pool)->prev = NULL;
-    *pool = (*pool)->next;
-    (*pool)->prev->next = NULL;
-    free((*pool)->prev);
+    (*pool)->next = NULL;
+    free(*pool);
+    *pool = NULL;
   }
-
-  (*pool)->prev = NULL;
-  (*pool)->next = NULL;
-  free(*pool);
-  *pool = NULL;
 
   free(*obj);
   *obj = NULL;
