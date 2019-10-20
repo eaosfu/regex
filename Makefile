@@ -19,7 +19,7 @@ endif
 
 MODULE_DESCRIPTORS:=${TOP_DIR}/build/module_descriptors
 
-test_targets    := test_slist test_all wrapper_funcs test_regex regex_alloc
+test_targets    := test_slist test_all wrapper_funcs regex_alloc
 product_targets := scanner misc nfa slist token regex_parser recognizer rbtree mpat collations all
 
 .PHONY: ${product_targets} ${test_targets}
