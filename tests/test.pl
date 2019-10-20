@@ -149,8 +149,9 @@ sub gen_regex_output {
     $out_file = "$output_dir/regex_$args->{$_}{inout_file_suffix}";
     $cmd      = "$regex_bin -g -o -f $exp_file $target > $out_file";
     print "$cmd\n" if($verbose);
+    #eval{`$cmd 2> /dev/null`};
     eval{`$cmd 2> /dev/null`};
-    die "Error running grep command: $cmd: $!\n" if($@);
+    die "Error running regex command: $cmd: $!\n" if($@);
   }
 }
 
