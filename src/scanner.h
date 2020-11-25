@@ -10,7 +10,11 @@
 typedef struct Scanner {
   int line_no;
   int eol_symbol;
+  #ifndef ssize_t
+  int line_len;
+  #else
   ssize_t line_len;
+  #endif
   size_t buf_len;
   const char * filename;
   ctrl_flags * ctrl_flags;
