@@ -4,9 +4,7 @@
 #include <err.h>
 #include <ctype.h>
 #include <limits.h>
-
-// This should be long enough.
-char program_name[NAME_MAX];
+#include <stdlib.h>
 
 // SHARED BETWEEN PARSER, SCANNER AND RECOGNIZER
 #define EOL_FLAG              0x00001
@@ -70,6 +68,7 @@ typedef unsigned int ctrl_flags;
 
 void fatal(const char *);
 void * xmalloc(unsigned int);
-void parser_fatal(const char *, const char *, const char *);
+void parser_fatal(const char *, const char *, const char *, const char *);
+size_t round_to_page(size_t size);
 
 #endif

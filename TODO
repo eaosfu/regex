@@ -43,7 +43,7 @@ TODO ITEMS LISTED IN ORDER:
 
 (D) - UPDATE scanner so there's a way to control whether escape sequences are treated as a single character
              E.x. Decide whether to treat \( as two characters or a single 'special' character
-             This is usefule when parsing bracket expression where \( should be treated as two separate
+             This is useful when parsing bracket expression where \( should be treated as two separate
              characters but as a single 'special' character when NOT in a bracket expression
 
 (D) - FIX    parse_match_list_expression():regex_parser.c the expression '[.].]' is not treated as an error

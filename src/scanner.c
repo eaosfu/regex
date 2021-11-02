@@ -358,4 +358,3 @@ regex_scan(Scanner * s)
 
   return s->curtoken;
 }
-

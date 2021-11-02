@@ -28,6 +28,8 @@ typedef struct Parser {
   int        * paren_stack;
   NFA        * prev_interval;
   NFA        * prev_interval_head;
+  const char * program_name;
+
 
   // Count open parens
   int paren_count;
@@ -57,7 +59,7 @@ typedef struct Parser {
 } Parser;
 
 
-Parser * init_parser(Scanner *, ctrl_flags *);
+Parser * init_parser(const char *, Scanner *, ctrl_flags *);
 void parser_free(Parser *);
 int parse_regex(Parser *);
 

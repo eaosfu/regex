@@ -1,4 +1,5 @@
 SRCDIR = src
+AM_CFLAGS=-O3
 
 bin_PROGRAMS = recognizer
 noinst_LIBRARIES = librecognizer.a
@@ -7,6 +8,8 @@ librecognizer_a_SOURCES = $(SRCDIR)/bits.h \
                           $(SRCDIR)/boyer_moore.c \
                           $(SRCDIR)/boyer_moore.h \
                           $(SRCDIR)/cgrps.h \
+                          $(SRCDIR)/compile.c \
+                          $(SRCDIR)/compile.h \
                           $(SRCDIR)/collations.c \
                           $(SRCDIR)/collations.h \
                           $(SRCDIR)/errmsg.h \

@@ -18,18 +18,20 @@
 #include <limits.h>
 #include <string.h>
 
+char program_name[NAME_MAX];
+
 #define INPUT_IS_OUTPUT(stat) (((stat)->st_ino == stdout_stat.st_ino) &&\
                                ((stat)->st_dev == stdout_stat.st_dev))
 
 static struct stat stdout_stat;
-static int fts_options = FTS_COMFOLLOW|FTS_LOGICAL; 
+static int fts_options = FTS_COMFOLLOW|FTS_LOGICAL;
 static int recurse_dirs = 0;
 static int suppress_errors = 0;
 static const char short_options [] = {"Ff:ghinoqrsv"}; // missing E and T options
 
 
 static struct option const long_options[] = {
-  {"help"            , no_argument      , NULL, 'h'}, 
+  {"help"            , no_argument      , NULL, 'h'},
   {"global_match"    , no_argument      , NULL, 'g'},
   {"pattern-file"    , required_argument, NULL, 'f'},
   {"show-file-name"  , no_argument      , NULL, 'F'},
@@ -72,6 +74,19 @@ get_stdout_stat()
   }
 }
 
+static int
+allocate_buffer(char ** buffer, size_t * buf_len, size_t new_size) {
+  if(*buf_len < new_size) {
+    new_size = round_to_page(new_size);
+    *buffer = realloc(*buffer, new_size);
+    *buf_len = new_size;
+    if(*buffer == NULL) {
+      return 1;
+    }
+  }
+  return 0;
+}
+
 
 static int
 process_file(int cwd_fd, FTSENT * ftsent, NFASimCtrl * nfa_sim_ctrl, int from_command_line)
@@ -97,7 +112,28 @@ process_file(int cwd_fd, FTSENT * ftsent, NFASimCtrl * nfa_sim_ctrl, int from_co
         err(EXIT_FAILURE, "unable to open file: %s", ftsent->fts_accpath);
       }
 
+
       Scanner * scanner = nfa_sim_ctrl->scanner;
+/*
+      off_t file_size = ftsent->fts_statp->st_size;
+      // +1 to make room for the eol_symbol when we call reset_scanner
+      if(allocate_buffer(&(scanner->buffer), &(scanner->buf_len), file_size + 1) == 0) {
+	if(read(fd, scanner->buffer, file_size) == -1) {
+          warn("Failed to allocate search buffer skipping file: %s\n", ftsent->fts_accpath);
+          return status;
+	}
+
+        scanner->buffer[scanner->buf_len - 1 ] = '\n';
+	reset_scanner(scanner, ftsent->fts_accpath);
+        reset_nfa_sim(nfa_sim_ctrl);
+        status = run_nfa(nfa_sim_ctrl);
+      }
+      else {
+        warn("Failed to allocate search buffer skipping file: %s\n", ftsent->fts_accpath);
+        return status;
+      }
+*/
+
       while((scanner->line_len = getline(&(scanner->buffer), &(scanner->buf_len), fh)) > 0) {
         reset_scanner(scanner, ftsent->fts_accpath);
         reset_nfa_sim(nfa_sim_ctrl);
@@ -170,7 +206,7 @@ handle_search_targets(int cwd_fd, int idx, int argc, char ** argv, NFASimCtrl * 
           } break;
           case FTS_SL: // fall through
           case FTS_DP: {
-            continue;// do nothing 
+            continue;// do nothing
           } break;
           case FTS_DC: {
             if(suppress_errors == 0) {
@@ -355,7 +391,7 @@ main(int argc, char ** argv)
     goto CLEANUP_SCANNER;
   }
 
-  if((parser = init_parser(scanner, &cfl)) == NULL) {
+  if((parser = init_parser(program_name, scanner, &cfl)) == NULL) {
     goto CLEANUP_PARSER;
   }
 

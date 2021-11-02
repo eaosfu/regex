@@ -37,7 +37,7 @@ static void process_adjacents(NFASim *sim, NFA * nfa, SimPoolList *, const char 
 
 
 static void
-swap_next_w_actice(NFASimCtrl * ctrl)
+swap_next_w_active(NFASimCtrl * ctrl)
 {
   ctrl->active_threads.head = ctrl->next_threads.head;
   ctrl->active_threads.tail = ctrl->next_threads.tail;
@@ -970,7 +970,7 @@ run_nfa(NFASimCtrl * ctrl)
     }
 
     if(ctrl->next_threads.head != NULL) {
-      swap_next_w_actice(ctrl);
+      swap_next_w_active(ctrl);
       thread = sim_pool_shift(&(ctrl->active_threads));
       ++(ctrl->cur_pos);// = ++input_pointer;
     }

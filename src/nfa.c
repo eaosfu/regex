@@ -414,10 +414,6 @@ concatenate_nfa(NFA * prev, NFA * next)
 }
 
 
-
-static int g_states_added = 0;
-
-
 void *
 nfa_compare_equal(void * nfa1, void *nfa2)
 {

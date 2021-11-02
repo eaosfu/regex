@@ -1,11 +1,25 @@
 #include "misc.h"
 
 #include <stdio.h>
-#include <stdlib.h>
 #include <string.h>
+#include <unistd.h>
+
+size_t cached_page_size;
+
+__attribute__((constructor))
+static void
+cache_page_size() {
+  cached_page_size = sysconf(_SC_PAGE_SIZE);
+}
+
+
+size_t round_to_page(size_t size) {
+  return (((size + (cached_page_size - 1)) / cached_page_size) * cached_page_size);
+}
+
 
 void
-parser_fatal(const char * msg, const char * regex, const char * here)
+parser_fatal(const char * program_name, const char * msg, const char * regex, const char * here)
 {
   #define err_buf_sz  201
   char err_msg[err_buf_sz] = {0};
@@ -28,6 +42,7 @@ parser_fatal(const char * msg, const char * regex, const char * here)
   exit(EXIT_FAILURE);
 }
 
+
 void
 fatal(const char * msg)
 {
@@ -37,7 +52,8 @@ fatal(const char * msg)
 
 
 inline void *
-xmalloc(unsigned int sz) {
+xmalloc(unsigned int sz)
+{
   void * n = calloc(1, sz);
   if(n == NULL) {
     fatal("Out of memeory");
